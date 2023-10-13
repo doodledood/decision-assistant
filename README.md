@@ -4,23 +4,44 @@
 
 Based on AHP:
 
+Absolutely. Here's the revised plan based on the simplified and user-centric approach you've outlined:
+
 ### 1. **Goal Identification:**
+   - Chatbot engages with the user to ascertain the ultimate goal of the evaluation process.
 
-- Chatbot engages with the user to ascertain the ultimate goal of the evaluation process.
+### 2. **Criteria and Sub-Criteria Development:**
+   - With chatbot assistance, the user identifies and prioritizes the criteria and possibly sub-criteria for evaluating the alternatives.
+   - Utilize the intensity scale and simplicity mapping for prioritizing criteria and sub-criteria:
+     - *Intensity Scale and Reciprocal Values Table*
+     - *Simplicity Mapping: Verbal Judgment to Intensity*
 
-### 2. **Alternatives Listing:**
+### 3. **Alternatives Listing:**
+   - User, with the aid of the chatbot, lists the items (alternatives) to be evaluated.
 
-- User, with the aid of the chatbot, lists the items (alternatives) to be evaluated.
+### 4. **Research Phase:**
+   - Chatbot autonomously conducts research on each alternative for each sub-criteria, leveraging both web resources and its own knowledge to generate summaries and conclusions.
 
-### 3. **Criteria Development:**
+### 5. **Information Validation:**
+   - The compiled information is presented in a table for user review.
+   - User and chatbot iterate until all information is validated and complete.
 
-- With chatbot assistance, the user identifies the criteria and possibly sub-criteria for evaluating the alternatives.
-- Chatbot helps construct the hierarchy of criteria and sub-criteria.
+### 6. **Automated Pairwise Comparisons and AHP Calculations:**
+   - Chatbot performs automated pairwise comparisons of criteria, sub-criteria, and alternatives based on the compiled information.
+   - Constructs comparison matrices, calculates priority vectors, and computes global weighted sums using AHP methodology:
+     - Formulas:
+       - \( \text{Comparison Matrix Construction: based on intensity values derived from research summaries.} \)
+       - \( \text{Priority Vector Calculation: either through the Perron-Frobenius eigenvector method or geometric mean method.} \)
+       - \( \text{Global Weighted Sum Calculation: } \Sigma \text{ (priority vector of (sub-)criterion × priority vector of alternative for that (sub-)criterion)} \)
+       - \( \text{Consistency Ratio (CR) Calculation: } CR(A) = \frac{CI(A)}{RI_n} \) where \( CI(A) = \frac{(\lambda_{\text{max}} - n)}{(n - 1)} \)
+   - Ensures consistency with a Consistency Ratio (CR) check and iteratively refines comparisons if needed.
 
-### 4. **Pairwise Comparisons:**
+### 7. **Ranking and Presentation:**
+   - Rank the alternatives based on their global weighted sum, with higher sums indicating better alignment with the goal.
+   - Present the final rankings for each alternative, ordered by the best fit for the user.
 
-- User performs pairwise comparisons of criteria, sub-criteria, and alternatives under the guidance of the chatbot.
-- The comparisons are based on the provided intensity scale:
+### Tables
+
+#### Intensity Scale and Reciprocal Values
 
 | Intensity | Description                                                                                                                               | Reciprocal Value                        |
 |-----------|-------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------|
@@ -35,9 +56,7 @@ Based on AHP:
 | 9         | Extreme Importance: The evidence favoring one activity over another is of the highest possible order of affirmation.                      | 1/9                                     |
 | 1.1 - 1.9 | For activities that are very close in importance, where assigning a value may be challenging but still indicative of relative importance. | Reciprocal within range (1/1.1 - 1/1.9) |
 
-- Note regarding Reciprocal Value: If activity i has one of the above non-zero numbers assigned to it when compared with
-  activity j, then j has the reciprocal value when compared with i.
-- For simplicity, map 5 levels of verbal judgments to intensities:
+#### Simplicity Mapping: Verbal Judgment to Intensity
 
 | Verbal Judgment     | Intensity |
 |---------------------|-----------|
@@ -47,62 +66,7 @@ Based on AHP:
 | Less Important      | 1/5       |
 | Much Less Important | 1/9       |
 
-#### 5. **Comparison Matrix Construction:**
-
-- Chatbot automates the construction of comparison matrices based on the pairwise comparisons for both criteria and
-  sub-criteria.
-
-#### 6. **Priority Vector Calculation:**
-
-- Chatbot calculates the priority vectors from the comparison matrices, either through the Perron-Frobenius eigenvector
-  method or geometric mean method, for both criteria and sub-criteria.
-
-#### 7. **Pairwise Comparisons (Alternatives):**
-
-- Perform pairwise comparisons for each sub-criteria among alternatives.
-
-#### 8. **Comparison Matrix Construction (Alternatives):**
-
-- Construct the comparison matrix for each sub-criteria among alternatives.
-
-#### 9. **Priority Vector Calculation (Alternatives):**
-
-- Calculate the priority vector for each sub-criteria among alternatives.
-
-#### 10. **Global Weighted Sum Calculation:**
-
-- For each alternative, calculate the global weighted sum by multiplying the priority vector of each (sub-)criterion
-  with the corresponding priority vector of the alternative for that (sub-)criterion, and summing these products across
-  all (sub-)criteria.
-
-#### 11. **Ranking:**
-
-- Rank the alternatives based on their global weighted sum, with higher sums indicating better alignment with the goal.
-
-#### 12. **Consistency Ratio (CR) Calculation:**
-
-- Chatbot calculates the Consistency Index (CI) and Consistency Ratio (CR) using the formulae:
-    - \[ \text{CI}(A) = \left( \lambda_{\text{max}} - n \right) / (n - 1) \]
-    - \[ \text{CR}(A) = \text{CI}(A) / \text{RI}_n \]
-- Where:
-    - \( \lambda_{\text{max}} \) is the maximum eigenvalue of the pairwise comparison matrix,
-    - \( n \) is the number of alternatives,
-    - \( \text{RI}_n \) is the average random index value for a matrix of size \( n \) (provided by Prof. Saaty).
-
-#### 13. **Iterative Refinement:**
-
-- If CR value is unacceptable (CR > 0.1), chatbot guides the user to revise the pairwise comparisons for better
-  consistency.
-
-#### 14. **Documentation and Review (Optional):**
-
-- Chatbot documents each step, calculations, and rankings, providing a transparent evaluation process for the user.
-
-#### 15. **User Engagement and Feedback (Optional):**
-
-- Chatbot captures user feedback for continuous improvement in future evaluations.
-
-#### 16. **Support and Guidance:**
-
-- Chatbot provides support and guidance throughout the evaluation process, clarifying any doubts and ensuring the user
-  feels confident in the evaluations and rankings.
+### Example Goals
+* Decide who to vote for in the next presidential elections
+* Choose the best smartphone to buy
+* Choose the best stock to invest in
