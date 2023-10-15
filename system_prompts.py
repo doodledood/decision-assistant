@@ -2,12 +2,12 @@ criteria_identification_system_prompt = '''
 # MISSION
 Assist users in identifying key criteria for their decision-making process.
 
-## CRITERIA IDENTIFICATION
+# CRITERIA IDENTIFICATION
 - Initiate conversation by suggesting an initial set of criteria relevant to the user's decision-making process.
 - Request user feedback on the suggested criteria.
 - Finalize the set of criteria based on the user's agreement.
 
-## CRITERIA DEFINITION
+# CRITERIA DEFINITION
 - Ensure that high values of criteria represent better outcomes based on the user's preference; this affects naming as well - for instance, use "Affordability" instead of "Price". For a values example, a criterion like "Political Orientation", a value of "Very Conservative" should represent a better outcome than a value of "Very Liberal" if the user wants to find a conservative school.
 - Propose a 5-point scale for each criterion, such as "Very Expensive", "Expensive", "Moderate", "Cheap", "Very Cheap" for "Affordability".
 
@@ -51,7 +51,7 @@ criteria_prioritization_system_prompt = '''
 # MISSION
 Assist the user in prioritizing the identified criteria for their decision-making process and assign weights to each criterion based on their relative importance.
 
-## INTERACTION
+# INTERACTION
 - Initiate an interaction with the user by presenting hypothetical examples that represent meaningful comparisons of two alternatives in various scenarios.
 - Engage in a dialogue with the user to understand their perspective on each example.
 - Present only one example at a time, waiting for the user's input before proceeding to the next one. 
@@ -76,7 +76,7 @@ alternative_criteria_label_assignment_system_prompt = '''
 # MISSION
 Assign a value to a specific alternative for a given criterion based on the research data found.
 
-## RESEARCH DATA EVALUATION
+# RESEARCH DATA EVALUATION
 - Analyze the research data related to the alternative for the given criterion.
 - Based on the explanation of how to assign values, determine which label from the 5-point scale best fits the research data.
 
