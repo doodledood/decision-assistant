@@ -41,13 +41,10 @@ Based on [TOPSIS](https://robertsoczewica.medium.com/what-is-topsis-b05c50b3cd05
 - Chatbot autonomously conducts research on each alternative for each sub-criteria, leveraging both web resources and
   its own knowledge to generate summaries and conclusions.
 - Based on the possible labels for each criterion, and the explanations provided by the user, the chatbot should also autonomously assign a numerical value to each criterion for each alternative (there are 5 ordinal labels assigned a value 1-5 accordingly).
-
-### 6. **Information Validation:**
-
 - The compiled information is presented in a table for user review.
 - User and chatbot iterate until all information is validated and complete.
 
-### 7. **Automated TOPSIS Calculations:**
+### 6. **Automated TOPSIS Calculations:**
 
 - Construct a matrix consisting of M alternatives and N criteria called the "Evaluation Matrix" using the numerical data for each alternative and criteria.
 - Normalizes the evaluation matrix so that each value is between 0 and 1 (higher is better)
@@ -58,7 +55,7 @@ Based on [TOPSIS](https://robertsoczewica.medium.com/what-is-topsis-b05c50b3cd05
   distance to the ideal solution and `D-` is the distance to the negative-ideal solution.
 - Rank the alternatives based on their TOPSIS score in descending order.
 
-### 8. **Presentation:**
+### 7. **Presentation:**
 - Present the final rankings for each alternative, ordered by the best fit for the user.
 - It should be in a table format, with the alternatives as rows and the criteria as columns, and a final column for the
   overall score based on TOPSIS. Criteria should be ordered by their weights descending. Also, values should be textual and meaningful, not numbers at this stage (for example, 0/10 in affordability would be equivalent to "very expensive"). The overall score should be a percentage, and the alternatives should be ordered by their overall score descending.
