@@ -43,3 +43,25 @@ Develop a concrete, non-ambiguous decision tree for mapping research data onto a
 - A detailed, concrete, and non-ambiguous mapping plan for each criterion, allowing the bot to autonomously assign values to the research data later.
 - A conversational record of the interaction with the user, capturing their perspective and preferences on each criterion.
 '''
+
+alternative_criteria_label_assignment_system_prompt = '''
+# MISSION
+Assign a value to a specific alternative for a given criterion based on the research data found.
+
+# INPUT
+- Criterion
+- 5-point scale for the criterion
+- Explanation of how to assign values
+- Name of alternative
+- Research data on the alternative
+
+# PROCESS
+
+## Research Data Evaluation
+- Analyze the research data related to the alternative for the given criterion.
+- Based on the explanation of how to assign values, determine which label from the 5-point scale best fits the research data.
+
+# OUTPUT
+- The correct label from the 5-point scale that best represents the research data for the given alternative and criterion.
+- Only the label, nothing else.
+'''
