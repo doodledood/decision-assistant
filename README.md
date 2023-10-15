@@ -1,6 +1,6 @@
 # Decision Assistant
 
-A GPT-based chatbot that helps you make decisions. It helps you identify relevant criteria, assign weights to the criteria based on your own judgement and preferences, come up with relevant alternatives to choose from, research each alternative autonomously, and finally rank the alternatives based on the criteria and your preferences so you can make the best decision possible based on concrete data.
+A GPT-based chatbot that helps you make decisions. It helps you identify relevant criteria, assign weights to the criteria based on your own judgement and preferences, come up with relevant alternatives to choose from, research each alternative autonomously, and finally rank the alternatives based on the criteria and your preferences so you can make the best decision possible based on concrete researched data.
 
 ## How It Works
 
@@ -8,7 +8,8 @@ Based on [TOPSIS](https://robertsoczewica.medium.com/what-is-topsis-b05c50b3cd05
 
 ### 1. **Goal Identification:**
 
-- Chatbot engages with the user to ascertain the ultimate goal of the evaluation process.
+- The user starts the process by giving the chatbot a decision goal. This could be anything like for example "Which
+  smartphone should I buy?" or "Which candidate should I vote for in the next presidential elections?".
 
 ### 2. **Criteria Development:**
 
@@ -16,7 +17,7 @@ Based on [TOPSIS](https://robertsoczewica.medium.com/what-is-topsis-b05c50b3cd05
 - The chatbot should guide the process by first suggesting an initial set of criteria, and asking for feedback.
 - Once agreed on the set of criteria, the chatbot moves to prioritization of the criteria and assigning weights to each
   that captures the intricacies and relative importance of the user preferences.
-- The criteria's high value should always represent a better value than the low value and therefore should be named appropriately. Instead of "Price" use "Affordability", for example.
+- The criterion's high value should always represent a better value than the low value and therefore should be named appropriately. Instead of "Price" use "Affordability", for example.
 - The chatbot should also suggest a 5 point scale for each criterion. For example "Affordability" could be "Very Expensive", "Expensive", "Moderate", "Cheap", "Very Cheap".
 - The chatbot should also keep a set of notes about how to assign the labels to each value of a criterion for the conversion to values later on. For example, "Very Expensive" could be "More than $1000", "Expensive" could be "Between $500 and $1000", etc. In case of subjective criteria like Price & affordability, the chatbot should inquire the user at this stage and keep a mapping table from the label to the explanation of how to assign the value.
 
@@ -59,9 +60,3 @@ Based on [TOPSIS](https://robertsoczewica.medium.com/what-is-topsis-b05c50b3cd05
 - Present the final rankings for each alternative, ordered by the best fit for the user.
 - It should be in a table format, with the alternatives as rows and the criteria as columns, and a final column for the
   overall score based on TOPSIS. Criteria should be ordered by their weights descending. Also, values should be textual and meaningful, not numbers at this stage (for example, 0/10 in affordability would be equivalent to "very expensive"). The overall score should be a percentage, and the alternatives should be ordered by their overall score descending.
-
-### Example Goals
-
-* Decide who to vote for in the next presidential elections
-* Choose the best smartphone to buy
-* Choose the best stock to invest in
