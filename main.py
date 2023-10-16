@@ -1,5 +1,6 @@
+import enum
 import json
-from typing import Optional, List, Callable, TypeVar, Type, Tuple
+from typing import Optional, List, Callable, TypeVar, Type, Tuple, Any
 
 from dotenv import load_dotenv
 from fire import Fire
@@ -124,23 +125,67 @@ class CriteriaIdentificationResult(BaseModel):
     criteria: List[Criterion] = Field(description='The identified criteria for evaluating the decision.')
 
 
-def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model='gpt-4-0613'):
+class Stage(enum.Enum):
+    GOAL_IDENTIFICATION = 0
+    CRITERIA_IDENTIFICATION = 1
+    CRITERIA_MAPPING = 2
+    CRITERIA_PRIORITIZATION = 3
+    DATA_RESEARCH = 4
+    PRESENTATION = 5
+
+
+class DecisionAssistantState(BaseModel):
+    last_completed_stage: Optional[Stage] = Field(description='The current stage of the decision-making process.')
+    data: Any = Field(description='The data collected so far.')
+
+
+def save_state(state: DecisionAssistantState, state_file: Optional[str]):
+    if state_file:
+        return
+
+    json.dump(state.dict(), open(state_file, 'w'), indent=2)
+
+
+def load_state(state_file: Optional[str]) -> Optional[DecisionAssistantState]:
+    if state_file is None:
+        return None
+
+    try:
+        return DecisionAssistantState.parse_obj(json.load(open(state_file, 'r')))
+    except FileNotFoundError:
+        return None
+
+
+def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model: str = 'gpt-4-0613',
+                           state_file: Optional[str] = 'state.json'):
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=True,
                             callbacks=[StreamingStdOutCallbackHandler()])
 
-    if goal is None:
+    state = load_state(state_file)
+    if state is None:
+        state = DecisionAssistantState(stage=None, data=None)
+
+    if state.last_completed_stage is None and goal is None:
         goal = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.goal_identification_system_prompt),
             HumanMessage(content="Hey")
         ])
 
-    criteria = chat(chat_model=chat_model, messages=[
-        SystemMessage(content=system_prompts.criteria_identification_system_prompt),
-        HumanMessage(content="GOAL: " + goal)
-    ], result_schema=CriteriaIdentificationResult)
+        state.last_completed_stage = Stage.GOAL_IDENTIFICATION
+        state.data = dict(goal=goal)
+        save_state(state, state_file)
 
-    print(goal)
-    print(criteria)
+    if state.last_completed_stage == Stage.GOAL_IDENTIFICATION:
+        criteria = chat(chat_model=chat_model, messages=[
+            SystemMessage(content=system_prompts.criteria_identification_system_prompt),
+            HumanMessage(content="GOAL: " + goal)
+        ], result_schema=CriteriaIdentificationResult)
+
+        state.last_completed_stage = Stage.CRITERIA_IDENTIFICATION
+        state.data = dict(goal=goal, criteria=criteria)
+        save_state(state, state_file)
+
+    print(state)
 
 
 if __name__ == '__main__':
