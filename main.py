@@ -179,6 +179,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         save_state(state, state_file)
 
     if state.last_completed_stage == Stage.GOAL_IDENTIFICATION:
+        goal = state.data['goal']
         criteria = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
             HumanMessage(content=f'GOAL: {goal}'),
