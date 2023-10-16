@@ -1,5 +1,5 @@
 import json
-from typing import Optional, List, Callable, TypeVar, Type
+from typing import Optional, List, Callable, TypeVar, Type, Tuple
 
 from dotenv import load_dotenv
 from fire import Fire
@@ -109,6 +109,15 @@ def chat(chat_model: ChatOpenAI,
 class Criterion(BaseModel):
     name: str = Field(description='The name of the criterion.')
     scale: List[str] = Field(description='The 5-point scale of the criterion, from worst (1) to best (5).')
+
+
+class CriterionWithMapping(Criterion):
+    scale: List[Tuple[str, str]] = Field(
+        description='The 5-point scale of the criterion, from worst (1) to best (5). Each level is mapped to a specific concrete description of how to assign the value to a piece of data.')
+
+
+class CriterionWithWeight(CriterionWithMapping):
+    weight: int = Field(description='The weight of the criterion, from 1 to 100, reflecting its relative importance.')
 
 
 class CriteriaIdentificationResult(BaseModel):
