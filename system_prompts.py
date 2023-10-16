@@ -46,6 +46,7 @@ Assist users in identifying key criteria and their respective 5-point scales for
 # OUTPUT
 - A set of identified criteria with their respective scales, numbered from 1 to 5, where 5 is the best outcome.
 - Should be nicely formatted and easy to read.
+- Confirm the criteria and scales with the user before proceeding to the next step.
 '''
 
 criteria_mapping_system_prompt = '''
@@ -77,6 +78,7 @@ Develop a concrete, non-ambiguous decision tree for mapping research data onto a
 # OUTPUT
 - A detailed, concrete, and non-ambiguous mapping plan for each criterion, allowing the bot to autonomously assign values to the research data later.
 - A conversational record of the interaction with the user, capturing their perspective and preferences on each criterion.
+- Confirm the mapping for the criteria with the user before proceeding to the next step.
 '''
 
 criteria_prioritization_system_prompt = '''
@@ -105,6 +107,7 @@ Assist the user in prioritizing the identified criteria for their decision-makin
 # OUTPUT
 - A detailed record of the interaction with the user, capturing their perspective and preferences on each criterion.
 - The weights (1-100) for each of the criteria, reflecting their relative importance based on the user's preferences. The weights should sum to 100.
+- Confirm the weights for the criteria with the user before proceeding to the next step.
 '''
 
 alternative_criteria_label_assignment_system_prompt = '''

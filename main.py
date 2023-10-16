@@ -16,6 +16,20 @@ import system_prompts
 ResultSchema = TypeVar("T", bound=BaseModel)
 
 
+def pydantic_to_json_schema(pydantic_model: Type[BaseModel]) -> dict:
+    try:
+        return pydantic_model.model_json_schema()
+    except AttributeError:
+        return pydantic_model.schema()
+
+
+def json_string_to_pydantic(json_string: str, pydantic_model: Type[BaseModel]) -> BaseModel:
+    try:
+        return pydantic_model.model_validate_json(json_string)
+    except AttributeError:
+        return pydantic_model.parse_raw(json_string)
+
+
 def chat(chat_model: ChatOpenAI,
          messages: List[BaseMessage],
          tools: Optional[List[Tool]] = None,
@@ -41,7 +55,7 @@ def chat(chat_model: ChatOpenAI,
                         "result": {
                             "type": "string",
                             "description": "The result of the mission or goal."
-                        } if result_schema is None else result_schema.model_json_schema(),
+                        } if result_schema is None else pydantic_to_json_schema(result_schema),
                     },
                     "required": ["result"],
                     "type": "object"
@@ -61,7 +75,7 @@ def chat(chat_model: ChatOpenAI,
 
                 result = args['result']
                 if result_schema is not None:
-                    result = result_schema.model_validate_json(result)
+                    result = json_string_to_pydantic(str(result), result_schema)
 
                 return result
 
@@ -71,10 +85,7 @@ def chat(chat_model: ChatOpenAI,
                     progress_text = 'Executing function call...'
 
                     if tool.args_schema is not None:
-                        try:
-                            args = tool.args_schema.model_validate_json(args)
-                        except AttributeError:
-                            args = tool.args_schema.parse_raw(args)
+                        args = json_string_to_pydantic(args, tool.args_schema)
 
                         if hasattr(args, 'progress_text'):
                             progress_text = args.progress_text
@@ -95,6 +106,15 @@ def chat(chat_model: ChatOpenAI,
             all_messages.append(HumanMessage(content=user_input))
 
 
+class Criterion(BaseModel):
+    name: str = Field(description='The name of the criterion.')
+    scale: List[str] = Field(description='The 5-point scale of the criterion, from worst (1) to best (5).')
+
+
+class CriteriaIdentificationResult(BaseModel):
+    criteria: List[Criterion] = Field(description='The identified criteria for evaluating the decision.')
+
+
 def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model='gpt-4-0613'):
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=True,
                             callbacks=[StreamingStdOutCallbackHandler()])
@@ -105,7 +125,13 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
             HumanMessage(content="Hey")
         ])
 
+    criteria = chat(chat_model=chat_model, messages=[
+        SystemMessage(content=system_prompts.criteria_identification_system_prompt),
+        HumanMessage(content="GOAL: " + goal)
+    ], result_schema=CriteriaIdentificationResult)
+
     print(goal)
+    print(criteria)
 
 
 if __name__ == '__main__':
