@@ -4,11 +4,12 @@ from typing import Optional, List, Callable, TypeVar, Type
 from dotenv import load_dotenv
 from fire import Fire
 from halo import Halo
+from langchain.callbacks import StreamingStdOutCallbackHandler
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import BaseMessage, FunctionMessage, HumanMessage, SystemMessage
 from langchain.tools import Tool
 from langchain.tools.render import format_tool_to_openai_function
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel, Field
 
 import system_prompts
 
@@ -20,15 +21,15 @@ def chat(chat_model: ChatOpenAI,
          tools: Optional[List[Tool]] = None,
          get_user_input: Optional[Callable[[List[BaseMessage]], str]] = None,
          on_reply: Optional[Callable[[str], None]] = None,
-         result_schema: Optional[BaseModel] = None
+         result_schema: Optional[Type[BaseModel]] = None
          ) -> ResultSchema:
     assert len(messages) > 0, 'At least one message is required.'
 
     if get_user_input is None:
-        get_user_input = lambda _: input('> ')
+        get_user_input = lambda _: input('\n> ')
 
     if on_reply is None:
-        on_reply = print
+        on_reply = lambda x: None
 
     all_messages = messages
     functions = (
@@ -50,9 +51,8 @@ def chat(chat_model: ChatOpenAI,
     )
 
     while True:
-        with Halo(text='Thinking...', spinner='dots'):
-            last_message = chat_model.predict_messages(all_messages, functions=functions)
-            all_messages.append(last_message)
+        last_message = chat_model.predict_messages(all_messages, functions=functions)
+        all_messages.append(last_message)
 
         function_call = last_message.additional_kwargs.get('function_call')
         if function_call is not None:
@@ -67,15 +67,24 @@ def chat(chat_model: ChatOpenAI,
 
             for tool in tools:
                 if tool.name == function_call['name']:
-                    args = function_call['arguments']
-                    if tool.args_schema is not None:
-                        args = tool.args_schema.model_validate_json(args)
+                    orig_args = args = function_call['arguments']
+                    progress_text = 'Executing function call...'
 
-                    result = tool.run(args)
-                    messages.append(FunctionMessage(
-                        name=tool.name,
-                        content=result
-                    ))
+                    if tool.args_schema is not None:
+                        try:
+                            args = tool.args_schema.model_validate_json(args)
+                        except AttributeError:
+                            args = tool.args_schema.parse_raw(args)
+
+                        if hasattr(args, 'progress_text'):
+                            progress_text = args.progress_text
+
+                    with Halo(text=progress_text, spinner='dots'):
+                        result = tool.run(orig_args)
+                        messages.append(FunctionMessage(
+                            name=tool.name,
+                            content=result or 'None'
+                        ))
 
                     break
         else:
@@ -87,7 +96,8 @@ def chat(chat_model: ChatOpenAI,
 
 
 def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model='gpt-4-0613'):
-    chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model)
+    chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=True,
+                            callbacks=[StreamingStdOutCallbackHandler()])
 
     if goal is None:
         goal = chat(chat_model=chat_model, messages=[
