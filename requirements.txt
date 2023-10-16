@@ -1,0 +1,6 @@
+requests===2.31.0
+pyautogen===0.1.10
+python-dotenv===1.0.0
+halo===0.0.31
+tqdm===4.66.1
+fire===0.5.0
