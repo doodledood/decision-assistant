@@ -1,28 +1,101 @@
-import random
-from typing import Optional
+import json
+from typing import Optional, List, Callable, TypeVar, Type
 
 from dotenv import load_dotenv
 from fire import Fire
-import autogen
+from halo import Halo
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import BaseMessage, FunctionMessage, HumanMessage, SystemMessage
+from langchain.tools import Tool
+from langchain.tools.render import format_tool_to_openai_function
+from pydantic import BaseModel
+
+import system_prompts
+
+ResultSchema = TypeVar("T", bound=BaseModel)
 
 
-def run_goal_assistant(llm_config: any):
-    pass
+def chat(chat_model: ChatOpenAI,
+         messages: List[BaseMessage],
+         tools: Optional[List[Tool]] = None,
+         get_user_input: Optional[Callable[[List[BaseMessage]], str]] = None,
+         on_reply: Optional[Callable[[str], None]] = None,
+         result_schema: Optional[BaseModel] = None
+         ) -> ResultSchema:
+    assert len(messages) > 0, 'At least one message is required.'
+
+    if get_user_input is None:
+        get_user_input = lambda _: input('> ')
+
+    if on_reply is None:
+        on_reply = print
+
+    all_messages = messages
+    functions = (
+            [{
+                "name": '_terminate',
+                "description": 'Should be called when you think you have achieved your mission or goal and ready to move on to the next step. The result of the mission or goal should be provided as an argument.',
+                "parameters": {
+                    "properties": {
+                        "result": {
+                            "type": "string",
+                            "description": "The result of the mission or goal."
+                        } if result_schema is None else result_schema.model_json_schema(),
+                    },
+                    "required": ["result"],
+                    "type": "object"
+                }
+            }] +
+            [format_tool_to_openai_function(tool) for tool in (tools or [])]
+    )
+
+    while True:
+        with Halo(text='Thinking...', spinner='dots'):
+            last_message = chat_model.predict_messages(all_messages, functions=functions)
+            all_messages.append(last_message)
+
+        function_call = last_message.additional_kwargs.get('function_call')
+        if function_call is not None:
+            if function_call['name'] == '_terminate':
+                args = json.loads(function_call['arguments'])
+
+                result = args['result']
+                if result_schema is not None:
+                    result = result_schema.model_validate_json(result)
+
+                return result
+
+            for tool in tools:
+                if tool.name == function_call['name']:
+                    args = function_call['arguments']
+                    if tool.args_schema is not None:
+                        args = tool.args_schema.model_validate_json(args)
+
+                    result = tool.run(args)
+                    messages.append(FunctionMessage(
+                        name=tool.name,
+                        content=result
+                    ))
+
+                    break
+        else:
+            last_message = messages[-1]
+            on_reply(last_message.content)
+
+            user_input = get_user_input(messages)
+            all_messages.append(HumanMessage(content=user_input))
 
 
-def run_decision_assistant(goal: str, llm_temperature: float = 0.0, llm_seed: Optional[int] = None):
-    if llm_seed is None:
-        llm_seed = random.randint(0, 1000000)
+def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model='gpt-4-0613'):
+    chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model)
 
-    config_list = autogen.config_list_from_models(model_list=["gpt-4-0613"],
-                                                  exclude="aoai")
-    default_llm_config = dict(seed=llm_seed,
-                              temperature=llm_temperature,
-                              config_list=config_list,
-                              model="gpt-4-0613",
-                              request_timeout=120)
+    if goal is None:
+        goal = chat(chat_model=chat_model, messages=[
+            SystemMessage(content=system_prompts.goal_identification_system_prompt),
+            HumanMessage(content="Hey")
+        ])
 
-    print(config_list)
+    print(goal)
 
 
 if __name__ == '__main__':
