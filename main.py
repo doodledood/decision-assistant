@@ -140,7 +140,7 @@ class DecisionAssistantState(BaseModel):
 
 
 def save_state(state: DecisionAssistantState, state_file: Optional[str]):
-    if state_file:
+    if state_file is None:
         return
 
     json.dump(state.dict(), open(state_file, 'w'), indent=2)
@@ -164,6 +164,9 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     state = load_state(state_file)
     if state is None:
         state = DecisionAssistantState(stage=None, data=None)
+    else:
+        print('Loaded state from file.')
+        print(state.dict())
 
     if state.last_completed_stage is None and goal is None:
         goal = chat(chat_model=chat_model, messages=[
@@ -178,7 +181,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     if state.last_completed_stage == Stage.GOAL_IDENTIFICATION:
         criteria = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
-            HumanMessage(content="GOAL: " + goal)
+            HumanMessage(content=f'GOAL: {goal}'),
         ], result_schema=CriteriaIdentificationResult)
 
         state.last_completed_stage = Stage.CRITERIA_IDENTIFICATION
