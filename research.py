@@ -16,7 +16,7 @@ class WebResearch:
         self.vectorstore = vectorstore
         self.llm = llm
 
-    def research_the_web(self, query: str):
+    def query(self, query: str):
         web_research_retriever = WebResearchRetriever.from_llm(
             vectorstore=self.vectorstore,
             llm=self.llm,
