@@ -246,7 +246,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     if state.last_completed_stage == Stage.GOAL_IDENTIFICATION:
         criteria = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
-            HumanMessage(content=f'GOAL: {goal}'),
+            HumanMessage(content=f'# GOAL\n{goal}'),
         ], result_schema=CriteriaIdentificationResult)
         criteria = criteria.dict()['criteria']
 
@@ -261,7 +261,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     if state.last_completed_stage == Stage.CRITERIA_IDENTIFICATION:
         criteria_with_mapping = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_mapping_system_prompt),
-            HumanMessage(content=f'GOAL: {goal}\n\nCRITERIA: {criteria}'),
+            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}'),
         ], result_schema=CriteriaMappingResult)
         criteria_with_mapping = criteria_with_mapping.dict()['criteria']
 
@@ -276,7 +276,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     if state.last_completed_stage == Stage.CRITERIA_MAPPING:
         criteria_with_mapping_and_prioritization = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_prioritization_system_prompt),
-            HumanMessage(content=f'GOAL: {goal}\n\nCRITERIA: {criteria_with_mapping}'),
+            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA: {criteria_with_mapping}'),
         ], result_schema=CriteriaMappingResult)
         criteria_with_mapping_and_prioritization = criteria_with_mapping_and_prioritization.dict()['criteria']
 
