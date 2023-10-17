@@ -131,27 +131,18 @@ class Criterion(BaseModel):
         description='The 5-point scale of the criterion, from worst to best. Labels only. No numerical value, no explainations. Example: "Very Expensive".')
 
 
-class CriterionWithMapping(Criterion):
-    mapping_explanation: str = Field(
-        description='The concrete description of how to assign a value form the scale to a piece of data.')
-
-
-class CriterionWithWeight(CriterionWithMapping):
-    weight: int = Field(description='The weight of the criterion, from 1 to 100, reflecting its relative importance based on the user\'s preferences.')
-
-
 class CriteriaIdentificationResult(BaseModel):
     criteria: List[Criterion] = Field(description='The identified criteria for evaluating the decision.')
 
 
 class CriteriaMappingResult(BaseModel):
-    criteria: List[CriterionWithMapping] = Field(
-        description='The identified criteria for evaluating the decision with concrete mappings and explainations for how to assign values.')
+    criteria_mapping: List[str] = Field(
+        description='An explaination for each criterion on how to assign a value from the scale to a piece of data. Ordered in the same way as the criteria.')
 
 
 class CriteriaPrioritizationResult(BaseModel):
-    criteria: List[CriterionWithWeight] = Field(
-        description='The identified criteria for evaluating the decision with concrete mappings, explainations for how to assign values, and weights reflecting their relative importance.')
+    criteria_weights: List[int] = Field(
+        description='The weights of the criteria, from 1 to 100, reflecting their relative importance based on the user\'s preferences. Ordered in the same way as the criteria.')
 
 
 class Stage(int, enum.Enum):
@@ -259,33 +250,36 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     criteria = state.data['criteria']
     if state.last_completed_stage == Stage.CRITERIA_IDENTIFICATION:
-        criteria_with_mapping = chat(chat_model=chat_model, messages=[
+        criteria_mapping = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_mapping_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}'),
         ], result_schema=CriteriaMappingResult)
-        criteria_with_mapping = criteria_with_mapping.dict()['criteria']
+        criteria_mapping = criteria_mapping.dict()['criteria_mapping']
 
         state.last_completed_stage = Stage.CRITERIA_MAPPING
-        state.data = dict(goal=goal, criteria=criteria_with_mapping)
+        state.data = dict(goal=goal, criteria=criteria, criteria_mapping=criteria_mapping)
 
         save_and_mark_stage_as_done(state, state_file)
     else:
         mark_stage_as_done(Stage.CRITERIA_MAPPING)
 
-    criteria_with_mapping = state.data['criteria']
+    criteria_mapping = state.data['criteria_mapping']
     if state.last_completed_stage == Stage.CRITERIA_MAPPING:
-        criteria_with_mapping_and_prioritization = chat(chat_model=chat_model, messages=[
+        criteria_weights = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_prioritization_system_prompt),
-            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA: {criteria_with_mapping}'),
-        ], result_schema=CriteriaMappingResult)
-        criteria_with_mapping_and_prioritization = criteria_with_mapping_and_prioritization.dict()['criteria']
+            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
+        ], result_schema=CriteriaPrioritizationResult)
+        criteria_weights = criteria_weights.dict()['criteria_weights']
 
         state.last_completed_stage = Stage.CRITERIA_PRIORITIZATION
-        state.data = dict(goal=goal, criteria=criteria_with_mapping_and_prioritization)
+        state.data = dict(goal=goal, criteria=criteria, criteria_mapping=criteria_mapping,
+                          criteria_weights=criteria_weights)
 
         save_and_mark_stage_as_done(state, state_file)
     else:
         mark_stage_as_done(Stage.CRITERIA_PRIORITIZATION)
+
+    criteria_weights = state.data['criteria_weights']
 
     print(state)
 
