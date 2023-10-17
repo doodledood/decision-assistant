@@ -126,9 +126,9 @@ def chat(chat_model: ChatOpenAI,
 
 
 class Criterion(BaseModel):
-    name: str = Field(description='The name of the criterion.')
+    name: str = Field(description='The name of the criterion. Example: "Affordability".')
     scale: List[str] = Field(
-        description='The 5-point scale of the criterion, from worst to best. Numerical values of the scale should be excluded, only label included.')
+        description='The 5-point scale of the criterion, from worst to best. Labels only. No numerical value, no explainations. Example: "Very Expensive".')
 
 
 class CriterionWithMapping(Criterion):
@@ -137,7 +137,7 @@ class CriterionWithMapping(Criterion):
 
 
 class CriterionWithWeight(CriterionWithMapping):
-    weight: int = Field(description='The weight of the criterion, from 1 to 100, reflecting its relative importance.')
+    weight: int = Field(description='The weight of the criterion, from 1 to 100, reflecting its relative importance based on the user\'s preferences.')
 
 
 class CriteriaIdentificationResult(BaseModel):
@@ -200,12 +200,12 @@ def mark_stage_as_done(stage: Stage, halo: Optional[Halo] = None):
         halo = Halo(spinner='dots')
 
     stage_text = {
-        Stage.GOAL_IDENTIFICATION: 'Goal identified',
-        Stage.CRITERIA_IDENTIFICATION: 'Criteria identified',
-        Stage.CRITERIA_MAPPING: 'Criteria mapped',
-        Stage.CRITERIA_PRIORITIZATION: 'Criteria prioritized',
-        Stage.DATA_RESEARCH: 'Data researched',
-        Stage.PRESENTATION: 'Presentation ready',
+        Stage.GOAL_IDENTIFICATION: 'Goal identified.',
+        Stage.CRITERIA_IDENTIFICATION: 'Criteria identified.',
+        Stage.CRITERIA_MAPPING: 'Criteria mapped.',
+        Stage.CRITERIA_PRIORITIZATION: 'Criteria prioritized.',
+        Stage.DATA_RESEARCH: 'Data researched.',
+        Stage.PRESENTATION: 'Presentation ready.',
     }[stage]
     halo.succeed(stage_text)
 
