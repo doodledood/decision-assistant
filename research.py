@@ -6,7 +6,6 @@ from langchain.schema.vectorstore import VectorStore
 from langchain.tools import Tool
 from langchain.utilities.google_search import GoogleSearchAPIWrapper
 from langchain.chains import RetrievalQAWithSourcesChain
-from langchain.utilities.serpapi import SerpAPIWrapper
 
 
 class WebSearch:
