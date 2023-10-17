@@ -8,3 +8,5 @@ fire===0.5.0
 pydantic===2.4.2
 chromadb===0.4.14
 google-api-python-client===2.103.0
+html2text===2020.1.16
+tiktoken===0.5.1

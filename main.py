@@ -7,12 +7,15 @@ from fire import Fire
 from halo import Halo
 from langchain.callbacks import StreamingStdOutCallbackHandler, StdOutCallbackHandler
 from langchain.chat_models import ChatOpenAI
+from langchain.embeddings import OpenAIEmbeddings
 from langchain.schema import BaseMessage, FunctionMessage, HumanMessage, SystemMessage
 from langchain.tools import Tool
 from langchain.tools.render import format_tool_to_openai_function
+from langchain.vectorstores.chroma import Chroma
 from pydantic.v1 import BaseModel, Field
 
 import system_prompts
+from research import create_web_search_tool, WebSearch
 
 ResultSchema = TypeVar("T", bound=BaseModel)
 
@@ -216,6 +219,10 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                            state_file: Optional[str] = 'state.json', streaming: bool = False):
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=streaming,
                             callbacks=[StreamingStdOutCallbackHandler() if streaming else StdOutCallbackHandler()])
+    default_tools = [create_web_search_tool(search=WebSearch(
+        llm=chat_model,
+        vectorstore=Chroma(embedding_function=OpenAIEmbeddings())
+    ))]
 
     with Halo(text='Loading previous state...', spinner='dots') as spinner:
         state = load_state(state_file)
@@ -228,7 +235,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         goal = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.goal_identification_system_prompt),
             HumanMessage(content="Hey")
-        ])
+        ], tools=default_tools)
 
         state.last_completed_stage = Stage.GOAL_IDENTIFICATION
         state.data = {**state.data, **dict(goal=goal)}
@@ -242,7 +249,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         alternatives = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.alternative_listing_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}'),
-        ], result_schema=AlternativeListingResult)
+        ], tools=default_tools, result_schema=AlternativeListingResult)
         alternatives = alternatives.dict()['alternatives']
 
         state.last_completed_stage = Stage.ALTERNATIVE_LISTING
@@ -257,7 +264,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}'),
-        ], result_schema=CriteriaIdentificationResult)
+        ], tools=default_tools, result_schema=CriteriaIdentificationResult)
         criteria = criteria.dict()['criteria']
 
         state.last_completed_stage = Stage.CRITERIA_IDENTIFICATION
@@ -272,7 +279,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria_mapping = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_mapping_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}'),
-        ], result_schema=CriteriaMappingResult)
+        ], tools=default_tools, result_schema=CriteriaMappingResult)
         criteria_mapping = criteria_mapping.dict()['criteria_mapping']
 
         state.last_completed_stage = Stage.CRITERIA_MAPPING
@@ -287,7 +294,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria_weights = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_prioritization_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
-        ], result_schema=CriteriaPrioritizationResult)
+        ], tools=default_tools, result_schema=CriteriaPrioritizationResult)
         criteria_weights = criteria_weights.dict()['criteria_weights']
 
         state.last_completed_stage = Stage.CRITERIA_PRIORITIZATION
