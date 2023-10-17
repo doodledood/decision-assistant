@@ -11,6 +11,7 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.schema import BaseMessage, FunctionMessage, HumanMessage, SystemMessage
 from langchain.tools import Tool
 from langchain.tools.render import format_tool_to_openai_function
+from langchain.utilities.google_search import GoogleSearchAPIWrapper
 from langchain.vectorstores.chroma import Chroma
 from pydantic.v1 import BaseModel, Field
 
@@ -216,12 +217,14 @@ def save_and_mark_stage_as_done(state: DecisionAssistantState, state_file: Optio
 
 
 def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model: str = 'gpt-4-0613',
-                           state_file: Optional[str] = 'state.json', streaming: bool = False):
+                           state_file: Optional[str] = 'state.json', streaming: bool = False,
+                           n_search_results: int = 5):
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=streaming,
                             callbacks=[StreamingStdOutCallbackHandler() if streaming else StdOutCallbackHandler()])
     default_tools = [create_web_search_tool(search=WebSearch(
         llm=chat_model,
-        vectorstore=Chroma(embedding_function=OpenAIEmbeddings())
+        vectorstore=Chroma(embedding_function=OpenAIEmbeddings()),
+        search=GoogleSearchAPIWrapper(k=n_search_results)
     ))]
 
     with Halo(text='Loading previous state...', spinner='dots') as spinner:
