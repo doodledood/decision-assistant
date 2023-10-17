@@ -1,11 +1,11 @@
 import enum
 import json
-from typing import Optional, List, Callable, TypeVar, Type, Tuple, Any
+from typing import Optional, List, Callable, TypeVar, Type, Tuple, Any, Dict, Union
 
 from dotenv import load_dotenv
 from fire import Fire
 from halo import Halo
-from langchain.callbacks import StreamingStdOutCallbackHandler
+from langchain.callbacks import StreamingStdOutCallbackHandler, StdOutCallbackHandler
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import BaseMessage, FunctionMessage, HumanMessage, SystemMessage
 from langchain.tools import Tool
@@ -36,7 +36,8 @@ def chat(chat_model: ChatOpenAI,
          tools: Optional[List[Tool]] = None,
          get_user_input: Optional[Callable[[List[BaseMessage]], str]] = None,
          on_reply: Optional[Callable[[str], None]] = None,
-         result_schema: Optional[Type[BaseModel]] = None
+         result_schema: Optional[Type[BaseModel]] = None,
+         use_halo: bool = True
          ) -> ResultSchema:
     assert len(messages) > 0, 'At least one message is required.'
 
@@ -66,8 +67,9 @@ def chat(chat_model: ChatOpenAI,
     )
 
     while True:
-        last_message = chat_model.predict_messages(all_messages, functions=functions)
-        all_messages.append(last_message)
+        with Halo(text='Thinking...', spinner='dots'):
+            last_message = chat_model.predict_messages(all_messages, functions=functions)
+            all_messages.append(last_message)
 
         function_call = last_message.additional_kwargs.get('function_call')
         if function_call is not None:
@@ -76,7 +78,10 @@ def chat(chat_model: ChatOpenAI,
 
                 result = args['result']
                 if result_schema is not None:
-                    result = json_string_to_pydantic(str(result), result_schema)
+                    if isinstance(result, str):
+                        result = json_string_to_pydantic(str(result), result_schema)
+                    else:
+                        result = result_schema.parse_obj(result)
 
                 return result
 
@@ -85,8 +90,12 @@ def chat(chat_model: ChatOpenAI,
                     orig_args = args = function_call['arguments']
                     progress_text = 'Executing function call...'
 
-                    if tool.args_schema is not None:
+                    if tool.args_schema is not None and isinstance(args, str):
                         args = json_string_to_pydantic(args, tool.args_schema)
+                        if isinstance(args, str):
+                            args = json_string_to_pydantic(str(args), tool.args_schema)
+                        else:
+                            args = tool.args_schema.parse_obj(args)
 
                         if hasattr(args, 'progress_text'):
                             progress_text = args.progress_text
@@ -109,12 +118,13 @@ def chat(chat_model: ChatOpenAI,
 
 class Criterion(BaseModel):
     name: str = Field(description='The name of the criterion.')
-    scale: List[str] = Field(description='The 5-point scale of the criterion, from worst (1) to best (5).')
+    scale: List[str] = Field(
+        description='The 5-point scale of the criterion, from worst to best. Numerical values of the scale should be excluded, only label included.')
 
 
 class CriterionWithMapping(Criterion):
-    scale: List[Tuple[str, str]] = Field(
-        description='The 5-point scale of the criterion, from worst (1) to best (5). Each level is mapped to a specific concrete description of how to assign the value to a piece of data.')
+    mapping_explanation: str = Field(
+        description='The concrete description of how to assign a value form the scale to a piece of data.')
 
 
 class CriterionWithWeight(CriterionWithMapping):
@@ -125,7 +135,17 @@ class CriteriaIdentificationResult(BaseModel):
     criteria: List[Criterion] = Field(description='The identified criteria for evaluating the decision.')
 
 
-class Stage(enum.Enum):
+class CriteriaMappingResult(BaseModel):
+    criteria: List[CriterionWithMapping] = Field(
+        description='The identified criteria for evaluating the decision with concrete mappings and explainations for how to assign values.')
+
+
+class CriteriaPrioritizationResult(BaseModel):
+    criteria: List[CriterionWithWeight] = Field(
+        description='The identified criteria for evaluating the decision with concrete mappings, explainations for how to assign values, and weights reflecting their relative importance.')
+
+
+class Stage(int, enum.Enum):
     GOAL_IDENTIFICATION = 0
     CRITERIA_IDENTIFICATION = 1
     CRITERIA_MAPPING = 2
@@ -139,11 +159,19 @@ class DecisionAssistantState(BaseModel):
     data: Any = Field(description='The data collected so far.')
 
 
+class Alternative(BaseModel):
+    name: str = Field(description='The name of the alternative.')
+    criteria_data: Optional[Dict[str, Tuple[str, int]]] = Field(
+        description='The research data collected for each criterion for this alternative. Key is the name of the criterion. Value is a tuple of the research data as text and the assigned value based on the 5-point scale of the criterion.')
+
+
 def save_state(state: DecisionAssistantState, state_file: Optional[str]):
     if state_file is None:
         return
 
-    json.dump(state.dict(), open(state_file, 'w'), indent=2)
+    data = state.dict()
+    with open(state_file, 'w') as f:
+        json.dump(data, f, indent=2)
 
 
 def load_state(state_file: Optional[str]) -> Optional[DecisionAssistantState]:
@@ -151,22 +179,46 @@ def load_state(state_file: Optional[str]) -> Optional[DecisionAssistantState]:
         return None
 
     try:
-        return DecisionAssistantState.parse_obj(json.load(open(state_file, 'r')))
+        with open(state_file, 'r') as f:
+            data = json.load(f)
+            return DecisionAssistantState.parse_obj(data)
     except FileNotFoundError:
         return None
 
 
-def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model: str = 'gpt-4-0613',
-                           state_file: Optional[str] = 'state.json'):
-    chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=True,
-                            callbacks=[StreamingStdOutCallbackHandler()])
+def mark_stage_as_done(stage: Stage, halo: Optional[Halo] = None):
+    if halo is None:
+        halo = Halo(spinner='dots')
 
-    state = load_state(state_file)
-    if state is None:
-        state = DecisionAssistantState(stage=None, data=None)
-    else:
-        print('Loaded state from file.')
-        print(state.dict())
+    stage_text = {
+        Stage.GOAL_IDENTIFICATION: 'Goal identified',
+        Stage.CRITERIA_IDENTIFICATION: 'Criteria identified',
+        Stage.CRITERIA_MAPPING: 'Criteria mapped',
+        Stage.CRITERIA_PRIORITIZATION: 'Criteria prioritized',
+        Stage.DATA_RESEARCH: 'Data researched',
+        Stage.PRESENTATION: 'Presentation ready',
+    }[stage]
+    halo.succeed(stage_text)
+
+
+def save_and_mark_stage_as_done(state: DecisionAssistantState, state_file: Optional[str]):
+    with Halo(text='Saving state...', spinner='dots') as spinner:
+        save_state(state, state_file)
+
+        mark_stage_as_done(state.last_completed_stage, spinner)
+
+
+def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model: str = 'gpt-4-0613',
+                           state_file: Optional[str] = 'state.json', streaming: bool = False):
+    chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=streaming,
+                            callbacks=[StreamingStdOutCallbackHandler() if streaming else StdOutCallbackHandler()])
+
+    with Halo(text='Loading previous state...', spinner='dots') as spinner:
+        state = load_state(state_file)
+        if state is None:
+            state = DecisionAssistantState(stage=None, data=None)
+        else:
+            spinner.succeed('Loaded previous state.')
 
     if state.last_completed_stage is None and goal is None:
         goal = chat(chat_model=chat_model, messages=[
@@ -176,18 +228,55 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
         state.last_completed_stage = Stage.GOAL_IDENTIFICATION
         state.data = dict(goal=goal)
-        save_state(state, state_file)
 
+        save_and_mark_stage_as_done(state, state_file)
+    else:
+        mark_stage_as_done(Stage.GOAL_IDENTIFICATION)
+
+    goal = state.data['goal']
     if state.last_completed_stage == Stage.GOAL_IDENTIFICATION:
-        goal = state.data['goal']
         criteria = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
             HumanMessage(content=f'GOAL: {goal}'),
         ], result_schema=CriteriaIdentificationResult)
+        criteria = criteria.dict()['criteria']
 
         state.last_completed_stage = Stage.CRITERIA_IDENTIFICATION
         state.data = dict(goal=goal, criteria=criteria)
-        save_state(state, state_file)
+
+        save_and_mark_stage_as_done(state, state_file)
+    else:
+        mark_stage_as_done(Stage.CRITERIA_IDENTIFICATION)
+
+    criteria = state.data['criteria']
+    if state.last_completed_stage == Stage.CRITERIA_IDENTIFICATION:
+        criteria_with_mapping = chat(chat_model=chat_model, messages=[
+            SystemMessage(content=system_prompts.criteria_mapping_system_prompt),
+            HumanMessage(content=f'GOAL: {goal}\n\nCRITERIA: {criteria}'),
+        ], result_schema=CriteriaMappingResult)
+        criteria_with_mapping = criteria_with_mapping.dict()['criteria']
+
+        state.last_completed_stage = Stage.CRITERIA_MAPPING
+        state.data = dict(goal=goal, criteria=criteria_with_mapping)
+
+        save_and_mark_stage_as_done(state, state_file)
+    else:
+        mark_stage_as_done(Stage.CRITERIA_MAPPING)
+
+    criteria_with_mapping = state.data['criteria']
+    if state.last_completed_stage == Stage.CRITERIA_MAPPING:
+        criteria_with_mapping_and_prioritization = chat(chat_model=chat_model, messages=[
+            SystemMessage(content=system_prompts.criteria_prioritization_system_prompt),
+            HumanMessage(content=f'GOAL: {goal}\n\nCRITERIA: {criteria_with_mapping}'),
+        ], result_schema=CriteriaMappingResult)
+        criteria_with_mapping_and_prioritization = criteria_with_mapping_and_prioritization.dict()['criteria']
+
+        state.last_completed_stage = Stage.CRITERIA_PRIORITIZATION
+        state.data = dict(goal=goal, criteria=criteria_with_mapping_and_prioritization)
+
+        save_and_mark_stage_as_done(state, state_file)
+    else:
+        mark_stage_as_done(Stage.CRITERIA_PRIORITIZATION)
 
     print(state)
 
