@@ -67,9 +67,18 @@ def chat(chat_model: ChatOpenAI,
     )
 
     while True:
-        with Halo(text='Thinking...', spinner='dots'):
+        if use_halo:
+            spinner = Halo(text='Thinking...', spinner='dots')
+            spinner.start()
+
             last_message = chat_model.predict_messages(all_messages, functions=functions)
-            all_messages.append(last_message)
+
+            if last_message.content != '':
+                spinner.stop_and_persist(symbol='🤖', text=last_message.content)
+        else:
+            last_message = chat_model.predict_messages(all_messages, functions=functions)
+
+        all_messages.append(last_message)
 
         function_call = last_message.additional_kwargs.get('function_call')
         if function_call is not None:
