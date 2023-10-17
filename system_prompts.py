@@ -116,6 +116,7 @@ Assist the user in prioritizing the identified criteria for their decision-makin
 - Based on the user's input, assign weights (1-100) to each criterion. The weights should reflect the relative importance of the criteria based on the user's preferences and views.
 
 # HYPOTHETICAL EXAMPLES
+- Remember, higher on the 1-5 scale is always better, so never give examples where one variable is the same while the other is not, as it's redundant.
 - Each example should be designed to maximize the information about the user's preferences and the relative importance of the criteria. 
 - An example only has a maximum of two free variables even if there are many more criteria. This is for simplicity. For example: Food A has a high price and a moderate nutritional value, while food B has a very high price and a high nutritional value. This makes sure the relative importance of price vs nutritional value is captured.
 - An example must have a contrasting mix of levels; otherwise, it's redundant. Given two factors X, and Y, a good example would be A (X=2, Y=4), B(X=5, Y=1).
