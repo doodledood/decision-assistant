@@ -133,6 +133,10 @@ class CriteriaIdentificationResult(BaseModel):
     criteria: List[Criterion] = Field(description='The identified criteria for evaluating the decision.')
 
 
+class AlternativeListingResult(BaseModel):
+    alternatives: List[str] = Field(description='The identified alternatives for the decision.')
+
+
 class CriteriaMappingResult(BaseModel):
     criteria_mapping: List[str] = Field(
         description='An explaination for each criterion on how to assign a value from the scale to a piece of data. Ordered in the same way as the criteria.')
@@ -145,11 +149,12 @@ class CriteriaPrioritizationResult(BaseModel):
 
 class Stage(int, enum.Enum):
     GOAL_IDENTIFICATION = 0
-    CRITERIA_IDENTIFICATION = 1
-    CRITERIA_MAPPING = 2
-    CRITERIA_PRIORITIZATION = 3
-    DATA_RESEARCH = 4
-    PRESENTATION = 5
+    ALTERNATIVE_LISTING = 1
+    CRITERIA_IDENTIFICATION = 2
+    CRITERIA_MAPPING = 3
+    CRITERIA_PRIORITIZATION = 4
+    DATA_RESEARCH = 5
+    PRESENTATION = 6
 
 
 class DecisionAssistantState(BaseModel):
@@ -190,6 +195,7 @@ def mark_stage_as_done(stage: Stage, halo: Optional[Halo] = None):
 
     stage_text = {
         Stage.GOAL_IDENTIFICATION: 'Goal identified.',
+        Stage.ALTERNATIVE_LISTING: 'Alternatives listed.',
         Stage.CRITERIA_IDENTIFICATION: 'Criteria identified.',
         Stage.CRITERIA_MAPPING: 'Criteria mapped.',
         Stage.CRITERIA_PRIORITIZATION: 'Criteria prioritized.',
@@ -214,7 +220,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     with Halo(text='Loading previous state...', spinner='dots') as spinner:
         state = load_state(state_file)
         if state is None:
-            state = DecisionAssistantState(stage=None, data=None)
+            state = DecisionAssistantState(stage=None, data={})
         else:
             spinner.succeed('Loaded previous state.')
 
@@ -225,7 +231,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         ])
 
         state.last_completed_stage = Stage.GOAL_IDENTIFICATION
-        state.data = dict(goal=goal)
+        state.data = {**state.data, **dict(goal=goal)}
 
         save_and_mark_stage_as_done(state, state_file)
     else:
@@ -233,6 +239,21 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     goal = state.data['goal']
     if state.last_completed_stage == Stage.GOAL_IDENTIFICATION:
+        alternatives = chat(chat_model=chat_model, messages=[
+            SystemMessage(content=system_prompts.alternative_listing_system_prompt),
+            HumanMessage(content=f'# GOAL\n{goal}'),
+        ], result_schema=AlternativeListingResult)
+        alternatives = alternatives.dict()['alternatives']
+
+        state.last_completed_stage = Stage.ALTERNATIVE_LISTING
+        state.data = {**state.data, **dict(alternatives=alternatives)}
+
+        save_and_mark_stage_as_done(state, state_file)
+    else:
+        mark_stage_as_done(Stage.ALTERNATIVE_LISTING)
+
+    alternatives = state.data['alternatives']
+    if state.last_completed_stage == Stage.ALTERNATIVE_LISTING:
         criteria = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}'),
@@ -240,7 +261,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria = criteria.dict()['criteria']
 
         state.last_completed_stage = Stage.CRITERIA_IDENTIFICATION
-        state.data = dict(goal=goal, criteria=criteria)
+        state.data = {**state.data, **dict(criteria=criteria)}
 
         save_and_mark_stage_as_done(state, state_file)
     else:
@@ -255,7 +276,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria_mapping = criteria_mapping.dict()['criteria_mapping']
 
         state.last_completed_stage = Stage.CRITERIA_MAPPING
-        state.data = dict(goal=goal, criteria=criteria, criteria_mapping=criteria_mapping)
+        state.data = {**state.data, **dict(criteria_mapping=criteria_mapping)}
 
         save_and_mark_stage_as_done(state, state_file)
     else:
@@ -270,8 +291,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria_weights = criteria_weights.dict()['criteria_weights']
 
         state.last_completed_stage = Stage.CRITERIA_PRIORITIZATION
-        state.data = dict(goal=goal, criteria=criteria, criteria_mapping=criteria_mapping,
-                          criteria_weights=criteria_weights)
+        state.data = {**state.data, **dict(criteria_weights=criteria_weights)}
 
         save_and_mark_stage_as_done(state, state_file)
     else:
