@@ -68,13 +68,11 @@ def chat(chat_model: ChatOpenAI,
 
     while True:
         if use_halo:
-            spinner = Halo(text='Thinking...', spinner='dots')
-            spinner.start()
+            with Halo(text='Thinking...', spinner='dots') as spinner:
+                last_message = chat_model.predict_messages(all_messages, functions=functions)
 
-            last_message = chat_model.predict_messages(all_messages, functions=functions)
-
-            if last_message.content != '':
-                spinner.stop_and_persist(symbol='🤖', text=last_message.content)
+                if last_message.content != '':
+                    spinner.stop_and_persist(symbol='🤖', text=last_message.content)
         else:
             last_message = chat_model.predict_messages(all_messages, functions=functions)
 
