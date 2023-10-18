@@ -1,15 +1,29 @@
+import re
 from typing import Optional, Tuple
 
 from halo import Halo
 from langchain.chat_models.openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.tools import Tool
-from pydantic import BaseModel, Field
 
 from chat import chat
 from research.page_analyzer import PageQueryAnalyzer
 from research.search import SearchResultsProvider
 import research.prompts as system_prompts
+
+
+def url_contains_unsupported_file(url):
+    # List of unsupported file types
+    unsupported_types = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'jpg', 'png', 'gif']
+
+    # Extract file extension from the URL
+    file_extension = re.findall(r'\.([a-zA-Z0-9]+)(?:[\?\#]|$)', url)
+
+    # Check if the file extension is in the list of unsupported types
+    if file_extension and file_extension[0] in unsupported_types:
+        return True
+    else:
+        return False
 
 
 class WebSearch:
@@ -26,6 +40,12 @@ class WebSearch:
 
         qna = []
 
+        if search_results.knowledge_graph_description is not None:
+            qna.append({
+                'answer': search_results.knowledge_graph_description,
+                'source': 'Knowledge Graph'
+            })
+
         if search_results.answer_snippet is not None:
             qna.append({
                 'answer': search_results.answer_snippet,
@@ -33,12 +53,15 @@ class WebSearch:
             })
 
         for result in search_results.organic_results:
+            if url_contains_unsupported_file(result.link):
+                continue
+
             if halo is not None:
                 halo.text = f'Analyzing #{result.position} result "{result.title}"'
 
             page_result = self.page_query_analyzer.analyze(url=result.link, title=result.title, query=query)
             qna.append({
-                'answer': page_result,
+                'answer': page_result.answer,
                 'source': result.link
             })
 
@@ -46,20 +69,20 @@ class WebSearch:
             halo.succeed(f'Done searching the web.')
             halo.start(f'Processing results...')
 
-        formatted_answers = '\n'.join([f'#{i + 1}: {q["answer"]}; Source: {q["source"]}' for i, q in enumerate(qna)])
+        formatted_answers = '\n'.join([f'{i + 1}. {q["answer"]}; Source: {q["source"]}' for i, q in enumerate(qna)])
         final_answer = chat(chat_model=self.chat_model, messages=[
             SystemMessage(content=system_prompts.aggregate_query_answers_system_prompt),
             HumanMessage(content=f'# QUERY\n{query}\n\n# ANSWERS\n{formatted_answers}')
-        ])
+        ], max_ai_messages=1, use_halo=False, get_user_input=lambda x: 'terminate now please')
 
         return True, final_answer
 
 
-def create_web_search_tool(search: WebSearch, description: Optional[str] = None):
+def create_web_search_tool(search: WebSearch, description: Optional[str] = None, n_results: int = 3):
     web_search_tool = Tool(
         name='web_search',
         description=description if description else 'Search the web for information. Use this when the user requests information you don\'t know or if you are actively researching and need the most up to date data.',
-        func=search.get_answer
+        func=lambda q: search.get_answer(query=q, n_results=n_results)
     )
 
     return web_search_tool

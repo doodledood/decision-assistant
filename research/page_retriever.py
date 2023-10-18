@@ -3,11 +3,24 @@ import os
 from typing import Optional
 
 import requests
+from tenacity import retry, wait_random, wait_fixed, stop_after_attempt, retry_if_exception_type
 
 
 class PageRetriever(abc.ABC):
     def retrieve_html(self, url: str) -> str:
         raise NotImplementedError()
+
+
+class TransientHTTPError(Exception):
+    def __init__(self, http_status_code: int, message: str):
+        self.http_status_code = http_status_code
+        self.message = message
+
+
+class NonTransientHTTPError(Exception):
+    def __init__(self, http_status_code: int, message: str):
+        self.http_status_code = http_status_code
+        self.message = message
 
 
 class ScraperAPIPageRetriever(PageRetriever):
@@ -21,6 +34,9 @@ class ScraperAPIPageRetriever(PageRetriever):
         self.api_key = api_key
         self.render_js = render_js
 
+    @retry(retry=retry_if_exception_type(TransientHTTPError),
+           wait=wait_fixed(2) + wait_random(0, 2),
+           stop=stop_after_attempt(5))
     def retrieve_html(self, url: str) -> str:
         payload = {
             'api_key': self.api_key,
@@ -29,6 +45,10 @@ class ScraperAPIPageRetriever(PageRetriever):
         }
         r = requests.get('https://api.scraperapi.com/', params=payload)
 
-        r.raise_for_status()
+        if r.status_code < 300:
+            return r.text
 
-        return r.text
+        if r.status_code >= 500:
+            raise TransientHTTPError(r.status_code, r.text)
+
+        raise NonTransientHTTPError(r.status_code, r.text)

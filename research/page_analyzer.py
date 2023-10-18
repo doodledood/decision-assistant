@@ -11,7 +11,7 @@ from research.page_retriever import PageRetriever
 from bs4 import BeautifulSoup
 
 
-def clean_html(html_string):
+def extract_html_text(html_string):
     soup = BeautifulSoup(html_string, 'html.parser')
 
     # Remove all tag attributes
@@ -23,7 +23,13 @@ def clean_html(html_string):
         if not tag.get_text(strip=True):
             tag.extract()
 
-    return str(soup.text)
+    text = soup.text
+
+    # Close down double new lines to single new lines
+    while '\n\n' in text:
+        text = text.replace('\n\n', '\n')
+
+    return text
 
 
 class PageQueryAnalysisResult(BaseModel):
@@ -38,14 +44,16 @@ class PageQueryAnalyzer(abc.ABC):
 
 
 class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
-    def __init__(self, chat_model: ChatOpenAI, page_retriever: PageRetriever, text_splitter: TextSplitter):
+    def __init__(self, chat_model: ChatOpenAI, page_retriever: PageRetriever, text_splitter: TextSplitter,
+                 use_first_split_only: bool = True):
         self.chat_model = chat_model
         self.page_retriever = page_retriever
         self.text_splitter = text_splitter
+        self.use_first_split_only = use_first_split_only
 
     def analyze(self, url: str, title: str, query: str) -> PageQueryAnalysisResult:
         html = self.page_retriever.retrieve_html(url)
-        html_text = clean_html(html)
+        html_text = extract_html_text(html)
 
         docs = self.text_splitter.create_documents([html_text])
 
@@ -56,9 +64,13 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
                 SystemMessage(content=system_prompts.answer_query_based_on_partial_page_system_prompt),
                 HumanMessage(
                     content=f'# QUERY\n{query}\n\n# URL\n{url}\n\n# TITLE\n{title}\n\n# PREVIOUS ANSWER\n{answer}\n\n# CONTEXT\n{context}\n\n# PAGE TEXT\n{text}')
-            ], result_schema=PageQueryAnalysisResult)
+            ], max_ai_messages=1, result_schema=PageQueryAnalysisResult, use_halo=False,
+                          get_user_input=lambda x: 'terminate now please')
 
             answer, context = result.answer, result.context
+
+            if self.use_first_split_only:
+                break
 
         return PageQueryAnalysisResult(
             answer=answer,

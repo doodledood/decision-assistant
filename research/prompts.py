@@ -24,12 +24,9 @@ Answer a query using provided (partial) webpage data, including title, URL, text
 - Previous answer based on partial text that came before this for the same page
 
 # OUTPUT
+Terminate immediately with the answer and context as args:
 - Succinct truthful answer to the query based on the webpage data and context. 
-- Context and bookmark information for the next piece of partial data. You will use it in the next call with the same page but the next partial data. It should include any important information that may assist in crafting the answer, like the last section, table information, etc. Should contain everything needed to understand a partial piece of text and answer the query for the next call. Context should not be succinct; it should be as detailed as possible.
-
-# OUTPUT FORMAT
-ANSWER: ...
-CONTEXT: ...
+- Context and bookmark information for the next piece of partial data. You will use it in the next call with the same page but the next partial data. It should provide the next call with all the information that is relevant about this and previous parts. It should include any important information that may assist in crafting the answer in the next call (like context for cut-off paragraph at the end), like the last section, table information, etc. Should contain everything needed to understand a partial piece of text and answer the query for the next call. Context should not be succinct; it should be as detailed as possible.
 '''
 
 aggregate_query_answers_system_prompt = '''
@@ -44,12 +41,18 @@ Aggregate and analyze a list of answers with sources to a given query, reject un
 3. Formulate a final answer based on the remaining, most likely answers.
 4. If no relevant data is found, respond with "The answer could not be found."
 
+# AGGREGATION
+- Make sure to base final answer on the sources.
+- Incorporate the sources into the answer in the form of links or citations in Markdown format.
+- Links to sources should be inline in the text in relevant places. For example: "Person 1 has been [elected as president in 2012](source-1). He has been (wanting to achieve this)[source-2] all this life.\n\n[source-1]: https://...\n[source-2]: ..."
+
 # INPUT
 - A query
 - A list of answers with sources
 
 # OUTPUT
-- The final aggregated answer to the query, with no additional information or fluff.
+Terminate immediately with the final answer as args:
+- The final aggregated answer to the query, with no additional information or fluff. Markdown formatted. Citation and sources are included in the answer on key phrases as links.
 
 # REMINDER
 - Do not fabricate information. Stick to the data provided.

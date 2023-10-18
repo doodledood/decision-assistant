@@ -7,15 +7,16 @@ from fire import Fire
 from halo import Halo
 from langchain.callbacks import StreamingStdOutCallbackHandler, StdOutCallbackHandler
 from langchain.chat_models import ChatOpenAI
-from langchain.embeddings import OpenAIEmbeddings
 from langchain.schema import HumanMessage, SystemMessage
-from langchain.utilities.google_search import GoogleSearchAPIWrapper
-from langchain.vectorstores.chroma import Chroma
+from langchain.text_splitter import TokenTextSplitter
 from pydantic.v1 import BaseModel, Field
 
 import system_prompts
 from chat import chat
 from research import create_web_search_tool, WebSearch
+from research.page_analyzer import OpenAIChatPageQueryAnalyzer
+from research.page_retriever import ScraperAPIPageRetriever
+from research.search import GoogleSerperSearchResultsProvider
 
 
 class Criterion(BaseModel):
@@ -108,15 +109,21 @@ def save_and_mark_stage_as_done(state: DecisionAssistantState, state_file: Optio
 
 
 def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model: str = 'gpt-4-0613',
+                           fast_llm_model: str = 'gpt-3.5-turbo-16k-0613',
                            state_file: Optional[str] = 'state.json', streaming: bool = False,
-                           n_search_results: int = 5):
+                           n_search_results: int = 3, render_js_when_researching: bool = False):
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=streaming,
                             callbacks=[StreamingStdOutCallbackHandler() if streaming else StdOutCallbackHandler()])
+    fast_chat_model = ChatOpenAI(temperature=llm_temperature, model=fast_llm_model)
     default_tools = [create_web_search_tool(search=WebSearch(
         chat_model=chat_model,
-        vectorstore=Chroma(embedding_function=OpenAIEmbeddings()),
-        search=GoogleSearchAPIWrapper(k=n_search_results)
-    ))]
+        search_results_provider=GoogleSerperSearchResultsProvider(),
+        page_query_analyzer=OpenAIChatPageQueryAnalyzer(
+            chat_model=fast_chat_model,
+            page_retriever=ScraperAPIPageRetriever(render_js=render_js_when_researching),
+            text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000)
+        )
+    ), n_results=n_search_results)]
 
     with Halo(text='Loading previous state...', spinner='dots') as spinner:
         state = load_state(state_file)

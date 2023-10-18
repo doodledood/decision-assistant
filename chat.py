@@ -31,7 +31,8 @@ def chat(chat_model: ChatOpenAI,
          get_user_input: Optional[Callable[[List[BaseMessage]], str]] = None,
          on_reply: Optional[Callable[[str], None]] = None,
          result_schema: Optional[Type[BaseModel]] = None,
-         use_halo: bool = True
+         use_halo: bool = True,
+         max_ai_messages: Optional[int] = None
          ) -> ResultSchema:
     assert len(messages) > 0, 'At least one message is required.'
 
@@ -41,11 +42,12 @@ def chat(chat_model: ChatOpenAI,
     if on_reply is None:
         on_reply = lambda x: None
 
+    curr_n_ai_messages = 0
     all_messages = messages
     functions = (
             [{
                 "name": '_terminate',
-                "description": 'Should be called when you think you have achieved your mission or goal and ready to move on to the next step. The result of the mission or goal should be provided as an argument.',
+                "description": 'Should be called when you think you have achieved your mission or goal and ready to move on to the next step, or if asked explicitly to terminate. The result of the mission or goal should be provided as an argument.',
                 "parameters": {
                     "properties": {
                         "result": {
@@ -113,5 +115,15 @@ def chat(chat_model: ChatOpenAI,
             last_message = messages[-1]
             on_reply(last_message.content)
 
-            user_input = get_user_input(messages)
+            curr_n_ai_messages += 1
+
+            if max_ai_messages is not None and curr_n_ai_messages >= max_ai_messages:
+                if curr_n_ai_messages >= max_ai_messages + 1:
+                    raise Exception(
+                        f'AI did not terminate when asked to do so. This is the last message: `{last_message}`')
+
+                user_input = 'Please now "_terminate" immediately with the result of your mission.'
+            else:
+                user_input = get_user_input(messages)
+
             all_messages.append(HumanMessage(content=user_input))
