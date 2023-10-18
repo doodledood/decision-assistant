@@ -10,3 +10,5 @@ chromadb===0.4.14
 google-api-python-client===2.103.0
 html2text===2020.1.16
 tiktoken===0.5.1
+requests===2.31.0
+beautifulsoup4===4.12.2

@@ -1,0 +1,117 @@
+import json
+from typing import List, Optional, Callable, Type, TypeVar
+
+from halo import Halo
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import BaseMessage, FunctionMessage, HumanMessage
+from langchain.tools import Tool
+from langchain.tools.render import format_tool_to_openai_function
+from pydantic import BaseModel
+
+ResultSchema = TypeVar("T", bound=BaseModel)
+
+
+def pydantic_to_json_schema(pydantic_model: Type[BaseModel]) -> dict:
+    try:
+        return pydantic_model.model_json_schema()
+    except AttributeError:
+        return pydantic_model.schema()
+
+
+def json_string_to_pydantic(json_string: str, pydantic_model: Type[BaseModel]) -> BaseModel:
+    try:
+        return pydantic_model.model_validate_json(json_string)
+    except AttributeError:
+        return pydantic_model.parse_raw(json_string)
+
+
+def chat(chat_model: ChatOpenAI,
+         messages: List[BaseMessage],
+         tools: Optional[List[Tool]] = None,
+         get_user_input: Optional[Callable[[List[BaseMessage]], str]] = None,
+         on_reply: Optional[Callable[[str], None]] = None,
+         result_schema: Optional[Type[BaseModel]] = None,
+         use_halo: bool = True
+         ) -> ResultSchema:
+    assert len(messages) > 0, 'At least one message is required.'
+
+    if get_user_input is None:
+        get_user_input = lambda _: input('\n> ')
+
+    if on_reply is None:
+        on_reply = lambda x: None
+
+    all_messages = messages
+    functions = (
+            [{
+                "name": '_terminate',
+                "description": 'Should be called when you think you have achieved your mission or goal and ready to move on to the next step. The result of the mission or goal should be provided as an argument.',
+                "parameters": {
+                    "properties": {
+                        "result": {
+                            "type": "string",
+                            "description": "The result of the mission or goal."
+                        } if result_schema is None else pydantic_to_json_schema(result_schema),
+                    },
+                    "required": ["result"],
+                    "type": "object"
+                }
+            }] +
+            [format_tool_to_openai_function(tool) for tool in (tools or [])]
+    )
+
+    while True:
+        if use_halo:
+            with Halo(text='Thinking...', spinner='dots') as spinner:
+                last_message = chat_model.predict_messages(all_messages, functions=functions)
+
+                if last_message.content != '':
+                    spinner.stop_and_persist(symbol='🤖', text=last_message.content)
+        else:
+            last_message = chat_model.predict_messages(all_messages, functions=functions)
+
+        all_messages.append(last_message)
+
+        function_call = last_message.additional_kwargs.get('function_call')
+        if function_call is not None:
+            if function_call['name'] == '_terminate':
+                args = json.loads(function_call['arguments'])
+
+                result = args['result']
+                if result_schema is not None:
+                    if isinstance(result, str):
+                        result = json_string_to_pydantic(str(result), result_schema)
+                    else:
+                        result = result_schema.parse_obj(result)
+
+                return result
+
+            for tool in tools:
+                if tool.name == function_call['name']:
+                    orig_args = args = function_call['arguments']
+                    progress_text = 'Executing function call...'
+
+                    if tool.args_schema is not None and isinstance(args, str):
+                        args = json_string_to_pydantic(args, tool.args_schema)
+                        if isinstance(args, str):
+                            args = json_string_to_pydantic(str(args), tool.args_schema)
+                        else:
+                            args = tool.args_schema.parse_obj(args)
+
+                        if hasattr(args, 'progress_text'):
+                            progress_text = args.progress_text
+
+                    with Halo(text=progress_text, spinner='dots'):
+                        result = tool.run(orig_args)
+                        messages.append(FunctionMessage(
+                            name=tool.name,
+                            content=result or 'None'
+                        ))
+
+                    break
+        else:
+            last_message = messages[-1]
+            on_reply(last_message.content)
+
+            user_input = get_user_input(messages)
+            all_messages.append(HumanMessage(content=user_input))
