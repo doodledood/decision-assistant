@@ -90,21 +90,15 @@ def chat(chat_model: ChatOpenAI,
 
             for tool in tools:
                 if tool.name == function_call['name']:
-                    orig_args = args = function_call['arguments']
-                    progress_text = 'Executing function call...'
+                    args = function_call['arguments']
 
-                    if tool.args_schema is not None and isinstance(args, str):
-                        args = json_string_to_pydantic(args, tool.args_schema)
-                        if isinstance(args, str):
-                            args = json_string_to_pydantic(str(args), tool.args_schema)
-                        else:
-                            args = tool.args_schema.parse_obj(args)
-
-                        if hasattr(args, 'progress_text'):
-                            progress_text = args.progress_text
+                    if hasattr(tool, 'progress_text'):
+                        progress_text = tool.progress_text
+                    else:
+                        progress_text = 'Executing function call...'
 
                     with Halo(text=progress_text, spinner='dots'):
-                        result = tool.run(orig_args)
+                        result = tool.run(args)
                         messages.append(FunctionMessage(
                             name=tool.name,
                             content=result or 'None'
