@@ -115,7 +115,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=streaming,
                             callbacks=[StreamingStdOutCallbackHandler() if streaming else StdOutCallbackHandler()])
     fast_chat_model = ChatOpenAI(temperature=llm_temperature, model=fast_llm_model)
-    default_tools = [create_web_search_tool(search=WebSearch(
+    web_search = WebSearch(
         chat_model=chat_model,
         search_results_provider=GoogleSerperSearchResultsProvider(),
         page_query_analyzer=OpenAIChatPageQueryAnalyzer(
@@ -123,7 +123,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
             page_retriever=ScraperAPIPageRetriever(render_js=render_js_when_researching),
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000)
         )
-    ), n_results=n_search_results)]
+    )
+    default_tools = [create_web_search_tool(search=web_search, n_results=n_search_results)]
 
     with Halo(text='Loading previous state...', spinner='dots') as spinner:
         state = load_state(state_file)
