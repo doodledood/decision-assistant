@@ -40,6 +40,9 @@ Assist the user in identifying and listing the alternatives they consider for th
 # INPUT
 - Decision-making goal
 
+# REQUIREMENTS
+- There MUST be at least 2 alternatives and no more than 20 alternatives to proceed to the next step.
+
 # OUTPUT
 - The final list of alternatives the user considers for their decision-making process.
 '''
