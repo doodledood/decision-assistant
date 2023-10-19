@@ -1,6 +1,6 @@
 answer_query_based_on_partial_page_system_prompt = '''
 # MISSION
-Answer a query using provided (partial) webpage data, including title, URL, text content, and potential context. Provide full context for the next piece of partial text to be processed correctly; assume the next call will not have access to this page but only the context, so include everything you think is relevant.
+Answer a query using provided (partial) webpage data, including title, URL, text content, potential context, and potential previous answer. 
 
 # PROCESS
 1. Analyze the query and the given data.
@@ -13,7 +13,7 @@ Answer a query using provided (partial) webpage data, including title, URL, text
 - Provide context for the next call if necessary (e.g., if a paragraph was cut short, include relevant header information, section, etc. for continuity). Assume the data is partial data from the page. Be very detailed in the context.
 - If unable to answer but found important information, include it in the context for the next call.
 - Pay attention to the details of the query and make sure the answer is suitable for the intent of the query.
-- A potential answer might have been provided. This means you thought you found the answer in a previous partial text for the same page. You should double-check that and provide an alternative revised answer if you think it's wrong, or repeat it if you think it's right.
+- A potential answer might have been provided. This means you thought you found the answer in a previous partial text for the same page. You should double-check that and provide an alternative revised answer if you think it's wrong, or repeat it if you think it's right or cannot be validated using the current text.
 
 # INPUT
 - Query
@@ -26,7 +26,6 @@ Answer a query using provided (partial) webpage data, including title, URL, text
 # OUTPUT
 Terminate immediately with the answer and context as args:
 - Succinct truthful answer to the query based on the webpage data and context. 
-- Context and bookmark information for the next piece of partial data. You will use it in the next call with the same page but the next partial data. It should provide the next call with all the information that is relevant about this and previous parts. It should include any important information that may assist in crafting the answer in the next call (like context for cut-off paragraph at the end), like the last section, table information, etc. Should contain everything needed to understand a partial piece of text and answer the query for the next call. Context should not be succinct; it should be as detailed as possible.
 '''
 
 aggregate_query_answers_system_prompt = '''

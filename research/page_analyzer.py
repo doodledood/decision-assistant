@@ -36,7 +36,6 @@ def extract_html_text(html_string):
 
 class PageQueryAnalysisResult(BaseModel):
     answer: str
-    context: str
 
 
 class PageQueryAnalyzer(abc.ABC):
@@ -59,22 +58,21 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
 
         docs = self.text_splitter.create_documents([html_text])
 
-        answer, context = 'No answer yet.', 'No context available.'
+        answer = 'No answer yet.'
         for i, doc in enumerate(docs):
             text = doc.page_content
             result = chat(chat_model=self.chat_model, messages=[
                 SystemMessage(content=system_prompts.answer_query_based_on_partial_page_system_prompt),
                 HumanMessage(
-                    content=f'# QUERY\n{query}\n\n# URL\n{url}\n\n# TITLE\n{title}\n\n# PREVIOUS ANSWER\n{answer}\n\n# CONTEXT\n{context}\n\n# PAGE TEXT\n{text}')
+                    content=f'# QUERY\n{query}\n\n# URL\n{url}\n\n# TITLE\n{title}\n\n# PREVIOUS ANSWER\n{answer}\n\n# PAGE TEXT\n{text}')
             ], max_ai_messages=1, result_schema=PageQueryAnalysisResult,
                           get_user_input=lambda x: 'terminate now please')
 
-            answer, context = result.answer, result.context
+            answer = result.answer
 
             if self.use_first_split_only:
                 break
 
         return PageQueryAnalysisResult(
             answer=answer,
-            context=context
         )
