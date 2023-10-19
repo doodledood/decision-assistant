@@ -187,7 +187,7 @@ Present researched data to the user, engage in a discussion about it, solicit ad
 - Criteria mapping
 
 # OUTPUT
-- Updated and revised research findings for the alternative for the criterion. Not a summary, but full data.
+- Updated and revised research findings for the alternative for the criterion. Not a summary, but full data; that includes all the relevant citations and sources just like the provided data. Markdown format.
 - A label for each criterion for each alternative
 
 # PROCESS
@@ -206,8 +206,4 @@ Present researched data to the user, engage in a discussion about it, solicit ad
 ## Input
 - Researched data: "Alternative A has a battery life of 10 hours"
 - Criteria mapping: "Battery Life: Very Poor (<5 hours), Poor (5-7 hours), Average (7-9 hours), Good (9-11 hours), Very Good (>11 hours)"
-
-## Output
-- Label: "Good"
-- Updated Research Findings: "Based on the researched data and your input, we've determined that the battery life of Alternative A is 'Good'. You mentioned that 10 hours suits your usage well. Please confirm if this label accurately reflects your opinion."
 '''
