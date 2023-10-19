@@ -48,6 +48,13 @@ class CriteriaResearchQueriesResult(BaseModel):
         description='The research queries for each criteria. Ordered in the same way as the criteria.')
 
 
+class AlternativeCriteriaResearchFindingsResult(BaseModel):
+    updated_research_findings: str = Field(
+        description='The updated and aggregated research findings for the alternative and criterion. Formatted as rich markdown with all the citations and links in place.')
+    label_value: int = Field(
+        description='The label value assigned to the alternative and criterion based on the aggregated research findings and user discussion. The label value is assigned from the scale of the criterion.')
+
+
 class Stage(enum.IntEnum):
     GOAL_IDENTIFICATION = 0
     ALTERNATIVE_LISTING = 1
@@ -144,6 +151,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     else:
         spinner.succeed('Loaded previous state.')
 
+    # Identify goal
     if state.last_completed_stage is None and goal is None:
         goal = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.goal_identification_system_prompt),
@@ -158,6 +166,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         mark_stage_as_done(Stage.GOAL_IDENTIFICATION)
 
     goal = state.data['goal']
+
+    # Identify alternatives
     if state.last_completed_stage == Stage.GOAL_IDENTIFICATION:
         alternatives = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.alternative_listing_system_prompt),
@@ -173,6 +183,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         mark_stage_as_done(Stage.ALTERNATIVE_LISTING)
 
     alternatives = state.data['alternatives']
+
+    # Identify criteria
     if state.last_completed_stage == Stage.ALTERNATIVE_LISTING:
         criteria = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
@@ -188,6 +200,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         mark_stage_as_done(Stage.CRITERIA_IDENTIFICATION)
 
     criteria = state.data['criteria']
+
+    # Map criteria
     if state.last_completed_stage == Stage.CRITERIA_IDENTIFICATION:
         criteria_mapping = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_mapping_system_prompt),
@@ -203,6 +217,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         mark_stage_as_done(Stage.CRITERIA_MAPPING)
 
     criteria_mapping = state.data['criteria_mapping']
+
+    # Prioritize criteria
     if state.last_completed_stage == Stage.CRITERIA_MAPPING:
         criteria_weights = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_prioritization_system_prompt),
@@ -218,6 +234,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         mark_stage_as_done(Stage.CRITERIA_PRIORITIZATION)
 
     criteria_weights = state.data['criteria_weights']
+
+    # Generate research questions
     if state.last_completed_stage == Stage.CRITERIA_PRIORITIZATION:
         criteria_research_queries = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
@@ -233,6 +251,76 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         save_and_mark_stage_as_done(state, state_file)
     else:
         mark_stage_as_done(Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION)
+
+    criteria_research_queries = state.data['criteria_research_queries']
+
+    # Research data
+    if state.last_completed_stage == Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION:
+        research_data = state.data.get('research_data')
+        if research_data is None:
+            research_data = {}
+
+        for alternative in alternatives:
+            alternative_research_data = research_data.get(alternative)
+
+            if alternative_research_data is None:
+                alternative_research_data = {}
+
+            for i, (criterion, criterion_research_questions) in enumerate(zip(criteria, criteria_research_queries)):
+                alternative_criterion_research_data = alternative_research_data.get(alternative)
+
+                if alternative_criterion_research_data is None:
+                    alternative_criterion_research_data = {'raw': {}, 'aggregated': {}}
+
+                # Already researched and aggregated, skip
+                if alternative_criterion_research_data['aggregated'] != {}:
+                    continue
+
+                # Research data online for each query
+                for query in criterion_research_questions:
+                    # Already researched query, skip
+                    if query in alternative_criterion_research_data['raw']:
+                        continue
+
+                    found_answer, answer = web_search.get_answer(query=query, n_results=n_search_results,
+                                                                 spinner=spinner)
+
+                    if not found_answer:
+                        alternative_criterion_research_data['raw'][query] = 'No answer found online.'
+
+                        spinner.warn(f'No answer found for query "{query}".')
+                    else:
+                        alternative_criterion_research_data['raw'][query] = answer
+
+                    alternative_research_data[criterion.name] = alternative_criterion_research_data
+                    research_data[alternative] = alternative_research_data
+                    state.data['research_data'] = research_data
+
+                    save_state(state, state_file)
+
+                # Present research data, discuss, aggregate, assign a proper label, and confirm with the user
+                criterion_mapping = criteria_mapping[i]
+                criterion_full_research_data = chat(chat_model=chat_model, messages=[
+                    SystemMessage(content=system_prompts.alternative_criteria_research_system_prompt),
+                    HumanMessage(
+                        content=f'# GOAL\n{goal}\n\n# ALTERNATIVE\n{alternative}\n\n# CRITERION MAPPING\n{criterion_mapping}\n\n# RESEARCH FINDINGS\n{alternative_criterion_research_data}'),
+                ], tools=default_tools_with_web_search, result_schema=AlternativeCriteriaResearchFindingsResult,
+                                                    spinner=spinner)
+                criterion_full_research_data = criterion_full_research_data
+
+                research_data[alternative]['aggregated'] = {
+                    'findings': criterion_full_research_data.updated_research_findings,
+                    'label_value': criterion_full_research_data.label_value
+                }
+                state.data['research_data'] = research_data
+                save_state(state, state_file)
+
+        state.last_completed_stage = Stage.DATA_RESEARCH
+        state.data = {**state.data, **dict(research_data=research_data)}
+
+        save_and_mark_stage_as_done(state, state_file)
+    else:
+        mark_stage_as_done(Stage.DATA_RESEARCH)
 
     print(state)
 
