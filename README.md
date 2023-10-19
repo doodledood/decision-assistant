@@ -20,6 +20,7 @@ Based on [TOPSIS](https://robertsoczewica.medium.com/what-is-topsis-b05c50b3cd05
 - The criterion's high value should always represent a better value than the low value and therefore should be named appropriately. Instead of "Price" use "Affordability", for example.
 - The chatbot should also suggest a 5 point scale for each criterion. For example "Affordability" could be "Very Expensive", "Expensive", "Moderate", "Cheap", "Very Cheap".
 - The chatbot should also keep a set of notes about how to assign the labels to each value of a criterion for the conversion to values later on. For example, "Very Expensive" could be "More than $1000", "Expensive" could be "Between $500 and $1000", etc. In case of subjective criteria like Price & affordability, the chatbot should inquire the user at this stage and keep a mapping table from the label to the explanation of how to assign the value.
+- The chatbot should mark each criterion as objective or subjective.
 
 ### 3. **Criteria Prioritization**
 
