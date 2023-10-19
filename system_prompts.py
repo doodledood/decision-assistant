@@ -58,13 +58,15 @@ Assist users in identifying key criteria and their respective scales for their d
 - Initiate conversation by suggesting an initial set of criteria relevant to the user's decision-making process.
 - Request user feedback on the suggested criteria.
 - Finalize the set of criteria based on the user's agreement.
-- There MUST be at least 1 criterion and no more than 10 criteria to proceed to the next step.
-- Scales MUST be on at least 2-point scale to proceed to the next step.
 
 # CRITERIA DEFINITION
 - Ensure that high values of criteria represent better outcomes based on the user's preference; this affects naming as well - for instance, use "Affordability" instead of "Price". For a values example, a criterion like "Political Orientation", a value of "Very Conservative" should represent a better outcome than a value of "Very Liberal" if the user wants to find a conservative school.
 - Propose a default scale for each criterion that makes the most sense, such as "Very Expensive", "Expensive", "Moderate", "Cheap", "Very Cheap" for "Affordability".
 - The scale should be monotonically increasing, i.e., higher is better. The last option is the best option as defined by the user.
+
+# REQUIREMENTS
+- There MUST be at least 1 criterion and no more than 10 criteria to proceed to the next step.
+- Scales MUST be on at least 2-point scale to proceed to the next step.
 
 # INPUT
 - Decision-making goal the user needs help with.
@@ -146,16 +148,16 @@ criteria_research_questions_system_prompt = '''
 # MISSION
 Generate a template for automated research queries for each criterion, whose answers can be used as context when evaluating alternatives.
 
-# INPUT
-- Decision-making goal.
-- List of criteria with value scales for each and an explanation of how to assign a value label to the answer of a query.
-
 # PROCESS
 1. For each criterion, generate a relevant query template.
    - The query should capture the essence of the criterion based on the scale and how to assign values.
    - The query should lead to answers that can be used to assign a value to each criterion for each alternative.
    - Each query MUST include "{alternative}" in the template to allow for replacement with various alternatives later.
 2. Note that online automated queries are only relevant for objective factors.
+
+# INPUT
+- Decision-making goal.
+- List of criteria with value scales for each and an explanation of how to assign a value label to the answer of a query.
 
 # OUTPUT
 - A list of criteria. Each item in the list is a sub-list of smart and relevant query templates for each criterion, each containing "{alternative}" placeholder for future replacement.
