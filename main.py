@@ -294,7 +294,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                     else:
                         alternative_criterion_research_data['raw'][query] = answer
 
-                    alternative_research_data[criterion.name] = alternative_criterion_research_data
+                    criterion_name = criterion['name']
+                    alternative_research_data[criterion_name] = alternative_criterion_research_data
                     research_data[alternative] = alternative_research_data
                     state.data['research_data'] = research_data
 
