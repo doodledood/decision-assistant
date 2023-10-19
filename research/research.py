@@ -35,7 +35,14 @@ class WebSearch:
         self.page_query_analyzer = page_query_analyzer
 
     def get_answer(self, query: str, n_results: int = 3, halo: Optional[Halo] = None) -> Tuple[bool, str]:
+        if halo is not None:
+            halo.start(f'Getting search results for "{query}"...')
+
         search_results = self.search_results_provider.search(query=query, n_results=n_results)
+
+        if halo is not None:
+            halo.succeed(f'Got search results for "{query}".')
+
         if len(search_results.organic_results) == 0 and search_results.answer_snippet is None:
             return False, 'Nothing was found on the web for this query.'
 
@@ -58,23 +65,30 @@ class WebSearch:
                 continue
 
             if halo is not None:
-                halo.text = f'Analyzing #{result.position} result "{result.title}"'
+                halo.start(f'Reading & analyzing #{result.position} result "{result.title}"')
 
-            page_result = self.page_query_analyzer.analyze(url=result.link, title=result.title, query=query)
+            page_result = self.page_query_analyzer.analyze(url=result.link, title=result.title, query=query,
+                                                           spinner=halo)
+
+            if halo is not None:
+                halo.succeed(f'Read & analyzed #{result.position} result "{result.title}".')
+
             qna.append({
                 'answer': page_result.answer,
                 'source': result.link
             })
 
         if halo is not None:
-            halo.succeed(f'Done searching the web.')
             halo.start(f'Processing results...')
 
         formatted_answers = '\n'.join([f'{i + 1}. {q["answer"]}; Source: {q["source"]}' for i, q in enumerate(qna)])
         final_answer = chat(chat_model=self.chat_model, messages=[
             SystemMessage(content=system_prompts.aggregate_query_answers_system_prompt),
             HumanMessage(content=f'# QUERY\n{query}\n\n# ANSWERS\n{formatted_answers}')
-        ], max_ai_messages=1, use_halo=False, get_user_input=lambda x: 'terminate now please')
+        ], max_ai_messages=1, get_user_input=lambda x: 'terminate now please')
+
+        if halo is not None:
+            halo.succeed(f'Done searching the web.')
 
         return True, final_answer
 
@@ -83,12 +97,12 @@ class WebSearchToolArgs(BaseModel):
     query: str = Field(description='The query to search the web for.')
 
 
-def create_web_search_tool(search: WebSearch, description: Optional[str] = None, n_results: int = 3):
+def create_web_search_tool(search: WebSearch, description: Optional[str] = None, n_results: int = 3,
+                           spinner: Optional[Halo] = None):
     def get_answer(args: str):
         q: WebSearchToolArgs = json_string_to_pydantic(args, WebSearchToolArgs)
 
-        with Halo(text='Searching the web...', spinner='dots') as spinner:
-            return search.get_answer(query=q.query, n_results=n_results, halo=spinner)[1]
+        return search.get_answer(query=q.query, n_results=n_results, halo=spinner)[1]
 
     web_search_tool = Tool.from_function(
         name='web_search',
@@ -96,5 +110,6 @@ def create_web_search_tool(search: WebSearch, description: Optional[str] = None,
         func=get_answer,
         args_schema=WebSearchToolArgs
     )
+    type(web_search_tool).progress_text = property(lambda _: 'Searching the web...')
 
     return web_search_tool

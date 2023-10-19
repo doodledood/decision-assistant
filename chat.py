@@ -31,7 +31,7 @@ def chat(chat_model: ChatOpenAI,
          get_user_input: Optional[Callable[[List[BaseMessage]], str]] = None,
          on_reply: Optional[Callable[[str], None]] = None,
          result_schema: Optional[Type[BaseModel]] = None,
-         use_halo: bool = True,
+         spinner: Optional[Halo] = None,
          max_ai_messages: Optional[int] = None
          ) -> ResultSchema:
     assert len(messages) > 0, 'At least one message is required.'
@@ -63,14 +63,16 @@ def chat(chat_model: ChatOpenAI,
     )
 
     while True:
-        if use_halo:
-            with Halo(text='Thinking...', spinner='dots') as spinner:
-                last_message = chat_model.predict_messages(all_messages, functions=functions)
+        if spinner is not None:
+            spinner.start(text='Thinking...')
 
-                if last_message.content != '':
-                    spinner.stop_and_persist(symbol='🤖', text=last_message.content)
-        else:
-            last_message = chat_model.predict_messages(all_messages, functions=functions)
+        last_message = chat_model.predict_messages(all_messages, functions=functions)
+
+        if spinner is not None:
+            if last_message.content != '':
+                spinner.stop_and_persist(symbol='🤖', text=last_message.content)
+            else:
+                spinner.stop()
 
         all_messages.append(last_message)
 
@@ -92,17 +94,19 @@ def chat(chat_model: ChatOpenAI,
                 if tool.name == function_call['name']:
                     args = function_call['arguments']
 
-                    if hasattr(tool, 'progress_text'):
-                        progress_text = tool.progress_text
-                    else:
-                        progress_text = 'Executing function call...'
+                    if spinner is not None:
+                        if hasattr(tool, 'progress_text'):
+                            progress_text = tool.progress_text
+                        else:
+                            progress_text = 'Executing function call...'
 
-                    with Halo(text=progress_text, spinner='dots'):
-                        result = tool.run(args)
-                        messages.append(FunctionMessage(
-                            name=tool.name,
-                            content=result or 'None'
-                        ))
+                        spinner.start(progress_text)
+
+                    result = tool.run(args)
+                    messages.append(FunctionMessage(
+                        name=tool.name,
+                        content=result or 'None'
+                    ))
 
                     break
         else:

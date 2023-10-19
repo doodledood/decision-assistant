@@ -119,6 +119,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                            fast_llm_model: str = 'gpt-3.5-turbo-16k-0613',
                            state_file: Optional[str] = 'state.json', streaming: bool = False,
                            n_search_results: int = 3, render_js_when_researching: bool = False):
+    spinner = Halo(spinner='dots')
+
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=streaming,
                             callbacks=[StreamingStdOutCallbackHandler() if streaming else StdOutCallbackHandler()])
     fast_chat_model = ChatOpenAI(temperature=llm_temperature, model=fast_llm_model)
@@ -131,20 +133,22 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000)
         )
     )
-    default_tools_with_web_search = [create_web_search_tool(search=web_search, n_results=n_search_results)]
+    default_tools_with_web_search = [
+        create_web_search_tool(search=web_search, n_results=n_search_results, spinner=spinner)]
 
-    with Halo(text='Loading previous state...', spinner='dots') as spinner:
-        state = load_state(state_file)
-        if state is None:
-            state = DecisionAssistantState(stage=None, data={})
-        else:
-            spinner.succeed('Loaded previous state.')
+    spinner.start('Loading previous state...')
+    state = load_state(state_file)
+    if state is None:
+        state = DecisionAssistantState(stage=None, data={})
+        spinner.stop()
+    else:
+        spinner.succeed('Loaded previous state.')
 
     if state.last_completed_stage is None and goal is None:
         goal = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.goal_identification_system_prompt),
             HumanMessage(content="Hey")
-        ], tools=default_tools_with_web_search)
+        ], tools=default_tools_with_web_search, spinner=spinner)
 
         state.last_completed_stage = Stage.GOAL_IDENTIFICATION
         state.data = {**state.data, **dict(goal=goal)}
@@ -158,7 +162,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         alternatives = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.alternative_listing_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}'),
-        ], tools=default_tools_with_web_search, result_schema=AlternativeListingResult)
+        ], tools=default_tools_with_web_search, result_schema=AlternativeListingResult, spinner=spinner)
         alternatives = alternatives.dict()['alternatives']
 
         state.last_completed_stage = Stage.ALTERNATIVE_LISTING
@@ -173,7 +177,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}'),
-        ], tools=default_tools_with_web_search, result_schema=CriteriaIdentificationResult)
+        ], tools=default_tools_with_web_search, result_schema=CriteriaIdentificationResult, spinner=spinner)
         criteria = criteria.dict()['criteria']
 
         state.last_completed_stage = Stage.CRITERIA_IDENTIFICATION
@@ -188,7 +192,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria_mapping = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_mapping_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}'),
-        ], tools=default_tools_with_web_search, result_schema=CriteriaMappingResult)
+        ], tools=default_tools_with_web_search, result_schema=CriteriaMappingResult, spinner=spinner)
         criteria_mapping = criteria_mapping.dict()['criteria_mapping']
 
         state.last_completed_stage = Stage.CRITERIA_MAPPING
@@ -203,7 +207,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria_weights = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_prioritization_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
-        ], tools=default_tools_with_web_search, result_schema=CriteriaPrioritizationResult)
+        ], tools=default_tools_with_web_search, result_schema=CriteriaPrioritizationResult, spinner=spinner)
         criteria_weights = criteria_weights.dict()['criteria_weights']
 
         state.last_completed_stage = Stage.CRITERIA_PRIORITIZATION
@@ -220,7 +224,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
             HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
         ], tools=default_tools_with_web_search, result_schema=CriteriaResearchQueriesResult,
                                          max_ai_messages=1,
-                                         get_user_input=lambda x: 'terminate now please')
+                                         get_user_input=lambda x: 'terminate now please', spinner=spinner)
         criteria_research_queries = criteria_research_queries.dict()['criteria_research_queries']
 
         state.last_completed_stage = Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION

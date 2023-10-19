@@ -1,5 +1,7 @@
 import abc
+from typing import Optional
 
+from halo import Halo
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage
 from langchain.text_splitter import TextSplitter
@@ -39,7 +41,7 @@ class PageQueryAnalysisResult(BaseModel):
 
 class PageQueryAnalyzer(abc.ABC):
     @abc.abstractmethod
-    def analyze(self, url: str, title: str, query: str) -> PageQueryAnalysisResult:
+    def analyze(self, url: str, title: str, query: str, spinner: Optional[Halo] = None) -> PageQueryAnalysisResult:
         raise NotImplementedError()
 
 
@@ -51,7 +53,7 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
         self.text_splitter = text_splitter
         self.use_first_split_only = use_first_split_only
 
-    def analyze(self, url: str, title: str, query: str) -> PageQueryAnalysisResult:
+    def analyze(self, url: str, title: str, query: str, spinner: Optional[Halo] = None) -> PageQueryAnalysisResult:
         html = self.page_retriever.retrieve_html(url)
         html_text = extract_html_text(html)
 
@@ -64,7 +66,7 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
                 SystemMessage(content=system_prompts.answer_query_based_on_partial_page_system_prompt),
                 HumanMessage(
                     content=f'# QUERY\n{query}\n\n# URL\n{url}\n\n# TITLE\n{title}\n\n# PREVIOUS ANSWER\n{answer}\n\n# CONTEXT\n{context}\n\n# PAGE TEXT\n{text}')
-            ], max_ai_messages=1, result_schema=PageQueryAnalysisResult, use_halo=False,
+            ], max_ai_messages=1, result_schema=PageQueryAnalysisResult,
                           get_user_input=lambda x: 'terminate now please')
 
             answer, context = result.answer, result.context
