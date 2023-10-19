@@ -5,22 +5,12 @@ from typing import Optional
 import requests
 from tenacity import retry, wait_random, wait_fixed, stop_after_attempt, retry_if_exception_type
 
+from research.errors import TransientHTTPError, NonTransientHTTPError
+
 
 class PageRetriever(abc.ABC):
     def retrieve_html(self, url: str) -> str:
         raise NotImplementedError()
-
-
-class TransientHTTPError(Exception):
-    def __init__(self, http_status_code: int, message: str):
-        self.http_status_code = http_status_code
-        self.message = message
-
-
-class NonTransientHTTPError(Exception):
-    def __init__(self, http_status_code: int, message: str):
-        self.http_status_code = http_status_code
-        self.message = message
 
 
 class ScraperAPIPageRetriever(PageRetriever):

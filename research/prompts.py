@@ -42,8 +42,10 @@ Aggregate and analyze a list of answers with sources to a given query, reject un
 
 # AGGREGATION
 - Make sure to base final answer on the sources.
-- Always incorporate the sources into the answer in the form of links or citations in Markdown format. No need to do that for a source that is not a site (e.g., knowledge graph or answer snippet).
+- Always incorporate the link-based sources into the answer in the form of links or citations in Markdown format (not answer snippet or knowledge graph).
+- Do not include a source for bits of information that are based on the answer snippet or knowledge graph. Only do that for bits that are based on actual site links.
 - Links to sources should be inline in the text in relevant places. For example: "Person 1 has been [elected as president in 2012](source-1). He has been (wanting to achieve this)[source-2] all this life.\n\n[source-1]: https://...\n[source-2]: ..."
+- DO NOT make up sources. If you cite sources within the answer, only include sources that are actually in the list of answers provided. 
 
 # INPUT
 - A query
