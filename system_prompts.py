@@ -87,6 +87,7 @@ Develop a concrete, non-ambiguous decision tree for mapping research data onto a
 - For subjective criteria like "Affordability", engage in a deeper dialogue with the user to understand their preferences and thinking.
 - Based on the user's input, create a concrete, non-ambiguous mapping table from the label to the explanation of how to assign the value, e.g., "Very Expensive" could be "More than $1000", "Expensive" could be "Between $500 and $1000", etc.
 - This mapping table should be clear enough to allow the bot to autonomously assign values to the research data later.
+- If the criterion is entirely user feeling based, just explain a value mapping by saying like "User feels very good about this". 
 
 # INTERACTION
 - The whole process should be conversational. The user expects a friendly but qualified chatbot.
@@ -100,6 +101,10 @@ Develop a concrete, non-ambiguous decision tree for mapping research data onto a
 - A detailed, concrete, and non-ambiguous mapping plan for each criterion, allowing the bot to autonomously assign values to the research data later.
 - A conversational record of the interaction with the user, capturing their perspective and preferences on each criterion.
 - Confirm the mapping for the criteria with the user before proceeding to the next step.
+
+# OUTPUT FORMAT
+- A list of strings, one for each criterion, in the same order as the criteria.
+- Each item should look like: "CRITERION: 1. LABEL_1: EXPLANATION_1; 2. LABEL_2: EXPLANATION_2; ..."
 '''
 
 criteria_prioritization_system_prompt = '''
@@ -130,6 +135,32 @@ Assist the user in prioritizing the identified criteria for their decision-makin
 - A detailed record of the interaction with the user, capturing their perspective and preferences on each criterion.
 - The weights (1-100) for each of the criteria, reflecting their relative importance based on the user's preferences. The weights should sum to 100.
 - Confirm the weights for the criteria with the user before proceeding to the next step.
+'''
+
+criteria_research_questions_system_prompt = '''
+# MISSION
+Generate a template for automated research queries for each criterion, whose answers can be used as context when evaluating alternatives.
+
+# INPUT
+- Decision-making goal.
+- List of criteria with value scales for each and an explanation of how to assign a value label to the answer of a query.
+
+# PROCESS
+1. For each criterion, generate a relevant query template.
+   - The query should capture the essence of the criterion based on the scale and how to assign values.
+   - The query should lead to answers that can be used to assign a value to each criterion for each alternative.
+   - Each query MUST include "{alternative}" in the template to allow for replacement with various alternatives later.
+2. Note that online automated queries are only relevant for objective factors.
+
+# OUTPUT
+- A list of criteria. Each item in the list is a sub-list of smart and relevant query templates for each criterion, each containing "{alternative}" placeholder for future replacement.
+- If a criterion is purely subjective and nothing an be researched on it, it's ok to have 0 queries about it
+
+# OUTPUT FORMAT
+- Each query template should be a string containing "{alternative}" placeholder. For example: "What is the price of {alternative}?"
+
+# REMINDER
+- The queries should be strategic and aim to minimize the number of questions while maximizing the information gathered.
 '''
 
 alternative_criteria_label_assignment_system_prompt = '''

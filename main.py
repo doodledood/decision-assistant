@@ -21,8 +21,6 @@ from research.search import GoogleSerperSearchResultsProvider
 
 class Criterion(BaseModel):
     name: str = Field(description='The name of the criterion. Example: "Affordability".')
-    is_objective: bool = Field(
-        description='Whether the criterion is objective (can be measured with data) or subjective (based on soley on personal opinion).')
     scale: List[str] = Field(
         description='The 5-point scale of the criterion, from worst to best. Labels only. No numerical value, no explainations. Example: "Very Expensive".')
 
@@ -45,14 +43,20 @@ class CriteriaPrioritizationResult(BaseModel):
         description='The weights of the criteria, from 1 to 100, reflecting their relative importance based on the user\'s preferences. Ordered in the same way as the criteria.')
 
 
-class Stage(int, enum.Enum):
+class CriteriaResearchQueriesResult(BaseModel):
+    criteria_research_queries: List[List[str]] = Field(
+        description='The research queries for each criteria. Ordered in the same way as the criteria.')
+
+
+class Stage(enum.IntEnum):
     GOAL_IDENTIFICATION = 0
     ALTERNATIVE_LISTING = 1
     CRITERIA_IDENTIFICATION = 2
     CRITERIA_MAPPING = 3
     CRITERIA_PRIORITIZATION = 4
-    DATA_RESEARCH = 5
-    PRESENTATION = 6
+    CRITERIA_RESEARCH_QUESTIONS_GENERATION = 5
+    DATA_RESEARCH = 6
+    PRESENTATION = 7
 
 
 class DecisionAssistantState(BaseModel):
@@ -97,6 +101,7 @@ def mark_stage_as_done(stage: Stage, halo: Optional[Halo] = None):
         Stage.CRITERIA_IDENTIFICATION: 'Criteria identified.',
         Stage.CRITERIA_MAPPING: 'Criteria mapped.',
         Stage.CRITERIA_PRIORITIZATION: 'Criteria prioritized.',
+        Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION: 'Research questions generated.',
         Stage.DATA_RESEARCH: 'Data researched.',
         Stage.PRESENTATION: 'Presentation ready.',
     }[stage]
@@ -209,6 +214,21 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         mark_stage_as_done(Stage.CRITERIA_PRIORITIZATION)
 
     criteria_weights = state.data['criteria_weights']
+    if state.last_completed_stage == Stage.CRITERIA_PRIORITIZATION:
+        criteria_research_queries = chat(chat_model=chat_model, messages=[
+            SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
+            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
+        ], tools=default_tools_with_web_search, result_schema=CriteriaResearchQueriesResult,
+                                         max_ai_messages=1,
+                                         get_user_input=lambda x: 'terminate now please')
+        criteria_research_queries = criteria_research_queries.dict()['criteria_research_queries']
+
+        state.last_completed_stage = Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION
+        state.data = {**state.data, **dict(criteria_research_queries=criteria_research_queries)}
+
+        save_and_mark_stage_as_done(state, state_file)
+    else:
+        mark_stage_as_done(Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION)
 
     print(state)
 
