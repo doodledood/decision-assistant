@@ -39,10 +39,19 @@ Based on [TOPSIS](https://robertsoczewica.medium.com/what-is-topsis-b05c50b3cd05
 
 ### 5. **Research Phase:**
 
+#### 5.1. **Coming Up With Automated Research Queries:**
+
+- Chatbot autonomously comes up with a set of queries for each alternative and each criterion.
+- The queries should be smart and relevant, and should be able to capture the essence of the criterion based the scale and how to assign values.
+- The queries should lead to answers that can be used to assign a value to each criterion for each alternative.
+- There is a distinction between objective and subjective criteria. Objective factors are much more suited to these queries. However, subjective factors are impossible to capture through online queries - by definition. Therefore, online automated queries are only relevant for objective factors.
+
+#### 5.2. **Researching Criteria:**
+
 - Chatbot autonomously conducts research on each alternative for each sub-criteria, leveraging both web resources and
-  its own knowledge to generate summaries and conclusions.
+  its own knowledge to generate summaries and conclusions - based on the queries it came up with earlier (for consistency).
+- The compiled information is presented to the user for review. In case of subjective criterion, there might not be any information available. In that case, the bot should just inquire the user about what it thinks about the criteria by asking guiding questions to extract as much information as possible from the user in order to be able to map the labels to values later on correctly.
 - Based on the possible labels for each criterion, and the explanations provided by the user, the chatbot should also autonomously assign a numerical value to each criterion for each alternative (there are 5 ordinal labels assigned a value 1-5 accordingly).
-- The compiled information is presented in a table for user review.
 - User and chatbot iterate until all information is validated and complete.
 
 ### 6. **Automated TOPSIS Calculations:**
