@@ -29,10 +29,11 @@ def url_contains_unsupported_file(url):
 
 class WebSearch:
     def __init__(self, chat_model: ChatOpenAI, search_results_provider: SearchResultsProvider,
-                 page_query_analyzer: PageQueryAnalyzer):
+                 page_query_analyzer: PageQueryAnalyzer, skip_results_if_answer_snippet_found: bool = True):
         self.chat_model = chat_model
         self.search_results_provider = search_results_provider
         self.page_query_analyzer = page_query_analyzer
+        self.skip_results_if_answer_snippet_found = skip_results_if_answer_snippet_found
 
     def get_answer(self, query: str, n_results: int = 3, spinner: Optional[Halo] = None) -> Tuple[bool, str]:
         if spinner is not None:
@@ -60,23 +61,24 @@ class WebSearch:
                 'source': 'Answer Snippet'
             })
 
-        for result in search_results.organic_results:
-            if url_contains_unsupported_file(result.link):
-                continue
+        if not self.skip_results_if_answer_snippet_found or search_results.answer_snippet is None:
+            for result in search_results.organic_results:
+                if url_contains_unsupported_file(result.link):
+                    continue
 
-            if spinner is not None:
-                spinner.start(f'Reading & analyzing #{result.position} result "{result.title}"')
+                if spinner is not None:
+                    spinner.start(f'Reading & analyzing #{result.position} result "{result.title}"')
 
-            page_result = self.page_query_analyzer.analyze(url=result.link, title=result.title, query=query,
-                                                           spinner=spinner)
+                page_result = self.page_query_analyzer.analyze(url=result.link, title=result.title, query=query,
+                                                               spinner=spinner)
 
-            if spinner is not None:
-                spinner.succeed(f'Read & analyzed #{result.position} result "{result.title}".')
+                if spinner is not None:
+                    spinner.succeed(f'Read & analyzed #{result.position} result "{result.title}".')
 
-            qna.append({
-                'answer': page_result.answer,
-                'source': result.link
-            })
+                qna.append({
+                    'answer': page_result.answer,
+                    'source': result.link
+                })
 
         if spinner is not None:
             spinner.start(f'Processing results...')
