@@ -309,7 +309,6 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                         content=f'# GOAL\n{goal}\n\n# ALTERNATIVE\n{alternative}\n\n# CRITERION MAPPING\n{criterion_mapping}\n\n# RESEARCH FINDINGS\n{alternative_criterion_research_data}'),
                 ], tools=default_tools_with_web_search, result_schema=AlternativeCriteriaResearchFindingsResult,
                                                     spinner=spinner)
-                criterion_full_research_data = criterion_full_research_data
 
                 research_data[alternative]['aggregated'] = {
                     'findings': criterion_full_research_data.updated_research_findings,
