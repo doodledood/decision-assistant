@@ -278,6 +278,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
                 # Research data online for each query
                 for query in criterion_research_questions:
+                    query = query.format(alternative=alternative)
+
                     # Already researched query, skip
                     if query in alternative_criterion_research_data['raw']:
                         continue
