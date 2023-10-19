@@ -22,7 +22,7 @@ from research.search import GoogleSerperSearchResultsProvider
 class Criterion(BaseModel):
     name: str = Field(description='The name of the criterion. Example: "Affordability".')
     scale: List[str] = Field(
-        description='The 5-point scale of the criterion, from worst to best. Labels only. No numerical value, no explainations. Example: "Very Expensive".')
+        description='The scale of the criterion, from worst to best. Labels only. No numerical value, no explainations. Example: "Very Expensive".')
 
 
 class CriteriaIdentificationResult(BaseModel):
@@ -67,7 +67,7 @@ class DecisionAssistantState(BaseModel):
 class Alternative(BaseModel):
     name: str = Field(description='The name of the alternative.')
     criteria_data: Optional[Dict[str, Tuple[str, int]]] = Field(
-        description='The research data collected for each criterion for this alternative. Key is the name of the criterion. Value is a tuple of the research data as text and the assigned value based on the 5-point scale of the criterion.')
+        description='The research data collected for each criterion for this alternative. Key is the name of the criterion. Value is a tuple of the research data as text and the assigned value based on the scale of the criterion.')
 
 
 def save_state(state: DecisionAssistantState, state_file: Optional[str]):
