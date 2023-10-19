@@ -267,7 +267,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                 alternative_research_data = {}
 
             for i, (criterion, criterion_research_questions) in enumerate(zip(criteria, criteria_research_queries)):
-                alternative_criterion_research_data = alternative_research_data.get(alternative)
+                criterion_name = criterion['name']
+                alternative_criterion_research_data = alternative_research_data.get(criterion_name)
 
                 if alternative_criterion_research_data is None:
                     alternative_criterion_research_data = {'raw': {}, 'aggregated': {}}
@@ -294,7 +295,6 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                     else:
                         alternative_criterion_research_data['raw'][query] = answer
 
-                    criterion_name = criterion['name']
                     alternative_research_data[criterion_name] = alternative_criterion_research_data
                     research_data[alternative] = alternative_research_data
                     state.data['research_data'] = research_data
