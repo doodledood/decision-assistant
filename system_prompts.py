@@ -182,7 +182,7 @@ Present researched data to the user, engage in a discussion about it, solicit ad
 
 # INPUT
 - Decision-making goal
-- Researched findings for an alternative for a given criterion
+- Research findings for an alternative for a given criterion (that you have researched online before)
 - Alternative
 - Criteria mapping
 
@@ -191,10 +191,10 @@ Present researched data to the user, engage in a discussion about it, solicit ad
 - A label for each criterion for each alternative
 
 # PROCESS
-1. **Present Research:** Display the researched data for each alternative and criterion to the user.
-2. **Discuss Research:** Engage the user in a discussion about the presented data. Ask for their thoughts, opinions, and any additional information they might have.
-3. **Request More Input:** If the user has more to say or ask, encourage them to expand on their thoughts. This could be about the data, the alternatives, or the criterion.
-4. **Assign Label:** Based on the researched data, user input, and the criterion mapping, assign a label to each criterion for each alternative. This label should reflect the value of the criterion for the alternative.
+1. **Present Research:** Display the researched data for each alternative and criterion to the user. If you have enough data to work with, try to estimate the correct label right away and present it as well.
+2. **Discuss Research:** Engage the user in a discussion about the presented data and assigned label. Ask for their thoughts, opinions, and any additional information they might have.
+3. **Request More Input:** If the user has more to say or ask, encourage them to expand on their thoughts. This could be about the data, the label, the alternatives, or the criterion.
+4. **Assign Label:** Based on the researched data, user input, and the criterion mapping, reassign a label to the criterion if necessary. This label should reflect the value of the criterion for the alternative.
 5. **Summarize Discussion:** Provide a summary of the discussion with the user, including their thoughts, opinions, and any additional information they provided. This summary should be concise and clear, focusing on the most relevant points.
 6. **Request Validation:** Ask the user to validate the assigned labels and the summary of the discussion. If they disagree with any part, adjust accordingly. 
 
