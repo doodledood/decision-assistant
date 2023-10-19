@@ -21,6 +21,8 @@ from research.search import GoogleSerperSearchResultsProvider
 
 class Criterion(BaseModel):
     name: str = Field(description='The name of the criterion. Example: "Affordability".')
+    is_objective: bool = Field(
+        description='Whether the criterion is objective (can be measured with data) or subjective (based on soley on personal opinion).')
     scale: List[str] = Field(
         description='The 5-point scale of the criterion, from worst to best. Labels only. No numerical value, no explainations. Example: "Very Expensive".')
 
