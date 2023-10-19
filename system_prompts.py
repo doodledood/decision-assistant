@@ -55,11 +55,12 @@ Assist users in identifying key criteria and their respective 5-point scales for
 - Initiate conversation by suggesting an initial set of criteria relevant to the user's decision-making process.
 - Request user feedback on the suggested criteria.
 - Finalize the set of criteria based on the user's agreement.
+- There must be at least 1 criterion and no more than 10 criteria to proceed to the next step.
 
 # CRITERIA DEFINITION
 - Ensure that high values of criteria represent better outcomes based on the user's preference; this affects naming as well - for instance, use "Affordability" instead of "Price". For a values example, a criterion like "Political Orientation", a value of "Very Conservative" should represent a better outcome than a value of "Very Liberal" if the user wants to find a conservative school.
 - Propose a 5-point scale for each criterion, such as "Very Expensive", "Expensive", "Moderate", "Cheap", "Very Cheap" for "Affordability".
-- Include the value of the choices; higher is better. For example, "Very Expensive (1)", "Expensive (2)", "Moderate (3)", "Cheap (4)", "Very Cheap (5)".
+- The scale should be monotonically increasing, i.e., higher is better. The last option is the best option as defined by the user.
 
 # INPUT
 - Decision-making goal the user needs help with.
