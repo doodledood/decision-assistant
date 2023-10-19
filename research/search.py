@@ -33,11 +33,11 @@ class GoogleSerperSearchResultsProvider(SearchResultsProvider):
     def search(self, query: str, n_results: int = 3) -> SearchResults:
         assert n_results > 0, 'n_results must be greater than 0'
 
-        api_wrapper = GoogleSerperAPIWrapper(serper_api_key=self.api_key, k=n_results)
+        api_wrapper = GoogleSerperAPIWrapper(serper_api_key=self.api_key, k=n_results + 2)
         results = api_wrapper.results(query)
 
         return SearchResults(
-            answer_snippet=results.get('answerBox', {}).get('snippet'),
+            answer_snippet=results.get('answerBox', {}).get('answer'),
             knowledge_graph_description=results.get('knowledgeGraph', {}).get('description'),
             organic_results=[
                 OrganicSearchResult(
