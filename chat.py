@@ -8,6 +8,8 @@ from langchain.tools import Tool
 from langchain.tools.render import format_tool_to_openai_function
 from pydantic import BaseModel
 
+from utils import fix_invalid_json
+
 ResultSchema = TypeVar("T", bound=BaseModel)
 
 
@@ -79,7 +81,7 @@ def chat(chat_model: ChatOpenAI,
         function_call = last_message.additional_kwargs.get('function_call')
         if function_call is not None:
             if function_call['name'] == '_terminate':
-                args = json.loads(function_call['arguments'])
+                args = json.loads(fix_invalid_json(function_call['arguments']))
 
                 result = args['result']
                 if result_schema is not None:
