@@ -452,7 +452,7 @@ Assigned label: **{criterion_data['aggregated']['label']}**'''
 
         partial_html = convert_markdown_to_html(markdown)
 
-        render_partial_html_to_file(partial_html=partial_html, title='Decision Report.html',
+        render_partial_html_to_file(partial_html=partial_html, title='Decision Report',
                                     filename='decision_report.html')
 
         state.last_completed_stage = Stage.PRESENTATION_COMPILATION
@@ -476,15 +476,18 @@ def render_partial_html_to_file(partial_html: str, title: str, filename: str) ->
           crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.js" integrity="sha512-Xo0Jh8MsOn72LGV8kU5LsclG7SUzJsWGhXbWcYs2MAmChkQzwiW/yTQwdJ8w6UA9C6EVG18GHb/TrYpYCjyAQw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <style>
-    body {{
-      font-size: 18px;
+    li, p, tbody {{
+      line-height: 1.6;
+      font-size: 20px;
+    }}
+    body > .ui.container {{
+       padding: 8em;
     }}
   </style>
 </head>
 <body>
   <div class="ui container" style="margin-top: 20px;">
     <div class="ui raised very padded text segment">
-      <div class="ui header">{title}</div>
       {partial_html}
     </div>
   </div>
