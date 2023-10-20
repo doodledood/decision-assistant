@@ -1,4 +1,5 @@
 import json
+from json import JSONDecodeError
 from typing import List, Optional, Callable, Type, TypeVar
 
 from halo import Halo
@@ -34,7 +35,8 @@ def chat(chat_model: ChatOpenAI,
          on_reply: Optional[Callable[[str], None]] = None,
          result_schema: Optional[Type[BaseModel]] = None,
          spinner: Optional[Halo] = None,
-         max_ai_messages: Optional[int] = None
+         max_ai_messages: Optional[int] = None,
+         max_consecutive_json_error_count: int = 3
          ) -> ResultSchema:
     assert len(messages) > 0, 'At least one message is required.'
 
@@ -64,6 +66,8 @@ def chat(chat_model: ChatOpenAI,
             [format_tool_to_openai_function(tool) for tool in (tools or [])]
     )
 
+    consecutive_json_error_count = 0
+
     while True:
         if spinner is not None:
             spinner.start(text='Thinking...')
@@ -81,36 +85,48 @@ def chat(chat_model: ChatOpenAI,
         function_call = last_message.additional_kwargs.get('function_call')
         if function_call is not None:
             if function_call['name'] == '_terminate':
-                args = json.loads(fix_invalid_json(function_call['arguments']))
+                try:
+                    args = json.loads(fix_invalid_json(function_call['arguments']))
 
-                result = args['result']
-                if result_schema is not None:
-                    if isinstance(result, str):
-                        result = json_string_to_pydantic(str(result), result_schema)
-                    else:
-                        result = result_schema.parse_obj(result)
-
-                return result
-
-            for tool in tools:
-                if tool.name == function_call['name']:
-                    args = function_call['arguments']
-
-                    if spinner is not None:
-                        if hasattr(tool, 'progress_text'):
-                            progress_text = tool.progress_text
+                    result = args['result']
+                    if result_schema is not None:
+                        if isinstance(result, str):
+                            result = json_string_to_pydantic(str(result), result_schema)
                         else:
-                            progress_text = 'Executing function call...'
+                            result = result_schema.parse_obj(result)
 
-                        spinner.start(progress_text)
+                    return result
+                except JSONDecodeError as e:
+                    if consecutive_json_error_count >= max_consecutive_json_error_count - 1:
+                        raise
 
-                    result = tool.run(args)
                     messages.append(FunctionMessage(
-                        name=tool.name,
-                        content=result or 'None'
+                        name=function_call['name'],
+                        content=f'ERROR: {e}'
                     ))
+                    consecutive_json_error_count += 1
 
                     break
+            else:
+                for tool in tools:
+                    if tool.name == function_call['name']:
+                        args = function_call['arguments']
+
+                        if spinner is not None:
+                            if hasattr(tool, 'progress_text'):
+                                progress_text = tool.progress_text
+                            else:
+                                progress_text = 'Executing function call...'
+
+                            spinner.start(progress_text)
+
+                        result = tool.run(args)
+                        messages.append(FunctionMessage(
+                            name=tool.name,
+                            content=result or 'None'
+                        ))
+
+                        break
         else:
             last_message = messages[-1]
             on_reply(last_message.content)

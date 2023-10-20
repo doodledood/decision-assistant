@@ -1,5 +1,6 @@
 import re
 
+
 def fix_invalid_json(json_string):
     # Use regular expression to find all string fields in the JSON
     pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
@@ -14,4 +15,5 @@ def fix_invalid_json(json_string):
         last_end = end
 
     fixed_json += json_string[last_end:]  # Add the remaining portion of the original string
+
     return fixed_json
