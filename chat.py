@@ -102,7 +102,7 @@ def chat(chat_model: ChatOpenAI,
 
                     messages.append(FunctionMessage(
                         name=function_call['name'],
-                        content=f'ERROR: {e}'
+                        content=f'ERROR: Arguments to the function call were not valid JSON. Please try again. Error: {e}'
                     ))
                     consecutive_json_error_count += 1
 
