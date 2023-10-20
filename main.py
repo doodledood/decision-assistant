@@ -65,7 +65,7 @@ class Stage(enum.IntEnum):
     CRITERIA_RESEARCH_QUESTIONS_GENERATION = 5
     DATA_RESEARCH = 6
     DATA_ANALYSIS = 7
-    PRESENTATION = 8
+    PRESENTATION_COMPILATION = 8
 
 
 class DecisionAssistantState(BaseModel):
@@ -113,7 +113,7 @@ def mark_stage_as_done(stage: Stage, halo: Optional[Halo] = None):
         Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION: 'Research questions generated.',
         Stage.DATA_RESEARCH: 'Data researched.',
         Stage.DATA_ANALYSIS: 'Data analyzed.',
-        Stage.PRESENTATION: 'Presentation ready.',
+        Stage.PRESENTATION_COMPILATION: 'Presentation compiled.'
     }[stage]
     halo.succeed(stage_text)
 
@@ -156,6 +156,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Identify goal
     if state.last_completed_stage is None and goal is None:
+        spinner.start('Identifying goal...')
+
         goal = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.goal_identification_system_prompt),
             HumanMessage(content="Hey")
@@ -172,6 +174,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Identify alternatives
     if state.last_completed_stage == Stage.GOAL_IDENTIFICATION:
+        spinner.start('Identifying alternatives...')
+
         alternatives = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.alternative_listing_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}'),
@@ -189,6 +193,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Identify criteria
     if state.last_completed_stage == Stage.ALTERNATIVE_LISTING:
+        spinner.start('Identifying criteria...')
+
         criteria = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}'),
@@ -206,6 +212,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Map criteria
     if state.last_completed_stage == Stage.CRITERIA_IDENTIFICATION:
+        spinner.start('Mapping criteria...')
+
         criteria_mapping = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_mapping_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}'),
@@ -223,6 +231,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Prioritize criteria
     if state.last_completed_stage == Stage.CRITERIA_MAPPING:
+        spinner.start('Prioritizing criteria...')
+
         criteria_weights = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_prioritization_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
@@ -240,6 +250,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Generate research questions
     if state.last_completed_stage == Stage.CRITERIA_PRIORITIZATION:
+        spinner.start('Generating research questions...')
+
         criteria_research_queries = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
             HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
@@ -259,6 +271,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Research data
     if state.last_completed_stage == Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION:
+        spinner.start('Researching data...')
+
         research_data = state.data.get('research_data')
         if research_data is None:
             research_data = {}
@@ -331,6 +345,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Analyze Data
     if state.last_completed_stage == Stage.DATA_RESEARCH:
+        spinner.start('Analyzing data...')
+
         items = [research_data[alternative] for alternative in alternatives]
         criteria_names = [criterion['name'] for criterion in criteria]
         weights = {c: w for c, w in zip(criteria_names, criteria_weights)}
@@ -340,7 +356,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                                   lower_bound=1.0,
                                   upper_bound=100.0))
 
-        scored_alternatives = sorted(zip(alternatives, scores), key=lambda x: x[1], reverse=True)
+        scored_alternatives = {alternative: score for alternative, score in zip(alternatives, scores)}
 
         state.last_completed_stage = Stage.DATA_ANALYSIS
         state.data = {**state.data, **dict(scored_alternatives=scored_alternatives)}
@@ -349,10 +365,94 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     else:
         mark_stage_as_done(Stage.DATA_ANALYSIS)
 
-    print(state)
+    scored_alternatives = state.data['scored_alternatives']
 
+    # Compile data for presentation
+    if state.last_completed_stage == Stage.DATA_ANALYSIS:
+        # Combine all alternative bits into an array of alternative objects
+        enriched_alternatives = []
+        for alternative in alternatives:
+            alternative_research_data = research_data[alternative]
+            alternative_score = scored_alternatives[alternative]
+
+            enriched_alternatives.append({
+                'name': alternative,
+                'score': alternative_score,
+                'criteria_data': alternative_research_data
+            })
+
+        # Aggregate everything into a markdown file for presentation
+        criteria_names = [criterion['name'] for criterion in criteria]
+
+        def get_criteria_value_string_for_alternative(alternative):
+            criterion_values = []
+            for criterion in criteria_names:
+                criterion_value = alternative['criteria_data'][criterion]['aggregated']['label']
+                criterion_values.append(criterion_value)
+
+            return ' | '.join(criterion_values)
+
+        alternative_lines = [
+            f'| {alternative["name"]} | {get_criteria_value_string_for_alternative(alternative)} | {round(alternative["score"], 2) * 100}% |'
+            for alternative in sorted(enriched_alternatives, key=lambda a: a['score'], reverse=True)
+        ]
+        alternative_lines_str = '\n'.join(alternative_lines)
+
+        def scale_to_str(scale):
+            return '\n'.join([f'{i + 1}. {label}' for i, label in enumerate(scale)])
+
+        criteria_definition_str = '\n'.join(
+            [f'## {criterion["name"]} (Weight = {criterion_weight})\n\n{scale_to_str(criterion["scale"])}\n\n' for
+             criterion, criterion_weight in zip(criteria, criteria_weights)]
+        )
+
+        def criterion_data_to_full_findings_str(criterion_name, criterion_data):
+            return f'''
+            ### {criterion_name}
+            
+            {criterion_data['aggregated']['findings']}
+            
+            Assigned label: **{criterion_data['aggregated']['label']}**
+            '''
+
+        criteria_full_findings_str = "\n\n".join(
+            [criterion_data_to_full_findings_str(criterion_name, data) for criterion_name, data in
+             alternative["criteria_data"].items()])
+
+        full_research_findings_str = '\n\n'.join(
+            [
+                f'''
+                ## {alternative["name"]}
+                
+                {criteria_full_findings_str}
+                ''' for alternative in enriched_alternatives]
+        )
+
+        markdown = f'''
+        # GOAL
+        {goal}
+        
+        # ALTERNATIVES
+        | Alternative | {criteria_names} | Score |
+        | --- | --- | --- |
+        {alternative_lines_str}
+        
+        # CRITERIA
+        {criteria_definition_str}
+        
+        # FULL RESEARCH FINDINGS
+        {full_research_findings_str}
+        '''
+
+        state.last_completed_stage = Stage.PRESENTATION_COMPILATION
+
+        save_and_mark_stage_as_done(state, state_file)
+    else:
+        mark_stage_as_done(Stage.PRESENTATION_COMPILATION)
+
+    print(state)
 
 if __name__ == '__main__':
     load_dotenv()
 
-    Fire(run_decision_assistant)
+Fire(run_decision_assistant)
