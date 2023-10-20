@@ -36,7 +36,8 @@ def chat(chat_model: ChatOpenAI,
          result_schema: Optional[Type[BaseModel]] = None,
          spinner: Optional[Halo] = None,
          max_ai_messages: Optional[int] = None,
-         max_consecutive_json_error_count: int = 3
+         max_consecutive_json_error_count: int = 3,
+         return_first_response: bool = False
          ) -> ResultSchema:
     assert len(messages) > 0, 'At least one message is required.'
 
@@ -79,6 +80,9 @@ def chat(chat_model: ChatOpenAI,
                 spinner.stop_and_persist(symbol='🤖', text=last_message.content)
             else:
                 spinner.stop()
+
+        if return_first_response:
+            return last_message.content
 
         all_messages.append(last_message)
 

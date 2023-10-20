@@ -393,7 +393,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
             return ' | '.join(criterion_values)
 
         alternative_lines = [
-            f'| {alternative["name"]} | {get_criteria_value_string_for_alternative(alternative)} | {round(alternative["score"], 2) * 100}% |'
+            f'| {alternative["name"]} | {get_criteria_value_string_for_alternative(alternative)} | {int(round(alternative["score"], 2) * 100)}% |'
             for alternative in sorted(enriched_alternatives, key=lambda a: a['score'], reverse=True)
         ]
         alternative_lines_str = '\n'.join(alternative_lines)
@@ -407,42 +407,53 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         )
 
         def criterion_data_to_full_findings_str(criterion_name, criterion_data):
-            return f'''
-            ### {criterion_name}
-            
-            {criterion_data['aggregated']['findings']}
-            
-            Assigned label: **{criterion_data['aggregated']['label']}**
-            '''
+            return f'''### {criterion_name}
 
-        criteria_full_findings_str = "\n\n".join(
-            [criterion_data_to_full_findings_str(criterion_name, data) for criterion_name, data in
-             alternative["criteria_data"].items()])
+{criterion_data['aggregated']['findings']}
+
+Assigned label: **{criterion_data['aggregated']['label']}**'''
+
+        def get_alternative_criteria_findings_str(alternative):
+            return '\n\n'.join(
+                [criterion_data_to_full_findings_str(criterion_name, alternative['criteria_data'][criterion_name]) for
+                 criterion_name in criteria_names])
 
         full_research_findings_str = '\n\n'.join(
             [
-                f'''
-                ## {alternative["name"]}
-                
-                {criteria_full_findings_str}
-                ''' for alternative in enriched_alternatives]
+                f'''## {alternative["name"]}
+
+{get_alternative_criteria_findings_str(alternative)}'''
+                for alternative in enriched_alternatives]
         )
 
-        markdown = f'''
-        # GOAL
-        {goal}
-        
-        # ALTERNATIVES
-        | Alternative | {criteria_names} | Score |
-        | --- | --- | --- |
-        {alternative_lines_str}
-        
-        # CRITERIA
-        {criteria_definition_str}
-        
-        # FULL RESEARCH FINDINGS
-        {full_research_findings_str}
-        '''
+        markdown = f'''# GOAL
+{goal}
+
+# ALTERNATIVES
+| Alternative | {" | ".join(criteria_names)} | Score |
+| --- | {" | ".join(["---" for _ in range(len(criteria_names))])} | --- |
+{alternative_lines_str}
+
+# CRITERIA
+{criteria_definition_str}
+
+# FULL RESEARCH FINDINGS
+{full_research_findings_str}'''
+
+        def convert_markdown_to_html(md):
+            decorated_html = chat(chat_model=fast_chat_model, messages=[
+                SystemMessage(content=system_prompts.convert_markdown_to_html_system_prompt),
+                HumanMessage(content=md),
+            ], return_first_response=True, spinner=spinner)
+
+            return decorated_html
+
+        spinner.start('Converting generated markdown into readable HTML...')
+
+        partial_html = convert_markdown_to_html(markdown)
+
+        render_partial_html_to_file(partial_html=partial_html, title='Decision Report.html',
+                                    filename='decision_report.html')
 
         state.last_completed_stage = Stage.PRESENTATION_COMPILATION
 
@@ -451,6 +462,39 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         mark_stage_as_done(Stage.PRESENTATION_COMPILATION)
 
     print(state)
+
+
+def render_partial_html_to_file(partial_html: str, title: str, filename: str) -> None:
+    # Full HTML with Semantic UI styling
+    full_html = f'''<!DOCTYPE html>
+<html>
+<head>
+  <title>{title}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.css" integrity="sha512-KXol4x3sVoO+8ZsWPFI/r5KBVB/ssCGB5tsv2nVOKwLg33wTFP3fmnXa47FdSVIshVTgsYk/1734xSk9aFIa4A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script src="https://code.jquery.com/jquery-3.1.1.min.js"
+          integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
+          crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.js" integrity="sha512-Xo0Jh8MsOn72LGV8kU5LsclG7SUzJsWGhXbWcYs2MAmChkQzwiW/yTQwdJ8w6UA9C6EVG18GHb/TrYpYCjyAQw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    body {{
+      font-size: 18px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="ui container" style="margin-top: 20px;">
+    <div class="ui raised very padded text segment">
+      <div class="ui header">{title}</div>
+      {partial_html}
+    </div>
+  </div>
+</body>
+</html>'''
+
+    # Write the full HTML to a file
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(full_html)
+
 
 if __name__ == '__main__':
     load_dotenv()

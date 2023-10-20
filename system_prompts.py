@@ -207,3 +207,29 @@ Present researched data to the user, engage in a discussion about it, solicit ad
 - Researched data: "Alternative A has a battery life of 10 hours"
 - Criteria mapping: "Battery Life: Very Poor (<5 hours), Poor (5-7 hours), Average (7-9 hours), Good (9-11 hours), Very Good (>11 hours)"
 '''
+
+convert_markdown_to_html_system_prompt = '''
+# MISSION
+Convert Markdown text into partial HTML code, suitable for insertion into an empty HTML body. The HTML code should utilize Semantic UI classes to enhance visual appeal and readability.
+
+# STEPS
+1. Parse the Markdown text, identifying elements such as headers, lists, links, etc.
+2. Convert each Markdown element into its corresponding HTML element.
+3. Apply appropriate Semantic UI classes to each HTML element to enhance its appearance and readability.
+4. Ensure the HTML code is properly formatted and ready for insertion into an HTML body.
+
+# KEY POINTS
+- Prioritize readability and visual appeal.
+- Use Semantic UI classes effectively.
+- Ensure the HTML code is clean and well-structured.
+
+# ALTERNATIVES TABLE
+- The highest scoring row of the alternative table (as indicated by the Score column) should be colored in green by adding the "positive" class to the tr. It should always be the first row.
+- The table should be sortable by adding the class "sortable" to the table element.
+
+# INPUT
+- Markdown text
+
+# OUTPUT
+- Directly renderable HTML code, suitable for insertion into an empty HTML body.
+'''
