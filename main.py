@@ -16,6 +16,7 @@ from chat import chat
 from research import create_web_search_tool, WebSearch
 from research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from research.page_retriever import ScraperAPIPageRetriever
+from research.ranking import topsis_score, normalize_label_value
 from research.search import GoogleSerperSearchResultsProvider
 
 
@@ -63,7 +64,8 @@ class Stage(enum.IntEnum):
     CRITERIA_PRIORITIZATION = 4
     CRITERIA_RESEARCH_QUESTIONS_GENERATION = 5
     DATA_RESEARCH = 6
-    PRESENTATION = 7
+    DATA_ANALYSIS = 7
+    PRESENTATION = 8
 
 
 class DecisionAssistantState(BaseModel):
@@ -110,6 +112,7 @@ def mark_stage_as_done(stage: Stage, halo: Optional[Halo] = None):
         Stage.CRITERIA_PRIORITIZATION: 'Criteria prioritized.',
         Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION: 'Research questions generated.',
         Stage.DATA_RESEARCH: 'Data researched.',
+        Stage.DATA_ANALYSIS: 'Data analyzed.',
         Stage.PRESENTATION: 'Presentation ready.',
     }[stage]
     halo.succeed(stage_text)
@@ -323,6 +326,28 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         save_and_mark_stage_as_done(state, state_file)
     else:
         mark_stage_as_done(Stage.DATA_RESEARCH)
+
+    research_data = state.data['research_data']
+
+    # Analyze Data
+    if state.last_completed_stage == Stage.DATA_RESEARCH:
+        items = [research_data[alternative] for alternative in alternatives]
+        criteria_names = [criterion['name'] for criterion in criteria]
+        weights = {c: w for c, w in zip(criteria_names, criteria_weights)}
+        scores = topsis_score(items=items, weights=weights, value_mapper=lambda item, criterion: \
+            normalize_label_value(label=item[criterion]['aggregated']['label'],
+                                  label_list=criteria[criteria_names.index(criterion)]['scale'],
+                                  lower_bound=1.0,
+                                  upper_bound=100.0))
+
+        scored_alternatives = sorted(zip(alternatives, scores), key=lambda x: x[1], reverse=True)
+
+        state.last_completed_stage = Stage.DATA_ANALYSIS
+        state.data = {**state.data, **dict(scored_alternatives=scored_alternatives)}
+
+        save_and_mark_stage_as_done(state, state_file)
+    else:
+        mark_stage_as_done(Stage.DATA_ANALYSIS)
 
     print(state)
 
