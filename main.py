@@ -10,6 +10,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.text_splitter import TokenTextSplitter
 from pydantic.v1 import BaseModel, Field
+from jinja2 import Template
 
 import system_prompts
 from chat import chat
@@ -441,7 +442,7 @@ Assigned label: **{criterion_data['aggregated']['label']}**'''
 {full_research_findings_str}'''
 
         def convert_markdown_to_html(md):
-            decorated_html = chat(chat_model=fast_chat_model, messages=[
+            decorated_html = chat(chat_model=chat_model, messages=[
                 SystemMessage(content=system_prompts.convert_markdown_to_html_system_prompt),
                 HumanMessage(content=md),
             ], return_first_response=True, spinner=spinner)
@@ -464,39 +465,96 @@ Assigned label: **{criterion_data['aggregated']['label']}**'''
     print(state)
 
 
-def render_partial_html_to_file(partial_html: str, title: str, filename: str) -> None:
-    # Full HTML with Semantic UI styling
-    full_html = f'''<!DOCTYPE html>
+def generate_decision_report(criteria: List[any], alternatives: List[any], goal: str) -> str:
+    template_str = '''<!DOCTYPE html>
 <html>
 <head>
-  <title>{title}</title>
+  <title>Decision Report</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.css" integrity="sha512-KXol4x3sVoO+8ZsWPFI/r5KBVB/ssCGB5tsv2nVOKwLg33wTFP3fmnXa47FdSVIshVTgsYk/1734xSk9aFIa4A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="https://code.jquery.com/jquery-3.1.1.min.js"
           integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
           crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.js" integrity="sha512-Xo0Jh8MsOn72LGV8kU5LsclG7SUzJsWGhXbWcYs2MAmChkQzwiW/yTQwdJ8w6UA9C6EVG18GHb/TrYpYCjyAQw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <style>
-    li, p, tbody {{
+    li, p, tbody {
       line-height: 1.6;
       font-size: 20px;
-    }}
-    body > .ui.container {{
+    }
+    body > .ui.container {
        padding: 8em;
-    }}
+    }
   </style>
 </head>
 <body>
   <div class="ui container" style="margin-top: 20px;">
     <div class="ui raised very padded text segment">
-      {partial_html}
-    </div>
-  </div>
+  <h1 class="ui header">Goal</h1>
+  <p>{{ goal }}</p>
+  <div class="ui divider"></div>
+
+  <h2 class="ui header">Alternatives</h2>
+  <table class="ui celled sortable table">
+    <thead>
+      <tr>
+        <th>Alternative</th>
+        {% for criterion in criteria %}
+        <th>{{ criterion['name'] }}</th>
+        {% endfor %}
+        <th>Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for alternative in alternatives %}
+      <tr>
+        <td>{{ alternative['name'] }}</td>
+        {% for criterion_name in criteria %}
+        <td>{{ alternative['criteria']['aggregated'][criterion_name['name']]['label'] }}</td>
+        {% endfor %}
+        <td>{{ alternative['score'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2 class="ui header">Criteria</h2>
+    <table class="ui celled sortable table">
+    <thead>
+      <tr>
+        <th>Criterion</th>
+        <th>Scale</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for criterion in criteria %}
+      <tr>
+        <td>{{ criterion['name'] }}</td>
+        <td><ol class="ui list">
+          {% for scale_value in criterion['scale'] %}
+          <li>{{ scale_value }}</li>
+          {% endfor %}
+        </ol></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="ui divider"></div>
+
+  <h2 class="ui header">Full Research Findings</h2>
+    {% for alternative in alternatives %}
+    <h3 class="ui header">{{ alternative['name'] }}</h3>
+    {% for criterion in criteria %}
+    <h4 class="ui header">{{ criterion['name'] }}</h4>
+    <p>{{ alternative['criteria']['aggregated'][criterion['name']]['findings'] }}</p>
+    <p><strong>Assigned label: {{ alternative['criteria']['aggregated'][criterion['name']]['label'] }}</strong></p>
+    {% endfor %}
+    {% endfor %}
+</div>
 </body>
 </html>'''
 
-    # Write the full HTML to a file
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write(full_html)
+    template = Template(template_str)
+    return template.render(criteria=criteria, alternatives=alternatives, goal=goal)
 
 
 if __name__ == '__main__':

@@ -160,3 +160,4 @@ cython_debug/
 #.idea/
 
 state.json
+decision_report.html
