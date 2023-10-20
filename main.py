@@ -51,8 +51,8 @@ class CriteriaResearchQueriesResult(BaseModel):
 class AlternativeCriteriaResearchFindingsResult(BaseModel):
     updated_research_findings: str = Field(
         description='The updated and aggregated research findings for the alternative and criterion. Formatted as rich markdown with all the citations and links in place.')
-    label_value: int = Field(
-        description='The label value assigned to the alternative and criterion based on the aggregated research findings and user discussion. The label value is assigned from the scale of the criterion.')
+    label: str = Field(
+        description='The label assigned to the alternative and criterion based on the aggregated research findings and user discussion. The label is assigned from the scale of the criterion (name of the label).')
 
 
 class Stage(enum.IntEnum):
@@ -312,7 +312,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
                 research_data[alternative][criterion_name]['aggregated'] = {
                     'findings': criterion_full_research_data.updated_research_findings,
-                    'label_value': criterion_full_research_data.label_value
+                    'label': criterion_full_research_data.label
                 }
                 state.data['research_data'] = research_data
                 save_state(state, state_file)
