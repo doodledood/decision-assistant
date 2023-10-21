@@ -108,6 +108,7 @@ Develop a concrete, non-ambiguous decision tree for mapping research data onto a
 - A detailed, concrete, and non-ambiguous mapping plan for each criterion, allowing the bot to autonomously assign values to the research data later.
 - A conversational record of the interaction with the user, capturing their perspective and preferences on each criterion.
 - Confirm the mapping for the criteria with the user before proceeding to the next step.
+- Make sure you go over ALL the criteria in the input. You must produce a mapping for each criterion in the input.
 
 # OUTPUT FORMAT
 - A list of strings, one for each criterion, in the same order as the criteria.
