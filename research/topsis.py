@@ -1,123 +1,33 @@
-# From topsis-jamesfallon with some mods to fix interpreter errors
+from typing import Optional, Tuple
 
-# Import for arrays, linalg, types
 import numpy as np
 
 
-class topsis:
-    """ Define a TOPSIS decision making process
-    TOPSIS (Technique for Order Preference by Similarity to an Ideal Solution)
-    chooses and ranks alternatives of shortest distance from the ideal solution
-    """
-    C = None
-    optimum_choice = None
+def topsis(decision_matrix: np.ndarray, weights: np.ndarray,
+           best_and_worst_solutions: Optional[Tuple[np.ndarray, np.ndarray]] = None):
+    # Step 1: Normalize the decision matrix
+    row_sums = np.sqrt(np.sum(np.square(decision_matrix), axis=0))
+    normalized_matrix = decision_matrix / row_sums
 
-    def __init__(self, a, w, I):
-        """ Initialise topsis object with alternatives (a), weighting (w),
-        and benefit/cost indicator (i). Validate the user input for correct
-        dimensions etc.
+    # Step 2: Weighted normalized decision matrix
+    weighted_normalized_matrix = normalized_matrix * weights
 
-        :param np.ndarray a: A 2D array of shape (J,n)
-        :param np.ndarray w: A 1D array of shape (J)
-        :param np.ndarray I: A 1D array of shape (n)
-        """
-        # Decision Matrix
-        self.a = np.array(a, dtype=float).T
-        assert len(self.a.shape) == 2, "Decision matrix a must be 2D"
+    # Step 3: Determine the ideal and anti-ideal solutions
+    if best_and_worst_solutions is not None:
+        ideal_solution, anti_ideal_solution = best_and_worst_solutions
 
-        # Number of alternatives, aspects
-        (self.n, self.J) = self.a.shape
+        # Normalize and weight the provided ideal and anti-ideal solutions
+        ideal_solution = (ideal_solution / row_sums) * weights
+        anti_ideal_solution = (anti_ideal_solution / row_sums) * weights
+    else:
+        ideal_solution = np.max(weighted_normalized_matrix, axis=0)
+        anti_ideal_solution = np.min(weighted_normalized_matrix, axis=0)
 
-        # Weight matrix
-        self.w = np.array(w, dtype=float)
-        assert len(self.w.shape) == 1, "Weights array must be 1D"
-        assert self.w.size == self.n, "Weights array wrong length, " + \
-                                      "should be of length {}".format(self.n)
+    # Step 4: Calculate the Euclidean distances
+    distances_to_ideal = np.linalg.norm(weighted_normalized_matrix - ideal_solution, axis=1)
+    distances_to_anti_ideal = np.linalg.norm(weighted_normalized_matrix - anti_ideal_solution, axis=1)
 
-        # Normalise weights to 1
-        self.w = self.w / sum(self.w)
+    # Step 5: Calculate the similarity to the ideal solution
+    similarity_to_ideal = distances_to_anti_ideal / (distances_to_ideal + distances_to_anti_ideal)
 
-        # Benefit (True) or Cost (False) criteria?
-        self.I = np.array(I, dtype=np.int8)
-        assert len(self.I.shape) == 1, "Criterion array must be 1D"
-        assert len(self.I) == self.n, "Criterion array wrong length, " + \
-                                      "should be of length {}".format(self.n)
-
-        # Initialise best/worst alternatives lists
-        ab, aw = np.zeros(self.n), np.zeros(self.n)
-
-    def __repr__(self):
-        """ What to print when the object is called?
-        """
-        # If optimum choice not yet calculated, start the calculation!
-        if self.optimum_choice == None:
-            self.calc()
-        opt_idx = self.optimum_choice
-        return 'Best alternative\na[{}]: {}'.format(opt_idx, self.a[:, opt_idx])
-
-    def step1(self):
-        """ TOPSIS Step 1
-        Calculate the normalised decision matrix (self.r)
-        """
-        self.r = self.a / np.array(np.linalg.norm(self.a, axis=1)[:, np.newaxis])
-        return
-
-    def step2(self):
-        """ TOPSIS Step 2
-        Calculate the weighted normalised decision matrix
-        Two transposes required so that indices are multiplied correctly:
-        """
-        self.v = (self.w * self.r.T).T
-        return
-
-    def step3(self):
-        """ TOPSIS Step 3
-        Determine the ideal and negative-ideal solutions
-        I[i] defines i as a member of the benefit criteria (True) or the cost
-        criteria (False)
-        """
-        # Calcualte ideal/negative ideals
-        self.ab = np.max(self.v, axis=1) * self.I + \
-                  np.min(self.v, axis=1) * (1 - self.I)
-        self.aw = np.max(self.v, axis=1) * (1 - self.I) + \
-                  np.min(self.v, axis=1) * self.I
-        return
-
-    def step4(self):
-        """ TOPSIS Step 4
-        Calculate the separation measures, n-dimensional Euclidean distance
-        """
-        # Create two n long arrays containing Eculidean distances
-        # Save the ideal and negative-ideal solutions
-        self.db = np.linalg.norm(self.v - self.ab[:, np.newaxis], axis=0)
-        self.dw = np.linalg.norm(self.v - self.aw[:, np.newaxis], axis=0)
-        return
-
-    def step5(self):
-        """ TOPSIS Step 5 & 6
-        Calculate the relative closeness to the ideal solution, then rank the
-        preference order
-        """
-        # Ignore division by zero errors
-        # np.seterr(all='ignore')
-        # Find relative closeness
-        self.C = self.dw / (self.dw + self.db)
-        self.optimum_choice = self.C.argsort()[-1]
-        return
-
-    def calc(self):
-        """ TOPSIS Calculations
-        This can be called once the object is initialised, and is
-        automatically called when a representation of topsis is
-        needed (eg. print(topsis(matrix, weights, I)). This calls each step in
-        TOPSIS algorithm and stores calcultions in self.
-
-        The optimum alternatives index (starting at 0) is saved in
-        self.optimum_choice
-        """
-        self.step1()
-        self.step2()
-        self.step3()
-        self.step4()
-        self.step5()
-        return
+    return similarity_to_ideal

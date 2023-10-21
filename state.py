@@ -5,8 +5,6 @@ from typing import Any, Optional
 from halo import Halo
 from pydantic.v1 import BaseModel, Field
 
-from main import mark_stage_as_done
-
 
 class Stage(enum.IntEnum):
     GOAL_IDENTIFICATION = 0

@@ -289,11 +289,19 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         items = [research_data[alternative] for alternative in alternatives]
         criteria_names = [criterion['name'] for criterion in criteria]
         weights = {c: w for c, w in zip(criteria_names, criteria_weights)}
-        scores = topsis_score(items=items, weights=weights, value_mapper=lambda item, criterion: \
-            normalize_label_value(label=item[criterion]['aggregated']['label'],
-                                  label_list=criteria[criteria_names.index(criterion)]['scale'],
-                                  lower_bound=1.0,
-                                  upper_bound=100.0))
+        scores = topsis_score(items=items,
+                              weights=weights,
+                              value_mapper=lambda item, criterion: \
+                                  normalize_label_value(label=item[criterion]['aggregated']['label'],
+                                                        label_list=criteria[criteria_names.index(criterion)]['scale'],
+                                                        lower_bound=0.0,
+                                                        upper_bound=1.0),
+                              best_and_worst_solutions=(
+                                  {criterion['name']: {'aggregated': {'label': criterion['scale'][-1]}} for
+                                   criterion in criteria},
+                                  {criterion['name']: {'aggregated': {'label': criterion['scale'][0]}} for
+                                   criterion in criteria}
+                              ))
 
         scored_alternatives = {alternative: score for alternative, score in zip(alternatives, scores)}
 
