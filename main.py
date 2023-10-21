@@ -9,16 +9,19 @@ from langchain.callbacks import StreamingStdOutCallbackHandler, StdOutCallbackHa
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.text_splitter import TokenTextSplitter
+from markdown import markdown
 from pydantic.v1 import BaseModel, Field
 from jinja2 import Template
 
 import system_prompts
 from chat import chat
+from presentation import open_html_file_in_browser, generate_decision_report_as_html, save_html_to_file
 from research import create_web_search_tool, WebSearch
 from research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from research.page_retriever import ScraperAPIPageRetriever
 from research.ranking import topsis_score, normalize_label_value
 from research.search import GoogleSerperSearchResultsProvider
+from state import Stage, DecisionAssistantState, load_state, save_and_mark_stage_as_done, mark_stage_as_done, save_state
 
 
 class Criterion(BaseModel):
@@ -57,78 +60,17 @@ class AlternativeCriteriaResearchFindingsResult(BaseModel):
         description='The label assigned to the alternative and criterion based on the aggregated research findings and user discussion. The label is assigned from the scale of the criterion (name of the label).')
 
 
-class Stage(enum.IntEnum):
-    GOAL_IDENTIFICATION = 0
-    ALTERNATIVE_LISTING = 1
-    CRITERIA_IDENTIFICATION = 2
-    CRITERIA_MAPPING = 3
-    CRITERIA_PRIORITIZATION = 4
-    CRITERIA_RESEARCH_QUESTIONS_GENERATION = 5
-    DATA_RESEARCH = 6
-    DATA_ANALYSIS = 7
-    PRESENTATION_COMPILATION = 8
-
-
-class DecisionAssistantState(BaseModel):
-    last_completed_stage: Optional[Stage] = Field(description='The current stage of the decision-making process.')
-    data: Any = Field(description='The data collected so far.')
-
-
 class Alternative(BaseModel):
     name: str = Field(description='The name of the alternative.')
     criteria_data: Optional[Dict[str, Tuple[str, int]]] = Field(
         description='The research data collected for each criterion for this alternative. Key is the name of the criterion. Value is a tuple of the research data as text and the assigned value based on the scale of the criterion.')
 
 
-def save_state(state: DecisionAssistantState, state_file: Optional[str]):
-    if state_file is None:
-        return
-
-    data = state.dict()
-    with open(state_file, 'w') as f:
-        json.dump(data, f, indent=2)
-
-
-def load_state(state_file: Optional[str]) -> Optional[DecisionAssistantState]:
-    if state_file is None:
-        return None
-
-    try:
-        with open(state_file, 'r') as f:
-            data = json.load(f)
-            return DecisionAssistantState.parse_obj(data)
-    except FileNotFoundError:
-        return None
-
-
-def mark_stage_as_done(stage: Stage, halo: Optional[Halo] = None):
-    if halo is None:
-        halo = Halo(spinner='dots')
-
-    stage_text = {
-        Stage.GOAL_IDENTIFICATION: 'Goal identified.',
-        Stage.ALTERNATIVE_LISTING: 'Alternatives listed.',
-        Stage.CRITERIA_IDENTIFICATION: 'Criteria identified.',
-        Stage.CRITERIA_MAPPING: 'Criteria mapped.',
-        Stage.CRITERIA_PRIORITIZATION: 'Criteria prioritized.',
-        Stage.CRITERIA_RESEARCH_QUESTIONS_GENERATION: 'Research questions generated.',
-        Stage.DATA_RESEARCH: 'Data researched.',
-        Stage.DATA_ANALYSIS: 'Data analyzed.',
-        Stage.PRESENTATION_COMPILATION: 'Presentation compiled.'
-    }[stage]
-    halo.succeed(stage_text)
-
-
-def save_and_mark_stage_as_done(state: DecisionAssistantState, state_file: Optional[str]):
-    with Halo(text='Saving state...', spinner='dots') as spinner:
-        save_state(state, state_file)
-
-        mark_stage_as_done(state.last_completed_stage, spinner)
-
-
 def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model: str = 'gpt-4-0613',
                            fast_llm_model: str = 'gpt-3.5-turbo-16k-0613',
-                           state_file: Optional[str] = 'state.json', streaming: bool = False,
+                           state_file: Optional[str] = 'state.json',
+                           report_file: str = 'decision_report.html',
+                           streaming: bool = False,
                            n_search_results: int = 3, render_js_when_researching: bool = False):
     spinner = Halo(spinner='dots')
 
@@ -370,7 +312,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Compile data for presentation
     if state.last_completed_stage == Stage.DATA_ANALYSIS:
-        # Combine all alternative bits into an array of alternative objects
+        # Aggregate everything into an HTML file for presentation
         enriched_alternatives = []
         for alternative in alternatives:
             alternative_research_data = research_data[alternative]
@@ -382,79 +324,10 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                 'criteria_data': alternative_research_data
             })
 
-        # Aggregate everything into a markdown file for presentation
-        criteria_names = [criterion['name'] for criterion in criteria]
+        spinner.start('Producing report...')
 
-        def get_criteria_value_string_for_alternative(alternative):
-            criterion_values = []
-            for criterion in criteria_names:
-                criterion_value = alternative['criteria_data'][criterion]['aggregated']['label']
-                criterion_values.append(criterion_value)
-
-            return ' | '.join(criterion_values)
-
-        alternative_lines = [
-            f'| {alternative["name"]} | {get_criteria_value_string_for_alternative(alternative)} | {int(round(alternative["score"], 2) * 100)}% |'
-            for alternative in sorted(enriched_alternatives, key=lambda a: a['score'], reverse=True)
-        ]
-        alternative_lines_str = '\n'.join(alternative_lines)
-
-        def scale_to_str(scale):
-            return '\n'.join([f'{i + 1}. {label}' for i, label in enumerate(scale)])
-
-        criteria_definition_str = '\n'.join(
-            [f'## {criterion["name"]} (Weight = {criterion_weight})\n\n{scale_to_str(criterion["scale"])}\n\n' for
-             criterion, criterion_weight in zip(criteria, criteria_weights)]
-        )
-
-        def criterion_data_to_full_findings_str(criterion_name, criterion_data):
-            return f'''### {criterion_name}
-
-{criterion_data['aggregated']['findings']}
-
-Assigned label: **{criterion_data['aggregated']['label']}**'''
-
-        def get_alternative_criteria_findings_str(alternative):
-            return '\n\n'.join(
-                [criterion_data_to_full_findings_str(criterion_name, alternative['criteria_data'][criterion_name]) for
-                 criterion_name in criteria_names])
-
-        full_research_findings_str = '\n\n'.join(
-            [
-                f'''## {alternative["name"]}
-
-{get_alternative_criteria_findings_str(alternative)}'''
-                for alternative in enriched_alternatives]
-        )
-
-        markdown = f'''# GOAL
-{goal}
-
-# ALTERNATIVES
-| Alternative | {" | ".join(criteria_names)} | Score |
-| --- | {" | ".join(["---" for _ in range(len(criteria_names))])} | --- |
-{alternative_lines_str}
-
-# CRITERIA
-{criteria_definition_str}
-
-# FULL RESEARCH FINDINGS
-{full_research_findings_str}'''
-
-        def convert_markdown_to_html(md):
-            decorated_html = chat(chat_model=chat_model, messages=[
-                SystemMessage(content=system_prompts.convert_markdown_to_html_system_prompt),
-                HumanMessage(content=md),
-            ], return_first_response=True, spinner=spinner)
-
-            return decorated_html
-
-        spinner.start('Converting generated markdown into readable HTML...')
-
-        partial_html = convert_markdown_to_html(markdown)
-
-        render_partial_html_to_file(partial_html=partial_html, title='Decision Report',
-                                    filename='decision_report.html')
+        html = generate_decision_report_as_html(criteria=criteria, alternatives=enriched_alternatives, goal=goal)
+        save_html_to_file(html, report_file)
 
         state.last_completed_stage = Stage.PRESENTATION_COMPILATION
 
@@ -462,99 +335,9 @@ Assigned label: **{criterion_data['aggregated']['label']}**'''
     else:
         mark_stage_as_done(Stage.PRESENTATION_COMPILATION)
 
+    open_html_file_in_browser(report_file)
+
     print(state)
-
-
-def generate_decision_report(criteria: List[any], alternatives: List[any], goal: str) -> str:
-    template_str = '''<!DOCTYPE html>
-<html>
-<head>
-  <title>Decision Report</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.css" integrity="sha512-KXol4x3sVoO+8ZsWPFI/r5KBVB/ssCGB5tsv2nVOKwLg33wTFP3fmnXa47FdSVIshVTgsYk/1734xSk9aFIa4A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <script src="https://code.jquery.com/jquery-3.1.1.min.js"
-          integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
-          crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.js" integrity="sha512-Xo0Jh8MsOn72LGV8kU5LsclG7SUzJsWGhXbWcYs2MAmChkQzwiW/yTQwdJ8w6UA9C6EVG18GHb/TrYpYCjyAQw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <style>
-    li, p, tbody {
-      line-height: 1.6;
-      font-size: 20px;
-    }
-    body > .ui.container {
-       padding: 8em;
-    }
-  </style>
-</head>
-<body>
-  <div class="ui container" style="margin-top: 20px;">
-    <div class="ui raised very padded text segment">
-  <h1 class="ui header">Goal</h1>
-  <p>{{ goal }}</p>
-  <div class="ui divider"></div>
-
-  <h2 class="ui header">Alternatives</h2>
-  <table class="ui celled sortable table">
-    <thead>
-      <tr>
-        <th>Alternative</th>
-        {% for criterion in criteria %}
-        <th>{{ criterion['name'] }}</th>
-        {% endfor %}
-        <th>Score</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for alternative in alternatives %}
-      <tr>
-        <td>{{ alternative['name'] }}</td>
-        {% for criterion_name in criteria %}
-        <td>{{ alternative['criteria']['aggregated'][criterion_name['name']]['label'] }}</td>
-        {% endfor %}
-        <td>{{ alternative['score'] }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <h2 class="ui header">Criteria</h2>
-    <table class="ui celled sortable table">
-    <thead>
-      <tr>
-        <th>Criterion</th>
-        <th>Scale</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for criterion in criteria %}
-      <tr>
-        <td>{{ criterion['name'] }}</td>
-        <td><ol class="ui list">
-          {% for scale_value in criterion['scale'] %}
-          <li>{{ scale_value }}</li>
-          {% endfor %}
-        </ol></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <div class="ui divider"></div>
-
-  <h2 class="ui header">Full Research Findings</h2>
-    {% for alternative in alternatives %}
-    <h3 class="ui header">{{ alternative['name'] }}</h3>
-    {% for criterion in criteria %}
-    <h4 class="ui header">{{ criterion['name'] }}</h4>
-    <p>{{ alternative['criteria']['aggregated'][criterion['name']]['findings'] }}</p>
-    <p><strong>Assigned label: {{ alternative['criteria']['aggregated'][criterion['name']]['label'] }}</strong></p>
-    {% endfor %}
-    {% endfor %}
-</div>
-</body>
-</html>'''
-
-    template = Template(template_str)
-    return template.render(criteria=criteria, alternatives=alternatives, goal=goal)
 
 
 if __name__ == '__main__':
