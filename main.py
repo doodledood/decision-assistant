@@ -34,9 +34,9 @@ class AlternativeListingResult(BaseModel):
     alternatives: List[str] = Field(description='The identified alternatives for the decision.')
 
 
-class CriteriaMappingResult(BaseModel):
-    criteria_mapping: List[str] = Field(
-        description='An explaination for each criterion on how to assign a value from the scale to a piece of data. Ordered in the same way as the criteria.')
+class CriterionMappingResult(BaseModel):
+    criterion_mapping: str = Field(
+        description='An explaination for the criterion on how to assign a value from the scale to a piece of data.')
 
 
 class CriteriaPrioritizationResult(BaseModel):
@@ -148,16 +148,29 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         mark_stage_as_done(Stage.CRITERIA_IDENTIFICATION)
 
     criteria = state.data['criteria']
+    criteria_names = [criterion['name'] for criterion in criteria]
 
     # Map criteria
     if state.last_completed_stage == Stage.CRITERIA_IDENTIFICATION:
         spinner.start('Mapping criteria...')
 
-        criteria_mapping = chat(chat_model=chat_model, messages=[
-            SystemMessage(content=system_prompts.criteria_mapping_system_prompt),
-            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}'),
-        ], tools=default_tools_with_web_search, result_schema=CriteriaMappingResult, spinner=spinner)
-        criteria_mapping = criteria_mapping.dict()['criteria_mapping']
+        criteria_mapping = state.data.get('criteria_mapping', {})
+
+        for criterion in criteria:
+            if criterion['name'] in criteria_mapping:
+                continue
+
+            scale_str = '\n'.join([f'{i + 1}. {scale_value}' for i, scale_value in enumerate(criterion['scale'])])
+            criterion_mapping = chat(chat_model=chat_model, messages=[
+                SystemMessage(content=system_prompts.criterion_mapping_system_prompt),
+                HumanMessage(
+                    content=f'# GOAL\n{goal}\n\n# CRITERION NAME\n{criterion["name"]}\n\n# CRITERION SCALE\n{scale_str}'),
+            ], tools=default_tools_with_web_search, result_schema=CriterionMappingResult, spinner=spinner)
+            criterion_mapping = criterion_mapping.dict()['criterion_mapping']
+
+            state.data = {**state.data,
+                          **dict(criteria_mapping={**criteria_mapping, **{criterion['name']: criterion_mapping}})}
+            save_state(state, state_file)
 
         state.last_completed_stage = Stage.CRITERIA_MAPPING
         state.data = {**state.data, **dict(criteria_mapping=criteria_mapping)}
@@ -174,7 +187,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
         criteria_weights = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_prioritization_system_prompt),
-            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
+            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria_names}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
         ], tools=default_tools_with_web_search, result_schema=CriteriaPrioritizationResult, spinner=spinner)
         criteria_weights = criteria_weights.dict()['criteria_weights']
 
@@ -258,7 +271,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                     save_state(state, state_file)
 
                 # Present research data, discuss, aggregate, assign a proper label, and confirm with the user
-                criterion_mapping = criteria_mapping[i]
+                criterion_mapping = criteria_mapping[criterion_name]
                 criterion_full_research_data = chat(chat_model=chat_model, messages=[
                     SystemMessage(content=system_prompts.alternative_criteria_research_system_prompt),
                     HumanMessage(
@@ -287,7 +300,6 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         spinner.start('Analyzing data...')
 
         items = [research_data[alternative] for alternative in alternatives]
-        criteria_names = [criterion['name'] for criterion in criteria]
         weights = {c: w for c, w in zip(criteria_names, criteria_weights)}
         scores = topsis_score(items=items,
                               weights=weights,
