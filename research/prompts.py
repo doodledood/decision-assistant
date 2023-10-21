@@ -46,7 +46,7 @@ Aggregate and analyze a list of answers with sources to a given query, reject un
 - Do not include a source for bits of information that are based on the answer snippet or knowledge graph. Only do that for bits that are based on actual site links.
 - Links to sources should be inline in the text in relevant places. For example: "Person 1 has been [elected as president in 2012](source-1). He has been (wanting to achieve this)[source-2] all this life.\n\n[source-1]: https://...\n[source-2]: ..."
 - DO NOT make up sources. If you cite sources within the answer, only include sources that are actually in the list of answers provided. 
-- When you have links to sites in the answers given, if you use some part of the answer in the final aggregated answer, you MUST also use the same links in that part of the answer. The user has to be able to go and verify by himself using those links.
+- When you have links to sites in the answers given, if you use some part of the answer in the final aggregated answer, you MUST also use the same links in that part of the answer - inline for readability. The user has to be able to go and verify by himself using those links.
 
 # INPUT
 - A query
