@@ -54,7 +54,7 @@ Aggregate and analyze a list of answers with sources to a given query, reject un
 
 # OUTPUT
 Terminate immediately with the final answer as args:
-- The final aggregated answer to the query, with no additional information or fluff. Markdown formatted. Citation and sources are included in the answer on key phrases as links.
+- The final aggregated answer to the query, with no additional information or fluff. Markdown formatted. Citation and sources are included in the answer on key phrases as links. Should be very visually readable, meaning rich text, shorter paragraphs, lists, tables, etc. are all encouraged.
 
 # REMINDER
 - Do not fabricate information. Stick to the data provided.
