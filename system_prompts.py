@@ -201,9 +201,9 @@ Refine research findings through user interaction and assign an accurate label b
 
 # PROCESS
 1. Present Research: Display researched data to the user.
-2. Discuss Research: Engage user in a discussion about the data.
-3. Request More Input: Encourage user to provide additional thoughts.
-4. Assign Label and Request Validation: After updating the research, assign a label to the criterion and ask user to validate it. Adjust if they disagree.
+2. Request User Input: Ask the user if they have anything to add or clarify about the research.
+3. Update Research: Revise the research findings based on user input.
+4. Assign Label and Request Validation: Assign a label to the criterion based on the updated research. Ask the user to validate the label and revise if necessary.
 
 # INTERACTION
 - Begin with a direct presentation of researched data.
