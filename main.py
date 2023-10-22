@@ -244,13 +244,13 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     criteria_comparisons = state.data['criteria_comparisons']
     criteria_comparisons = {tuple(json.loads(labels)): value for labels, value in criteria_comparisons.items()}
 
-    criteria_mapping_str = '\n\n'.join(
-        [f'## {criterion_name}\n{criterion_mapping}' for i, (criterion_name, criterion_mapping) in
-         enumerate(criteria_mapping.items())])
-
     # Generate research questions
     if state.last_completed_stage == Stage.CRITERIA_PRIORITIZATION:
         spinner.start('Generating research questions...')
+
+        criteria_mapping_str = '\n\n'.join(
+            [f'## {criterion_name}\n{criterion_mapping}' for i, (criterion_name, criterion_mapping) in
+             enumerate(criteria_mapping.items())])
 
         criteria_research_queries = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
@@ -347,36 +347,51 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     if state.last_completed_stage == Stage.DATA_RESEARCH:
         spinner.start('Analyzing data...')
 
-        def criteria_to_alternative_label_values(criterion):
-            return {
-                alternative: normalize_label_value(
-                    label=research_data[alternative][criterion['name']]['aggregated']['label'],
-                    label_list=criterion['scale'],
-                    lower_bound=0.0,
-                    upper_bound=1.0
-                ) for alternative in alternatives
-            }
-
-        criteria_alternatives_comparisons = {criterion['name']: criteria_to_alternative_label_values(criterion) for
-                                             criterion in criteria}
-        scored_alternatives = ahp_score(criteria_comparisons,
-                                        criteria_alternative_scores=criteria_alternatives_comparisons)
-        # items = [research_data[alternative] for alternative in alternatives]
-        # weights = ahpy.Compare('Criteria', criteria_comparisons).target_weights
-        # scores = topsis_score(items=items,
-        #                       weights=weights,
-        #                       value_mapper=lambda item, criterion: \
-        #                           normalize_label_value(label=item[criterion]['aggregated']['label'],
-        #                                                 label_list=criteria[criteria_names.index(criterion)]['scale'],
-        #                                                 lower_bound=0.0,
-        #                                                 upper_bound=1.0),
-        #                       best_and_worst_solutions=(
-        #                           {criterion['name']: {'aggregated': {'label': criterion['scale'][-1]}} for
-        #                            criterion in criteria},
-        #                           {criterion['name']: {'aggregated': {'label': criterion['scale'][0]}} for
-        #                            criterion in criteria}
-        #                       ))
-        # scored_alternatives = {alternative: score for alternative, score in zip(alternatives, scores)}
+        # AHP based
+        # def criteria_to_alternative_label_values(criterion):
+        #     return {
+        #         alternative: normalize_label_value(
+        #             label=research_data[alternative][criterion['name']]['aggregated']['label'],
+        #             label_list=criterion['scale'],
+        #             lower_bound=1.0,
+        #             upper_bound=9.0
+        #         ) for alternative in alternatives
+        #     }
+        #
+        # ideal_solution = {criterion['name']: normalize_label_value(
+        #     label=criterion['scale'][-1],
+        #     label_list=criterion['scale'],
+        #     lower_bound=1.0,
+        #     upper_bound=9.0
+        # ) for criterion in criteria}
+        # non_ideal_solution = {criterion['name']: normalize_label_value(
+        #     label=criterion['scale'][0],
+        #     label_list=criterion['scale'],
+        #     lower_bound=1.0,
+        #     upper_bound=9.0
+        # ) for criterion in criteria}
+        # criteria_alternatives_comparisons = {criterion['name']: criteria_to_alternative_label_values(criterion) for
+        #                                      criterion in criteria}
+        # scored_alternatives = ahp_score(criteria_comparisons,
+        #                                 criteria_alternative_scores=criteria_alternatives_comparisons,
+        #                                 ideal_solution=ideal_solution,
+        #                                 non_ideal_solution=non_ideal_solution)
+        items = [research_data[alternative] for alternative in alternatives]
+        weights = ahpy.Compare('Criteria', criteria_comparisons).target_weights
+        scores = topsis_score(items=items,
+                              weights=weights,
+                              value_mapper=lambda item, criterion: \
+                                  normalize_label_value(label=item[criterion]['aggregated']['label'],
+                                                        label_list=criteria[criteria_names.index(criterion)]['scale'],
+                                                        lower_bound=0.0,
+                                                        upper_bound=1.0),
+                              best_and_worst_solutions=(
+                                  {criterion['name']: {'aggregated': {'label': criterion['scale'][-1]}} for
+                                   criterion in criteria},
+                                  {criterion['name']: {'aggregated': {'label': criterion['scale'][0]}} for
+                                   criterion in criteria}
+                              ))
+        scored_alternatives = {alternative: score for alternative, score in zip(alternatives, scores)}
 
         state.last_completed_stage = Stage.DATA_ANALYSIS
         state.data = {**state.data, **dict(scored_alternatives=scored_alternatives)}
@@ -414,7 +429,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     open_html_file_in_browser(report_file)
 
-    print(state)
+    spinner.succeed('Done.')
 
 
 if __name__ == '__main__':
