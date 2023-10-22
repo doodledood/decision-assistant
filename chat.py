@@ -8,6 +8,7 @@ from langchain.schema import BaseMessage, FunctionMessage, HumanMessage
 from langchain.tools import Tool
 from langchain.tools.render import format_tool_to_openai_function
 from pydantic import BaseModel
+from pydantic.v1 import ValidationError
 
 from utils import fix_invalid_json
 
@@ -36,7 +37,7 @@ def chat(chat_model: ChatOpenAI,
          result_schema: Optional[Type[BaseModel]] = None,
          spinner: Optional[Halo] = None,
          max_ai_messages: Optional[int] = None,
-         max_consecutive_json_error_count: int = 3,
+         max_consecutive_arg_error_count: int = 3,
          return_first_response: bool = False
          ) -> ResultSchema:
     assert len(messages) > 0, 'At least one message is required.'
@@ -67,7 +68,7 @@ def chat(chat_model: ChatOpenAI,
             [format_tool_to_openai_function(tool) for tool in (tools or [])]
     )
 
-    consecutive_json_error_count = 0
+    consecutive_arg_error_count = 0
 
     while True:
         if spinner is not None:
@@ -100,17 +101,18 @@ def chat(chat_model: ChatOpenAI,
                             result = result_schema.parse_obj(result)
 
                     return result
-                except JSONDecodeError as e:
-                    if consecutive_json_error_count >= max_consecutive_json_error_count - 1:
+                except Exception as e:
+                    if type(e) not in (JSONDecodeError, ValidationError):
+                        raise
+
+                    if consecutive_arg_error_count >= max_consecutive_arg_error_count - 1:
                         raise
 
                     messages.append(FunctionMessage(
                         name=function_call['name'],
-                        content=f'ERROR: Arguments to the function call were not valid JSON. Please try again. Error: {e}'
+                        content=f'ERROR: Arguments to the function call were not valid JSON or did not follow the given schema for the function argss. Please try again. Error: {e}'
                     ))
-                    consecutive_json_error_count += 1
-
-                    break
+                    consecutive_arg_error_count += 1
             else:
                 for tool in tools:
                     if tool.name == function_call['name']:

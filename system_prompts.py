@@ -9,7 +9,7 @@ Identify a clear and specific decision-making goal from the user's initial vague
 - Start by greeting the user and explaining the purpose of the chatbot.
 - Ask the user to elaborate on their decision goal.
 - If the user's decision goal remains unclear, ask follow-up questions to clarify and refine the goal.
-- Continue the discussion until the decision goal is clearly defined.
+- Continue the discussion until the decision goal is clearly defined (without talking about factors, as they are not needed now).
 
 # USER DECISION GOAL
 - Only one decision goal can be identified per conversation.
@@ -164,7 +164,7 @@ Generate a template for automated research queries for each criterion, whose ans
 - List of criteria with value scales for each and an explanation of how to assign a value label to the answer of a query.
 
 # OUTPUT
-- A list of criteria. Each item in the list is a sub-list of smart and relevant query templates for each criterion, each containing "{alternative}" placeholder for future replacement.
+- A mapping of criteria to research queries. The keys are the criteria names and values are smart and relevant query templates for each criterion, each containing "{alternative}" placeholder for future replacement.
 - If a criterion is purely subjective and nothing an be researched on it, it's ok to have 0 queries about it
 
 # OUTPUT FORMAT
