@@ -1,5 +1,9 @@
-from typing import Optional, List, Tuple, Dict
+import itertools
+import json
+from typing import Optional, List, Tuple, Dict, Callable
 
+import ahpy
+import questionary
 from dotenv import load_dotenv
 from fire import Fire
 from halo import Halo
@@ -60,6 +64,42 @@ class Alternative(BaseModel):
     name: str = Field(description='The name of the alternative.')
     criteria_data: Optional[Dict[str, Tuple[str, int]]] = Field(
         description='The research data collected for each criterion for this alternative. Key is the name of the criterion. Value is a tuple of the research data as text and the assigned value based on the scale of the criterion.')
+
+
+def gather_unique_pairwise_comparisons(criteria_names: List[str],
+                                       previous_comparisons: Optional[Dict[Tuple[str, str], float]] = None,
+                                       on_question_asked: Optional[Callable[[Tuple[str, str], float], None]] = None) \
+        -> Dict[Tuple[str, str], float]:
+    choices = {
+        'Much less important': 1 / 9,
+        'Slightly less important': 1 / 5,
+        'Equally important': 1,
+        'Slightly more important': 5,
+        'Much more important': 9
+    }
+    ordered_choice_names = [choice[0] for choice in sorted(choices.items(), key=lambda x: x[1])]
+
+    comparisons = previous_comparisons
+    all_combs = list(itertools.combinations(criteria_names, 2))
+    for i, (label1, label2) in enumerate(all_combs):
+        if (label1, label2) in comparisons:
+            continue
+
+        answer = questionary.select(
+            f'({i + 1}/{len(all_combs)}) How much more important is "{label1}" when compared to "{label2}"?',
+            choices=ordered_choice_names,
+            default=ordered_choice_names[2]
+        ).ask()
+
+        labels = (label1, label2)
+        value = choices[answer]
+
+        comparisons[labels] = value
+
+        if on_question_asked is not None:
+            on_question_asked(labels, value)
+
+    return comparisons
 
 
 def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 0.0, llm_model: str = 'gpt-4-0613',
@@ -167,9 +207,10 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
                     content=f'# GOAL\n{goal}\n\n# CRITERION NAME\n{criterion["name"]}\n\n# CRITERION SCALE\n{scale_str}'),
             ], tools=default_tools_with_web_search, result_schema=CriterionMappingResult, spinner=spinner)
             criterion_mapping = criterion_mapping.dict()['criterion_mapping']
+            criteria_mapping[criterion['name']] = criterion_mapping
 
             state.data = {**state.data,
-                          **dict(criteria_mapping={**criteria_mapping, **{criterion['name']: criterion_mapping}})}
+                          **dict(criteria_mapping=criteria_mapping)}
             save_state(state, state_file)
 
         state.last_completed_stage = Stage.CRITERIA_MAPPING
@@ -183,13 +224,23 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
     # Prioritize criteria
     if state.last_completed_stage == Stage.CRITERIA_MAPPING:
-        spinner.start('Prioritizing criteria...')
+        # spinner.start('Prioritizing criteria...')
 
-        criteria_weights = chat(chat_model=chat_model, messages=[
-            SystemMessage(content=system_prompts.criteria_prioritization_system_prompt),
-            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA\n{criteria_names}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
-        ], tools=default_tools_with_web_search, result_schema=CriteriaPrioritizationResult, spinner=spinner)
-        criteria_weights = criteria_weights.dict()['criteria_weights']
+        criteria_comparisons = state.data.get('criteria_comparisons', {})
+        criteria_comparisons = {tuple(json.loads(labels)): value for labels, value in criteria_comparisons.items()}
+
+        def save_comparison(labels, value):
+            criteria_comparisons[labels] = value
+
+            state.data = {**state.data, **dict(
+                criteria_comparisons={json.dumps(labels): value for labels, value in criteria_comparisons.items()})}
+            save_state(state, state_file)
+
+        criteria_comparisons = gather_unique_pairwise_comparisons(criteria_names,
+                                                                  previous_comparisons=criteria_comparisons,
+                                                                  on_question_asked=save_comparison)
+        criteria_weights = ahpy.Compare('Criteria', criteria_comparisons).target_weights
+        criteria_weights = [int(round(criteria_weights[criterion_name] * 100)) for criterion_name in criteria_names]
 
         state.last_completed_stage = Stage.CRITERIA_PRIORITIZATION
         state.data = {**state.data, **dict(criteria_weights=criteria_weights)}
