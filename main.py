@@ -17,6 +17,7 @@ import system_prompts
 from chat import chat
 from presentation import open_html_file_in_browser, generate_decision_report_as_html, save_html_to_file
 from research import create_web_search_tool, WebSearch
+from research.ahp import ahp_score
 from research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from research.page_retriever import ScraperAPIPageRetriever
 from research.ranking import topsis_score, normalize_label_value
@@ -43,14 +44,9 @@ class CriterionMappingResult(BaseModel):
         description='An explaination for the criterion on how to assign a value from the scale to a piece of data.')
 
 
-class CriteriaPrioritizationResult(BaseModel):
-    criteria_weights: List[int] = Field(
-        description='The weights of the criteria, from 1 to 100, reflecting their relative importance based on the user\'s preferences. Ordered in the same way as the criteria.')
-
-
 class CriteriaResearchQueriesResult(BaseModel):
-    criteria_research_queries: List[List[str]] = Field(
-        description='The research queries for each criteria. Ordered in the same way as the criteria.')
+    criteria_research_queries: Dict[str, List[str]] = Field(
+        description='The research queries for each criteria. Key is the criterion name, value is a list of research queries for that criterion.')
 
 
 class AlternativeCriteriaResearchFindingsResult(BaseModel):
@@ -239,17 +235,18 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         criteria_comparisons = gather_unique_pairwise_comparisons(criteria_names,
                                                                   previous_comparisons=criteria_comparisons,
                                                                   on_question_asked=save_comparison)
-        criteria_weights = ahpy.Compare('Criteria', criteria_comparisons).target_weights
-        criteria_weights = [int(round(criteria_weights[criterion_name] * 100)) for criterion_name in criteria_names]
-
         state.last_completed_stage = Stage.CRITERIA_PRIORITIZATION
-        state.data = {**state.data, **dict(criteria_weights=criteria_weights)}
 
         save_and_mark_stage_as_done(state, state_file)
     else:
         mark_stage_as_done(Stage.CRITERIA_PRIORITIZATION)
 
-    criteria_weights = state.data['criteria_weights']
+    criteria_comparisons = state.data['criteria_comparisons']
+    criteria_comparisons = {tuple(json.loads(labels)): value for labels, value in criteria_comparisons.items()}
+
+    criteria_mapping_str = '\n\n'.join(
+        [f'## {criterion_name}\n{criterion_mapping}' for i, (criterion_name, criterion_mapping) in
+         enumerate(criteria_mapping.items())])
 
     # Generate research questions
     if state.last_completed_stage == Stage.CRITERIA_PRIORITIZATION:
@@ -257,7 +254,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
         criteria_research_queries = chat(chat_model=chat_model, messages=[
             SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
-            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA MAPPING\n{criteria_mapping}'),
+            HumanMessage(content=f'# GOAL\n{goal}\n\n# CRITERIA MAPPING\n{criteria_mapping_str}'),
         ], tools=default_tools_with_web_search, result_schema=CriteriaResearchQueriesResult,
                                          max_ai_messages=1,
                                          get_user_input=lambda x: 'terminate now please', spinner=spinner)
@@ -286,8 +283,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
             if alternative_research_data is None:
                 alternative_research_data = {}
 
-            for i, (criterion, criterion_research_questions) in enumerate(zip(criteria, criteria_research_queries)):
-                criterion_name = criterion['name']
+            for i, criterion_name in enumerate(criteria_names):
+                criterion_research_questions = criteria_research_queries[criterion_name]
                 alternative_criterion_research_data = alternative_research_data.get(criterion_name)
 
                 if alternative_criterion_research_data is None:
@@ -350,23 +347,36 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
     if state.last_completed_stage == Stage.DATA_RESEARCH:
         spinner.start('Analyzing data...')
 
-        items = [research_data[alternative] for alternative in alternatives]
-        weights = {c: w for c, w in zip(criteria_names, criteria_weights)}
-        scores = topsis_score(items=items,
-                              weights=weights,
-                              value_mapper=lambda item, criterion: \
-                                  normalize_label_value(label=item[criterion]['aggregated']['label'],
-                                                        label_list=criteria[criteria_names.index(criterion)]['scale'],
-                                                        lower_bound=0.0,
-                                                        upper_bound=1.0),
-                              best_and_worst_solutions=(
-                                  {criterion['name']: {'aggregated': {'label': criterion['scale'][-1]}} for
-                                   criterion in criteria},
-                                  {criterion['name']: {'aggregated': {'label': criterion['scale'][0]}} for
-                                   criterion in criteria}
-                              ))
+        def criteria_to_alternative_label_values(criterion):
+            return {
+                alternative: normalize_label_value(
+                    label=research_data[alternative][criterion['name']]['aggregated']['label'],
+                    label_list=criterion['scale'],
+                    lower_bound=0.0,
+                    upper_bound=1.0
+                ) for alternative in alternatives
+            }
 
-        scored_alternatives = {alternative: score for alternative, score in zip(alternatives, scores)}
+        criteria_alternatives_comparisons = {criterion['name']: criteria_to_alternative_label_values(criterion) for
+                                             criterion in criteria}
+        scored_alternatives = ahp_score(criteria_comparisons,
+                                        criteria_alternative_scores=criteria_alternatives_comparisons)
+        # items = [research_data[alternative] for alternative in alternatives]
+        # weights = ahpy.Compare('Criteria', criteria_comparisons).target_weights
+        # scores = topsis_score(items=items,
+        #                       weights=weights,
+        #                       value_mapper=lambda item, criterion: \
+        #                           normalize_label_value(label=item[criterion]['aggregated']['label'],
+        #                                                 label_list=criteria[criteria_names.index(criterion)]['scale'],
+        #                                                 lower_bound=0.0,
+        #                                                 upper_bound=1.0),
+        #                       best_and_worst_solutions=(
+        #                           {criterion['name']: {'aggregated': {'label': criterion['scale'][-1]}} for
+        #                            criterion in criteria},
+        #                           {criterion['name']: {'aggregated': {'label': criterion['scale'][0]}} for
+        #                            criterion in criteria}
+        #                       ))
+        # scored_alternatives = {alternative: score for alternative, score in zip(alternatives, scores)}
 
         state.last_completed_stage = Stage.DATA_ANALYSIS
         state.data = {**state.data, **dict(scored_alternatives=scored_alternatives)}
