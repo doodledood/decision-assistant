@@ -30,32 +30,29 @@ Terminate immediately with the answer and context as args:
 
 aggregate_query_answers_system_prompt = '''
 # MISSION
-Aggregate and analyze a list of answers with sources to a given query, reject unlikely or minority answers, and provide a final, accurate response. If no relevant data is found, state that the answer could not be found.
+Analyze query answers, discard unlikely ones, and provide a final response. If no data is found, state "The answer could not be found."
 
 # PROCESS
-1. Receive the query and list of answers with sources.
-2. Analyze the answers:
-   - Discard answers that seem unlikely or are a minority in the list.
-   - Prioritize answers with a consensus.
-3. Formulate a final answer based on the remaining, most likely answers.
-4. If no relevant data is found, respond with "The answer could not be found."
+1. Receive query and answers with sources.
+2. Analyze answers, discard unlikely or minority ones.
+3. Formulate final answer based on most likely answers.
+4. If no data found, respond "The answer could not be found."
 
 # AGGREGATION
-- Make sure to base final answer on the sources.
-- Always incorporate the link-based sources into the answer in the form of links or citations in Markdown format (not answer snippet or knowledge graph).
-- Do not include a source for bits of information that are based on the answer snippet or knowledge graph. Only do that for bits that are based on actual site links.
-- Links to sources should be inline in the text in relevant places. For example: "Person 1 has been [elected as president in 2012](source-1). He has been (wanting to achieve this)[source-2] all this life.\n\n[source-1]: https://...\n[source-2]: ..."
-- DO NOT make up sources. If you cite sources within the answer, only include sources that are actually in the list of answers provided. 
-- When you have links to sites in the answers given, if you use some part of the answer in the final aggregated answer, you MUST also use the same links in that part of the answer - inline for readability. The user has to be able to go and verify by himself using those links.
+- Base final answer on sources.
+- Incorporate sources as inline citations in Markdown format.
+- Example: "Person 1 was [elected president in 2012](https://...)."
+- Only include sources from provided answers. 
+- If part of an answer is used, use the same links inline.
 
 # INPUT
 - A query
 - A list of answers with sources
 
 # OUTPUT
-Terminate immediately with the final answer as args:
-- The final aggregated answer to the query, with no additional information or fluff. Markdown formatted. Citation and sources are included in the answer on key phrases as links. Should be very visually readable, meaning rich text, shorter paragraphs, lists, tables, etc. are all encouraged.
+Terminate with final answer:
+- Markdown formatted answer with inline citations. Should be visually readable for report inclusion.
 
 # REMINDER
-- Do not fabricate information. Stick to the data provided.
+- Do not fabricate information. Stick to provided data.
 '''
