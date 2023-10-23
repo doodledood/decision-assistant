@@ -12,8 +12,17 @@ from research.page_analyzer import PageQueryAnalyzer
 from research.search import SearchResultsProvider
 import research.prompts as system_prompts
 
+video_watch_urls_patterns = [
+    r'youtube.com/watch\?v=([a-zA-Z0-9_-]+)',
+    r'youtu.be/([a-zA-Z0-9_-]+)',
+    r'vimeo.com/([0-9]+)',
+    r'dailymotion.com/video/([a-zA-Z0-9]+)',
+    r'dailymotion.com/embed/video/([a-zA-Z0-9]+)',
+    r'tiktok.com/@([a-zA-Z0-9_]+)/video/([0-9]+)'
+]
 
-def url_contains_unsupported_file(url):
+
+def url_unsupported(url):
     # List of unsupported file types
     unsupported_types = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'jpg', 'png', 'gif']
 
@@ -23,8 +32,13 @@ def url_contains_unsupported_file(url):
     # Check if the file extension is in the list of unsupported types
     if file_extension and file_extension[0] in unsupported_types:
         return True
-    else:
-        return False
+
+    # Check if URL is a video or video site
+    for pattern in video_watch_urls_patterns:
+        if re.search(pattern, url):
+            return True
+
+    return False
 
 
 class WebSearch:
@@ -63,7 +77,7 @@ class WebSearch:
 
         if not self.skip_results_if_answer_snippet_found or search_results.answer_snippet is None:
             for result in search_results.organic_results:
-                if url_contains_unsupported_file(result.link):
+                if url_unsupported(result.link):
                     continue
 
                 if spinner is not None:
