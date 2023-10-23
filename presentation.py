@@ -31,6 +31,9 @@ def generate_decision_report_as_html(criteria: List[any], alternatives: List[any
       line-height: 1.6;
       font-size: 20px;
     }
+    body {
+        background-color: lightblue;
+    }
     body > .ui.container {
        padding: 8em;
     }
