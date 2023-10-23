@@ -1,4 +1,5 @@
 from functools import partial
+from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -23,12 +24,18 @@ def run_decision_assistant(
         llm_temperature: float = 0.0,
         llm_model: str = 'gpt-4-0613',
         fast_llm_model: str = 'gpt-3.5-turbo-16k-0613',
-        state_file: Optional[str] = 'state.json',
-        report_file: str = 'decision_report.html',
+        state_file: Optional[str] = 'output/state.json',
+        report_file: str = 'output/decision_report.html',
         streaming: bool = False,
         n_search_results: int = 3,
         render_js_when_researching: bool = False
 ):
+    if state_file is not None:
+        Path(state_file).parent.mkdir(exist_ok=True, parents=True)
+
+    if report_file is not None:
+        Path(report_file).parent.mkdir(exist_ok=True, parents=True)
+
     spinner = Halo(spinner='dots')
 
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=streaming,
