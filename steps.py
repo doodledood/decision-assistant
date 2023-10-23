@@ -269,6 +269,13 @@ def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_result
 
                 yield state
 
+    # Do this separately, so all the automated research runs entirely before the user is asked to discuss the findings
+    for alternative in state.data['alternatives']:
+        alternative_research_data = research_data.get(alternative)
+
+        if alternative_research_data is None:
+            alternative_research_data = {}
+
         for i, criterion in enumerate(state.data['criteria']):
             criterion_name = criterion['name']
 
