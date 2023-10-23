@@ -1,3 +1,4 @@
+import os.path
 from typing import List, Dict
 
 from jinja2 import Template
@@ -6,7 +7,7 @@ import webbrowser
 
 
 def open_html_file_in_browser(filename: str):
-    webbrowser.open(filename)
+    webbrowser.open(os.path.abspath(filename))
 
 
 def save_html_to_file(html: str, filename: str):

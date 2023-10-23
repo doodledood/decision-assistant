@@ -3,6 +3,7 @@ import json
 import os
 from typing import List, Dict, Tuple, Optional, Callable, Generator
 
+import ahpy
 import questionary
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
@@ -60,11 +61,15 @@ def gather_unique_pairwise_comparisons(criteria_names: List[str],
                                        on_question_asked: Optional[Callable[[Tuple[str, str], float], None]] = None) \
         -> Generator[Tuple[Tuple[str, str], float], None, None]:
     choices = {
-        'Much less important': 1 / 9,
-        'Slightly less important': 1 / 5,
-        'Equally important': 1,
-        'Slightly more important': 5,
-        'Much more important': 9
+        'Absolutely less important': 1 / 9,
+        'A lot less important': 1 / 7,
+        'Notably less important': 1 / 5,
+        'Slightly less important': 1 / 3,
+        'Just as important': 1,
+        'Slightly more important': 3,
+        'Notably more important': 5,
+        'A lot more important': 7,
+        'Absolutely more important': 9
     }
     ordered_choice_names = [choice[0] for choice in sorted(choices.items(), key=lambda x: x[1])]
 
@@ -177,6 +182,9 @@ def map_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[Too
 
 
 def prioritize_criteria(state: DecisionAssistantState):
+    if state.data.get('criteria_weights') is not None:
+        return
+
     criteria_comparisons = state.data.get('criteria_comparisons', {})
     criteria_comparisons = {tuple(json.loads(labels)): value for labels, value in criteria_comparisons.items()}
     criteria_comparisons = list(criteria_comparisons.items())
@@ -190,6 +198,8 @@ def prioritize_criteria(state: DecisionAssistantState):
         state.data = {**state.data, **dict(
             criteria_comparisons={json.dumps(labels): value for labels, value in criteria_comparisons})}
         yield state
+
+    state.data['criteria_weights'] = ahpy.Compare('Criteria', dict(criteria_comparisons)).target_weights
 
 
 def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_search: List[Tool],
@@ -283,6 +293,10 @@ def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_result
             criterion_mapping = state.data['criteria_mapping'][criterion_name]
             alternative_criterion_research_data = alternative_research_data[criterion_name]
 
+            # Already researched and aggregated, skip
+            if alternative_criterion_research_data['aggregated'] != {}:
+                continue
+
             alternative_criterion_research_data_str = '\n\n'.join(
                 [f'## {query}\n{answer}' for query, answer in alternative_criterion_research_data['raw'].items()]
             )
@@ -317,12 +331,16 @@ def analyze_data(state: DecisionAssistantState):
         return
 
     items = [state.data['research_data'][alternative] for alternative in state.data['alternatives']]
+
+    criteria_weights = state.data['criteria_weights']
+    criteria_names = [criterion['name'] for criterion in state.data['criteria']]
+
     scores = topsis_score(items=items,
-                          weights=state.data['criteria_weights'],
+                          weights=criteria_weights,
                           value_mapper=lambda item, criterion: \
                               normalize_label_value(label=item[criterion]['aggregated']['label'],
                                                     label_list=state.data['criteria'][
-                                                        state.data['criteria_names'].index(criterion)]['scale'],
+                                                        criteria_names.index(criterion)]['scale'],
                                                     lower_bound=0.0,
                                                     upper_bound=1.0),
                           best_and_worst_solutions=(
