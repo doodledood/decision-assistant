@@ -182,12 +182,13 @@ def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_s
     criteria_mapping_str = '\n\n'.join(
         [f'## {criterion_name}\n{criterion_mapping}' for i, (criterion_name, criterion_mapping) in
          enumerate(state.data['criteria_mapping'].items())])
+    alternatives_str = '\n\n'.join([f'## {alternative}' for i, alternative in enumerate(state.data['alternatives'])])
 
     criteria_research_queries = chat(
         chat_model=chat_model,
         messages=[
             SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
-            HumanMessage(content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERIA MAPPING\n{criteria_mapping_str}'),
+            HumanMessage(content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERIA MAPPING\n{criteria_mapping_str}# ALTERNATIVES\n{alternatives_str}'),
         ],
         tools=default_tools_with_web_search,
         result_schema=CriteriaResearchQueriesResult,

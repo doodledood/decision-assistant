@@ -28,6 +28,7 @@ def json_string_to_pydantic(json_string: str, pydantic_model: Type[BaseModel]) -
     except AttributeError:
         return pydantic_model.parse_raw(json_string)
 
+terminate_now_message_content = 'Please now "_terminate" immediately with the result of your mission.'
 
 def chat(chat_model: ChatOpenAI,
          messages: List[BaseMessage],
@@ -49,7 +50,7 @@ def chat(chat_model: ChatOpenAI,
         on_reply = lambda message: print(f'\n🤖: {message}')
 
     if get_immediate_answer:
-        get_user_input = lambda _: 'Okay. Please terminate now with the result of your mission.'
+        get_user_input = lambda _: terminate_now_message_content
         on_reply = lambda _: None
         max_ai_messages = 1
 
@@ -104,7 +105,7 @@ def chat(chat_model: ChatOpenAI,
                     if consecutive_arg_error_count >= max_consecutive_arg_error_count - 1:
                         raise
 
-                    messages.append(FunctionMessage(
+                    all_messages.append(FunctionMessage(
                         name=function_call['name'],
                         content=f'ERROR: Arguments to the function call were not valid JSON or did not follow the given schema for the function argss. Please try again. Error: {e}'
                     ))
@@ -123,14 +124,13 @@ def chat(chat_model: ChatOpenAI,
                             spinner.start(progress_text)
 
                         result = tool.run(args)
-                        messages.append(FunctionMessage(
+                        all_messages.append(FunctionMessage(
                             name=tool.name,
                             content=result or 'None'
                         ))
 
                         break
         else:
-            last_message = messages[-1]
             on_reply(last_message.content)
 
             curr_n_ai_messages += 1
@@ -140,8 +140,8 @@ def chat(chat_model: ChatOpenAI,
                     raise Exception(
                         f'AI did not terminate when asked to do so. This is the last message: `{last_message}`')
 
-                user_input = 'Please now "_terminate" immediately with the result of your mission.'
+                user_input = terminate_now_message_content
             else:
-                user_input = get_user_input(messages)
+                user_input = get_user_input(all_messages)
 
             all_messages.append(HumanMessage(content=user_input))

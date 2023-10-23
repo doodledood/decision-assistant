@@ -37,11 +37,15 @@ Assist the user in identifying and listing the alternatives they consider for th
 - Assist the user in generating alternatives if they struggle to come up with options.
 - Confirm the list of alternatives with the user before proceeding to the next step.
 
-# INPUT
-- Decision-making goal
-
 # REQUIREMENTS
 - There MUST be at least 2 alternatives and no more than 20 alternatives to proceed to the next step.
+
+# ALTERNATIVES
+- If alternatives are items make sure you name them in a way that makes sense. For example, if the decision is about choosing a school, name the alternatives as the school names and not "Go to X School".
+- Must be unique.
+
+# INPUT
+- Decision-making goal
 
 # OUTPUT
 - The final list of alternatives the user considers for their decision-making process.
@@ -162,6 +166,7 @@ Generate a template for automated research queries for each criterion, whose ans
 # INPUT
 - Decision-making goal.
 - List of criteria with value scales for each and an explanation of how to assign a value label to the answer of a query.
+- List of alternatives being evaluated, for your reference.
 
 # OUTPUT
 - A mapping of criteria to research queries. The keys are the criteria names and values are smart and relevant query templates for each criterion, each containing "{alternative}" placeholder for future replacement.
