@@ -28,7 +28,9 @@ def json_string_to_pydantic(json_string: str, pydantic_model: Type[BaseModel]) -
     except AttributeError:
         return pydantic_model.parse_raw(json_string)
 
+
 terminate_now_message_content = 'Please now "_terminate" immediately with the result of your mission.'
+
 
 def chat(chat_model: ChatOpenAI,
          messages: List[BaseMessage],
