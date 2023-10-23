@@ -15,7 +15,7 @@ from research.search import GoogleSerperSearchResultsProvider
 from sequential_process import Step, SequentialProcess
 from state import DecisionAssistantState, load_state, save_state
 from steps import identify_goal, identify_alternatives, identify_criteria, map_criteria, prioritize_criteria, \
-    generate_research_questions, research_data, analyze_data, compile_data_for_presentation, present_report
+    generate_research_questions, perform_research, analyze_data, compile_data_for_presentation, present_report
 
 
 def run_decision_assistant(
@@ -26,7 +26,8 @@ def run_decision_assistant(
         state_file: Optional[str] = 'output/state.json',
         report_file: str = 'output/decision_report.html',
         n_search_results: int = 3,
-        render_js_when_researching: bool = False
+        render_js_when_researching: bool = False,
+        fully_autonomous_research: bool = True
 ):
     if state_file is not None:
         Path(state_file).parent.mkdir(exist_ok=True, parents=True)
@@ -98,8 +99,8 @@ def run_decision_assistant(
             ),
             Step(
                 name='Data Research',
-                func=partial(research_data, chat_model, web_search, n_search_results, default_tools_with_web_search,
-                             spinner=spinner),
+                func=partial(perform_research, chat_model, web_search, n_search_results, default_tools_with_web_search,
+                             spinner=spinner, fully_autonomous=fully_autonomous_research),
                 on_step_start=lambda _: spinner.start('Researching data...'),
                 on_step_completed=lambda _: spinner.succeed('Researched data.')
             ),

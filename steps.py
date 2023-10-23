@@ -229,9 +229,10 @@ def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_s
     state.data = {**state.data, **dict(criteria_research_queries=criteria_research_queries)}
 
 
-def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_results: int,
-                  default_tools_with_web_search: List[Tool], state: DecisionAssistantState,
-                  spinner: Optional[Halo] = None):
+def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_results: int,
+                     default_tools_with_web_search: List[Tool], state: DecisionAssistantState,
+                     spinner: Optional[Halo] = None,
+                     fully_autonomous: bool = False):
     research_data = state.data.get('research_data')
     if research_data is None:
         research_data = {}
@@ -312,7 +313,8 @@ def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_result
                 ],
                 tools=default_tools_with_web_search,
                 result_schema=AlternativeCriteriaResearchFindingsResult,
-                spinner=spinner
+                spinner=spinner,
+                get_immediate_answer=fully_autonomous
             )
 
             research_data[alternative][criterion_name]['aggregated'] = {
