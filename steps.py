@@ -306,7 +306,7 @@ def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_result
                 'label': criterion_full_research_data.label
             }
             state.data['research_data'] = research_data
-            
+
             yield state
 
     state.data = {**state.data, **dict(research_data=research_data)}

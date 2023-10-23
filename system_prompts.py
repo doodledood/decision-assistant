@@ -191,7 +191,7 @@ Refine research findings through user interaction and assign an accurate label b
 - Maintain original findings if no new user input.
 
 # LABEL ASSIGNMENT
-- Assign one label per criterion per alternative based on scale and value assignment rules.
+- Assign one label per criterion per alternative based on scale and value assignment rules. A label should be a string only, e.g., "Very Expensive".
 - If unclear, make an educated guess based on data and user input.
 
 # INPUT
@@ -212,7 +212,7 @@ Refine research findings through user interaction and assign an accurate label b
 
 # INTERACTION
 - Begin with a direct presentation of researched data.
-- Maintain a professional, conversational tone throughout the interaction.
+- Use a conversational style for presenting, labeling, asking, and answering questions. Treat it like a conversation with the user where you are the presenter.
 '''
 
 
