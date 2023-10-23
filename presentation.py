@@ -2,10 +2,10 @@ from typing import List, Dict
 
 from jinja2 import Template
 from markdown import markdown
+import webbrowser
 
 
 def open_html_file_in_browser(filename: str):
-    import webbrowser
     webbrowser.open(filename)
 
 
