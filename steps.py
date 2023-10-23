@@ -160,12 +160,19 @@ def map_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[Too
             continue
 
         scale_str = '\n'.join([f'{i + 1}. {scale_value}' for i, scale_value in enumerate(criterion['scale'])])
+        previously_mapped_criteria_str = '\n'.join(
+            [f'- {criterion_name}: {criterion_mapping}' for criterion_name, criterion_mapping in
+             criteria_mapping.items()])
+        criteria_left_to_map_str = '\n'.join(
+            [f'- {criterion_name}' for criterion_name in
+             [criterion['name'] for criterion in state.data['criteria'] if
+              criterion['name'] not in criteria_mapping]])
         criterion_mapping = chat(
             chat_model=chat_model,
             messages=[
                 SystemMessage(content=system_prompts.criterion_mapping_system_prompt),
                 HumanMessage(
-                    content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERION NAME\n{criterion["name"]}\n\n# CRITERION SCALE\n{scale_str}'),
+                    content=f'# GOAL\n{state.data["goal"]}\n\n# PREVIOUSLY MAPPED CRITERIA\n{previously_mapped_criteria_str}\n\n#CRITERIA LEFT TO MAP\n{criteria_left_to_map_str}\n\n# CURRENT CRITERION TO MAP\n{criterion["name"]}\n\n## Criterion Scale\n{scale_str}'),
             ],
             tools=default_tools_with_web_search,
             result_schema=CriterionMappingResult,
