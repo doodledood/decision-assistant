@@ -239,10 +239,15 @@ def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_result
 
                 yield state
 
+        for i, criterion in enumerate(state.data['criteria']):
+            criterion_name = criterion['name']
+
             # Present research data, discuss, aggregate, assign a proper label, and confirm with the user
             criterion_mapping = state.data['criteria_mapping'][criterion_name]
             criterion_full_research_data = chat(chat_model=chat_model, messages=[
-                SystemMessage(content=system_prompts.alternative_criteria_research_system_prompt),
+                SystemMessage(
+                    content=system_prompts.alternative_criteria_research_system_prompt
+                ),
                 HumanMessage(
                     content=f'# GOAL\n{state.data["goal"]}\n\n# ALTERNATIVE\n{alternative}\n\n# CRITERION MAPPING\n{criterion_mapping}\n\n# RESEARCH FINDINGS\n{alternative_criterion_research_data}'),
             ], tools=default_tools_with_web_search,
