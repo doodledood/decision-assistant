@@ -84,6 +84,9 @@ def chat(chat_model: ChatOpenAI,
 
         last_message = chat_model.predict_messages(all_messages, functions=functions)
 
+        if spinner is not None:
+            spinner.stop()
+
         all_messages.append(last_message)
 
         function_call = last_message.additional_kwargs.get('function_call')
