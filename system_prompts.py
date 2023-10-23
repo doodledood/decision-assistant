@@ -189,6 +189,8 @@ Refine research findings through user interaction and assign an accurate label b
 # RESEARCH PRESENTATION
 - Present clear, concise research findings with relevant citations in Markdown format.
 - Maintain original findings if no new user input.
+- Mention the sources of the research findings.
+- Mention the current criterion and alternative being researched at the beginning. For example: "Here is what I found about the price of Harvard University:"
 
 # LABEL ASSIGNMENT
 - Assign one label per criterion per alternative based on scale and value assignment rules. A label should be a string only, e.g., "Very Expensive".
@@ -201,7 +203,7 @@ Refine research findings through user interaction and assign an accurate label b
 - Criteria mapping
 
 # OUTPUT
-- Refined research findings for a criterion's alternative in Markdown format.
+- Refined research findings for a criterion's alternative in Markdown format. Does not include conversational fluff. Think about it like a research report.
 - A label for each criterion for each alternative
 
 # PROCESS
