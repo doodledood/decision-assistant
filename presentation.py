@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 
 from jinja2 import Template
 from markdown import markdown
@@ -14,7 +14,27 @@ def save_html_to_file(html: str, filename: str):
         f.write(html)
 
 
-def generate_decision_report_as_html(criteria: List[any], alternatives: List[any], goal: str) -> str:
+def label_to_color(label: str, scale: List[str]) -> str:
+    label_index = scale.index(label) + 1
+    percentage_to_max = label_index / len(scale)
+
+    if percentage_to_max <= 0.2:
+        return 'red'
+
+    if percentage_to_max <= 0.4:
+        return 'orange'
+
+    if percentage_to_max <= 0.6:
+        return 'yellow'
+
+    if percentage_to_max <= 0.8:
+        return 'olive'
+
+    return 'green'
+
+
+def generate_decision_report_as_html(criteria: List[any], criteria_weights: Dict[str, float], alternatives: List[any],
+                                     goal: str) -> str:
     sorted_alternatives = sorted(alternatives, key=lambda x: x['score'], reverse=True)
 
     template_str = '''<!DOCTYPE html>
@@ -62,7 +82,11 @@ def generate_decision_report_as_html(criteria: List[any], alternatives: List[any
           <tr {% if loop.first %}class="positive"{% endif %}>
                 <td>{{ alternative['name'] }}</td>
             {% for criterion in criteria %}
-                <td>{{ alternative['criteria_data'][criterion['name']]['aggregated']['label'] }}</td>
+                <td>
+                    <span class="ui large {{ label_to_color(alternative['criteria_data'][criterion['name']]['aggregated']['label'], criterion['scale']) }} label">
+                        {{ alternative['criteria_data'][criterion['name']]['aggregated']['label'] }}
+                    </span>
+                </td>
             {% endfor %}
             <td>{{ "{:.0%}".format(alternative['score']) }}</td>
           </tr>
@@ -76,6 +100,7 @@ def generate_decision_report_as_html(criteria: List[any], alternatives: List[any
       <tr>
         <th>Criterion</th>
         <th>Scale</th>
+        <th>Weight</th>
       </tr>
     </thead>
     <tbody>
@@ -84,9 +109,14 @@ def generate_decision_report_as_html(criteria: List[any], alternatives: List[any
         <td>{{ criterion['name'] }}</td>
         <td><ol class="ui list">
           {% for scale_value in criterion['scale'] %}
-              <li>{{ scale_value }}</li>
+              <li>
+                <div class="ui large basic {{ label_to_color(scale_value, criterion['scale']) }} label">
+                    {{ scale_value }}
+                </div>
+              </li>
           {% endfor %}
         </ol></td>
+        <td>{{ "{:.0%}".format(criteria_weights[criterion['name']]) }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -97,8 +127,12 @@ def generate_decision_report_as_html(criteria: List[any], alternatives: List[any
         <h3 class="ui header">{{ alternative['name'] }}</h3>
         {% for criterion in criteria %}
             <h4 class="ui header">{{ criterion['name'] }}</h4>
+            <p>
+                <div class="ui basic large {{ label_to_color(alternative['criteria_data'][criterion['name']]['aggregated']['label'], criterion['scale']) }} label">
+                    {{ alternative['criteria_data'][criterion['name']]['aggregated']['label'] }}
+                </div>
+            </p>
             <p>{{ markdown(alternative['criteria_data'][criterion['name']]['aggregated']['findings']) }}</p>
-            <p><strong>Assigned label: {{ alternative['criteria_data'][criterion['name']]['aggregated']['label'] }}</strong></p>
         {% endfor %}
     {% endfor %}
 </div>
@@ -106,4 +140,9 @@ def generate_decision_report_as_html(criteria: List[any], alternatives: List[any
 </html>'''
 
     template = Template(template_str)
-    return template.render(criteria=criteria, sorted_alternatives=sorted_alternatives, goal=goal, markdown=markdown)
+    return template.render(criteria=criteria,
+                           criteria_weights=criteria_weights,
+                           sorted_alternatives=sorted_alternatives,
+                           goal=goal,
+                           markdown=markdown,
+                           label_to_color=label_to_color)

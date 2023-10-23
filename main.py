@@ -342,6 +342,7 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         mark_stage_as_done(Stage.DATA_RESEARCH)
 
     research_data = state.data['research_data']
+    criteria_weights = ahpy.Compare('Criteria', criteria_comparisons).target_weights
 
     # Analyze Data
     if state.last_completed_stage == Stage.DATA_RESEARCH:
@@ -377,9 +378,8 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
         #                                 ideal_solution=ideal_solution,
         #                                 non_ideal_solution=non_ideal_solution)
         items = [research_data[alternative] for alternative in alternatives]
-        weights = ahpy.Compare('Criteria', criteria_comparisons).target_weights
         scores = topsis_score(items=items,
-                              weights=weights,
+                              weights=criteria_weights,
                               value_mapper=lambda item, criterion: \
                                   normalize_label_value(label=item[criterion]['aggregated']['label'],
                                                         label_list=criteria[criteria_names.index(criterion)]['scale'],
@@ -418,7 +418,11 @@ def run_decision_assistant(goal: Optional[str] = None, llm_temperature: float = 
 
         spinner.start('Producing report...')
 
-        html = generate_decision_report_as_html(criteria=criteria, alternatives=enriched_alternatives, goal=goal)
+        html = generate_decision_report_as_html(
+            criteria=criteria,
+            criteria_weights=criteria_weights,
+            alternatives=enriched_alternatives,
+            goal=goal)
         save_html_to_file(html, report_file)
 
         state.last_completed_stage = Stage.PRESENTATION_COMPILATION
