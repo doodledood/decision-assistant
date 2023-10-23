@@ -162,7 +162,7 @@ def prioritize_criteria(state: DecisionAssistantState):
 
     for labels, value in gather_unique_pairwise_comparisons(criteria_names,
                                                             previous_comparisons=criteria_comparisons):
-        criteria_comparisons[labels] = value
+        criteria_comparisons.append((labels, value))
 
         state.data = {**state.data, **dict(
             criteria_comparisons={json.dumps(labels): value for labels, value in criteria_comparisons})}

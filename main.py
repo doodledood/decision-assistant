@@ -90,7 +90,7 @@ def run_decision_assistant(
             Step(
                 name='Criteria Prioritization',
                 func=prioritize_criteria,
-                on_step_start=lambda _: spinner.start('Prioritizing criteria...'),
+                on_step_start=lambda _: spinner.succeed('Started prioritizing criteria.'),
                 on_step_completed=lambda _: spinner.succeed('Prioritized criteria.')
             ),
             Step(
