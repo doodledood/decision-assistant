@@ -281,6 +281,12 @@ def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_result
 
             # Present research data, discuss, aggregate, assign a proper label, and confirm with the user
             criterion_mapping = state.data['criteria_mapping'][criterion_name]
+            alternative_criterion_research_data = alternative_research_data[criterion_name]
+
+            alternative_criterion_research_data_str = '\n\n'.join(
+                [f'## {query}\n{answer}' for query, answer in alternative_criterion_research_data['raw'].items()]
+            )
+
             criterion_full_research_data = chat(
                 chat_model=chat_model,
                 messages=[
@@ -288,7 +294,7 @@ def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_result
                         content=system_prompts.alternative_criteria_research_system_prompt
                     ),
                     HumanMessage(
-                        content=f'# GOAL\n{state.data["goal"]}\n\n# ALTERNATIVE\n{alternative}\n\n# CRITERION MAPPING\n{criterion_mapping}\n\n# RESEARCH FINDINGS\n{alternative_criterion_research_data}'),
+                        content=f'# GOAL\n{state.data["goal"]}\n\n# ALTERNATIVE\n{alternative}\n\n# CRITERION MAPPING\n{criterion_mapping}\n\n# RESEARCH FINDINGS\n{alternative_criterion_research_data_str}'),
                 ],
                 tools=default_tools_with_web_search,
                 result_schema=AlternativeCriteriaResearchFindingsResult,
@@ -300,6 +306,8 @@ def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_result
                 'label': criterion_full_research_data.label
             }
             state.data['research_data'] = research_data
+            
+            yield state
 
     state.data = {**state.data, **dict(research_data=research_data)}
 
