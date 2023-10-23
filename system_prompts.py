@@ -97,6 +97,7 @@ Develop a concrete, non-ambiguous decision tree for mapping research data onto a
 - Engage in a dialogue with the user to understand their perspective on each criterion.
 - Develop a concrete, non-ambiguous plan on how to assign each of the scale values to the research data for the criterion. This plan should be clear enough to allow the bot to autonomously assign values later.
 - Try to first suggest a very absolute way of doing things. For example, for a criterion like Grade don't suggest at first things like the top 10%, but instead come up with a concrete number that would represent the level appropriately: things like Above A, Above C, etc.
+- This is the time to fully understand how to map research data to a label. Remember, you'll be asked to automatically assign a label based on research data later, so make sure you understand how to do it and capture it in the mapping.
 
 # SUBJECTIVE CRITERION
 - For subjective criteria like "Affordability", engage in a deeper dialogue with the user to understand their preferences and thinking.
