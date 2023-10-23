@@ -68,6 +68,7 @@ def generate_decision_report_as_html(criteria: List[any], criteria_weights: Dict
   <div class="ui divider"></div>
 
   <h2 class="ui header">Alternatives</h2>
+  <div style="overflow-x:auto;">
    <table class="ui celled sortable table">
     <thead>
       <tr>
@@ -94,6 +95,7 @@ def generate_decision_report_as_html(criteria: List[any], criteria_weights: Dict
       {% endfor %}
     </tbody>
    </table>
+  </div>
 
   <h2 class="ui header">Criteria</h2>
     <table class="ui celled sortable table">
