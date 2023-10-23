@@ -84,10 +84,14 @@ class WebSearch:
             spinner.start(f'Processing results...')
 
         formatted_answers = '\n'.join([f'{i + 1}. {q["answer"]}; Source: {q["source"]}' for i, q in enumerate(qna)])
-        final_answer = chat(chat_model=self.chat_model, messages=[
-            SystemMessage(content=system_prompts.aggregate_query_answers_system_prompt),
-            HumanMessage(content=f'# QUERY\n{query}\n\n# ANSWERS\n{formatted_answers}')
-        ], max_ai_messages=1, get_user_input=lambda x: 'terminate now please')
+        final_answer = chat(
+            chat_model=self.chat_model,
+            messages=[
+                SystemMessage(content=system_prompts.aggregate_query_answers_system_prompt),
+                HumanMessage(content=f'# QUERY\n{query}\n\n# ANSWERS\n{formatted_answers}')
+            ],
+            get_immediate_answer=True
+        )
 
         if spinner is not None:
             spinner.succeed(f'Done searching the web.')

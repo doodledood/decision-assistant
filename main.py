@@ -5,7 +5,6 @@ from typing import Optional
 from dotenv import load_dotenv
 from fire import Fire
 from halo import Halo
-from langchain.callbacks import StreamingStdOutCallbackHandler, StdOutCallbackHandler
 from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import TokenTextSplitter
 
@@ -26,7 +25,6 @@ def run_decision_assistant(
         fast_llm_model: str = 'gpt-3.5-turbo-16k-0613',
         state_file: Optional[str] = 'output/state.json',
         report_file: str = 'output/decision_report.html',
-        streaming: bool = False,
         n_search_results: int = 3,
         render_js_when_researching: bool = False
 ):
@@ -38,8 +36,7 @@ def run_decision_assistant(
 
     spinner = Halo(spinner='dots')
 
-    chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model, streaming=streaming,
-                            callbacks=[StreamingStdOutCallbackHandler() if streaming else StdOutCallbackHandler()])
+    chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model)
     fast_chat_model = ChatOpenAI(temperature=llm_temperature, model=fast_llm_model)
     web_search = WebSearch(
         chat_model=chat_model,

@@ -93,10 +93,15 @@ def identify_goal(chat_model: ChatOpenAI, default_tools_with_web_search: List[To
     if state.data.get('goal') is not None:
         return
 
-    goal = chat(chat_model=chat_model, messages=[
-        SystemMessage(content=system_prompts.goal_identification_system_prompt),
-        HumanMessage(content="Hey")
-    ], tools=default_tools_with_web_search, spinner=spinner)
+    goal = chat(
+        chat_model=chat_model,
+        messages=[
+            SystemMessage(content=system_prompts.goal_identification_system_prompt),
+            HumanMessage(content="Hey")
+        ],
+        tools=default_tools_with_web_search,
+        spinner=spinner
+    )
 
     state.data = {**state.data, **dict(goal=goal)}
 
@@ -178,12 +183,16 @@ def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_s
         [f'## {criterion_name}\n{criterion_mapping}' for i, (criterion_name, criterion_mapping) in
          enumerate(state.data['criteria_mapping'].items())])
 
-    criteria_research_queries = chat(chat_model=chat_model, messages=[
-        SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
-        HumanMessage(content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERIA MAPPING\n{criteria_mapping_str}'),
-    ], tools=default_tools_with_web_search, result_schema=CriteriaResearchQueriesResult,
-                                     max_ai_messages=1,
-                                     get_user_input=lambda x: 'terminate now please', spinner=spinner)
+    criteria_research_queries = chat(
+        chat_model=chat_model,
+        messages=[
+            SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
+            HumanMessage(content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERIA MAPPING\n{criteria_mapping_str}'),
+        ],
+        tools=default_tools_with_web_search,
+        result_schema=CriteriaResearchQueriesResult,
+        get_immediate_answer=True,
+        spinner=spinner)
     criteria_research_queries = criteria_research_queries.dict()['criteria_research_queries']
 
     state.data = {**state.data, **dict(criteria_research_queries=criteria_research_queries)}

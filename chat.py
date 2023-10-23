@@ -38,15 +38,20 @@ def chat(chat_model: ChatOpenAI,
          spinner: Optional[Halo] = None,
          max_ai_messages: Optional[int] = None,
          max_consecutive_arg_error_count: int = 3,
-         return_first_response: bool = False
+         get_immediate_answer: bool = False,
          ) -> ResultSchema:
     assert len(messages) > 0, 'At least one message is required.'
 
     if get_user_input is None:
-        get_user_input = lambda _: input('\n> ')
+        get_user_input = lambda _: input('\n👤: ')
 
     if on_reply is None:
-        on_reply = lambda x: None
+        on_reply = lambda message: print(f'\n🤖: {message}')
+
+    if get_immediate_answer:
+        get_user_input = lambda _: 'Okay. Please terminate now with the result of your mission.'
+        on_reply = lambda _: None
+        max_ai_messages = 1
 
     curr_n_ai_messages = 0
     all_messages = messages
@@ -75,15 +80,6 @@ def chat(chat_model: ChatOpenAI,
             spinner.start(text='Thinking...')
 
         last_message = chat_model.predict_messages(all_messages, functions=functions)
-
-        if spinner is not None:
-            if last_message.content != '':
-                spinner.stop_and_persist(symbol='🤖', text=last_message.content)
-            else:
-                spinner.stop()
-
-        if return_first_response:
-            return last_message.content
 
         all_messages.append(last_message)
 

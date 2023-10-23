@@ -61,12 +61,16 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
         answer = 'No answer yet.'
         for i, doc in enumerate(docs):
             text = doc.page_content
-            result = chat(chat_model=self.chat_model, messages=[
-                SystemMessage(content=system_prompts.answer_query_based_on_partial_page_system_prompt),
-                HumanMessage(
-                    content=f'# QUERY\n{query}\n\n# URL\n{url}\n\n# TITLE\n{title}\n\n# PREVIOUS ANSWER\n{answer}\n\n# PAGE TEXT\n{text}')
-            ], max_ai_messages=1, result_schema=PageQueryAnalysisResult,
-                          get_user_input=lambda x: 'terminate now please')
+            result = chat(
+                chat_model=self.chat_model,
+                messages=[
+                    SystemMessage(content=system_prompts.answer_query_based_on_partial_page_system_prompt),
+                    HumanMessage(
+                        content=f'# QUERY\n{query}\n\n# URL\n{url}\n\n# TITLE\n{title}\n\n# PREVIOUS ANSWER\n{answer}\n\n# PAGE TEXT\n{text}')
+                ],
+                result_schema=PageQueryAnalysisResult,
+                get_immediate_answer=True
+            )
 
             answer = result.answer
 
