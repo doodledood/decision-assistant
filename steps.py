@@ -111,10 +111,16 @@ def identify_alternatives(chat_model: ChatOpenAI, default_tools_with_web_search:
     if state.data.get('alternatives') is not None:
         return
 
-    alternatives = chat(chat_model=chat_model, messages=[
-        SystemMessage(content=system_prompts.alternative_listing_system_prompt),
-        HumanMessage(content=f'# GOAL\n{state.data["goal"]}'),
-    ], tools=default_tools_with_web_search, result_schema=AlternativeListingResult, spinner=spinner)
+    alternatives = chat(
+        chat_model=chat_model,
+        messages=[
+            SystemMessage(content=system_prompts.alternative_listing_system_prompt),
+            HumanMessage(content=f'# GOAL\n{state.data["goal"]}'),
+        ],
+        tools=default_tools_with_web_search,
+        result_schema=AlternativeListingResult,
+        spinner=spinner
+    )
     alternatives = alternatives.dict()['alternatives']
 
     state.data = {**state.data, **dict(alternatives=alternatives)}
@@ -125,10 +131,16 @@ def identify_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: Lis
     if state.data.get('criteria') is not None:
         return
 
-    criteria = chat(chat_model=chat_model, messages=[
-        SystemMessage(content=system_prompts.criteria_identification_system_prompt),
-        HumanMessage(content=f'# GOAL\n{state.data["goal"]}'),
-    ], tools=default_tools_with_web_search, result_schema=CriteriaIdentificationResult, spinner=spinner)
+    criteria = chat(
+        chat_model=chat_model,
+        messages=[
+            SystemMessage(content=system_prompts.criteria_identification_system_prompt),
+            HumanMessage(content=f'# GOAL\n{state.data["goal"]}'),
+        ],
+        tools=default_tools_with_web_search,
+        result_schema=CriteriaIdentificationResult,
+        spinner=spinner
+    )
     criteria = criteria.dict()['criteria']
 
     state.data = {**state.data, **dict(criteria=criteria)}
@@ -143,11 +155,17 @@ def map_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[Too
             continue
 
         scale_str = '\n'.join([f'{i + 1}. {scale_value}' for i, scale_value in enumerate(criterion['scale'])])
-        criterion_mapping = chat(chat_model=chat_model, messages=[
-            SystemMessage(content=system_prompts.criterion_mapping_system_prompt),
-            HumanMessage(
-                content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERION NAME\n{criterion["name"]}\n\n# CRITERION SCALE\n{scale_str}'),
-        ], tools=default_tools_with_web_search, result_schema=CriterionMappingResult, spinner=spinner)
+        criterion_mapping = chat(
+            chat_model=chat_model,
+            messages=[
+                SystemMessage(content=system_prompts.criterion_mapping_system_prompt),
+                HumanMessage(
+                    content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERION NAME\n{criterion["name"]}\n\n# CRITERION SCALE\n{scale_str}'),
+            ],
+            tools=default_tools_with_web_search,
+            result_schema=CriterionMappingResult,
+            spinner=spinner
+        )
         criterion_mapping = criterion_mapping.dict()['criterion_mapping']
         criteria_mapping[criterion['name']] = criterion_mapping
 
@@ -188,12 +206,14 @@ def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_s
         chat_model=chat_model,
         messages=[
             SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
-            HumanMessage(content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERIA MAPPING\n{criteria_mapping_str}# ALTERNATIVES\n{alternatives_str}'),
+            HumanMessage(
+                content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERIA MAPPING\n{criteria_mapping_str}# ALTERNATIVES\n{alternatives_str}'),
         ],
         tools=default_tools_with_web_search,
         result_schema=CriteriaResearchQueriesResult,
         get_immediate_answer=True,
-        spinner=spinner)
+        spinner=spinner
+    )
     criteria_research_queries = criteria_research_queries.dict()['criteria_research_queries']
 
     state.data = {**state.data, **dict(criteria_research_queries=criteria_research_queries)}
@@ -254,15 +274,19 @@ def research_data(chat_model: ChatOpenAI, web_search: WebSearch, n_search_result
 
             # Present research data, discuss, aggregate, assign a proper label, and confirm with the user
             criterion_mapping = state.data['criteria_mapping'][criterion_name]
-            criterion_full_research_data = chat(chat_model=chat_model, messages=[
-                SystemMessage(
-                    content=system_prompts.alternative_criteria_research_system_prompt
-                ),
-                HumanMessage(
-                    content=f'# GOAL\n{state.data["goal"]}\n\n# ALTERNATIVE\n{alternative}\n\n# CRITERION MAPPING\n{criterion_mapping}\n\n# RESEARCH FINDINGS\n{alternative_criterion_research_data}'),
-            ], tools=default_tools_with_web_search,
-                                                result_schema=AlternativeCriteriaResearchFindingsResult,
-                                                spinner=spinner)
+            criterion_full_research_data = chat(
+                chat_model=chat_model,
+                messages=[
+                    SystemMessage(
+                        content=system_prompts.alternative_criteria_research_system_prompt
+                    ),
+                    HumanMessage(
+                        content=f'# GOAL\n{state.data["goal"]}\n\n# ALTERNATIVE\n{alternative}\n\n# CRITERION MAPPING\n{criterion_mapping}\n\n# RESEARCH FINDINGS\n{alternative_criterion_research_data}'),
+                ],
+                tools=default_tools_with_web_search,
+                result_schema=AlternativeCriteriaResearchFindingsResult,
+                spinner=spinner
+            )
 
             research_data[alternative][criterion_name]['aggregated'] = {
                 'findings': criterion_full_research_data.updated_research_findings,
