@@ -143,6 +143,7 @@ def chat(chat_model: ChatOpenAI,
                         f'AI did not terminate when asked to do so. This is the last message: `{last_message}`')
 
                 user_input = terminate_now_message_content
+                max_ai_messages = curr_n_ai_messages
             else:
                 user_input = get_user_input(all_messages)
 
