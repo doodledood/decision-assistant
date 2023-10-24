@@ -158,13 +158,15 @@ def chat(chat_model: ChatOpenAI,
 class ChatParticipant(abc.ABC):
     name: str
     symbol: str
+    role: str
     messages_hidden: bool
     _chats_joined = Dict[int, 'Chat']
 
-    def __init__(self, name: str, symbol: str = '👤', messages_hidden: bool = False):
+    def __init__(self, name: str, symbol: str = '👤', role: str = 'Chat Participant', messages_hidden: bool = False):
 
         self.name = name
         self.symbol = symbol
+        self.role = role
         self.messages_hidden = messages_hidden
 
         self._chats_joined = {}
@@ -289,33 +291,35 @@ class UserChatParticipant(ChatParticipant):
 
 class AIChatParticipant(ChatParticipant):
     system_message: str = '''
-    # MISSION
-    - {mission}
-    
-    # NAME
-    - {name}
-    
-    # ROLE
-    - {role}
-    
-    # INPUT
-    - Messages from the user.
-    - The messages represent previous messages from the group chat you are a part of.
-    - They are prefixed by the sender's name.
-    
-    # OUTPUT
-    - Your response to the user or other participants in the group chat.
-    - Do not prefix your messages with your name. Assume the participants know who you are.
-    
-    # TERMINATION
-    - When you think you have achieved your mission or goal, please respond with final result of your mission or goal.
-    - End the message with TERMINATE.
-    
-    # TERMINATION EXAMPLE
-    - The result of my mission or goal. TERMINATE
-    '''
+# MISSION
+- {mission}
+
+# NAME
+- {name}
+
+# ROLE
+- {role}
+
+# CURRENT CHAT PARTICIPANTS
+{participants}
+
+# INPUT
+- Messages from the user.
+- The messages represent previous messages from the group chat you are a part of.
+- They are prefixed by the sender's name.
+
+# OUTPUT
+- Your response to the user or other participants in the group chat.
+- Do not prefix your messages with your name. Assume the participants know who you are.
+
+# TERMINATION
+- When you think you have achieved your mission or goal, please respond with final result of your mission or goal.
+- End the message with TERMINATE.
+
+# TERMINATION EXAMPLE
+- The result of my mission or goal. TERMINATE
+'''
     mission: str
-    role: str
     chat_model: ChatOpenAI
     spinner: Optional[Halo] = None
 
@@ -327,19 +331,15 @@ class AIChatParticipant(ChatParticipant):
                  chat_model: ChatOpenAI,
                  symbol: str = '🤖',
                  mission: str = 'Be a helpful AI assistant.',
-                 role='AI Assistant',
                  system_message: Optional[str] = None,
                  spinner: Optional[Halo] = None
                  ):
-        super().__init__(name=name, symbol=symbol)
+        super().__init__(name=name, symbol=symbol, role='AI Assistant')
 
         self.chat_model = chat_model
         self.system_message = system_message or self.system_message
         self.spinner = spinner
         self.mission = mission
-        self.role = role
-
-        self.system_message = self.system_message.format(name=self.name, mission=self.mission, role=self.role)
 
     def _chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
         messages = []
@@ -358,9 +358,17 @@ class AIChatParticipant(ChatParticipant):
         if self.spinner is not None:
             self.spinner.start(text=f'{self.name} ({self.role}) is thinking...')
 
+        system_message = self.system_message.format(
+            mission=self.mission,
+            name=self.name,
+            role=self.role,
+            participants='\n'.join([f'- {p.name} ({p.role}){" -> This is you." if p.name == self.name else ""}' \
+                                    for p in chat.participants.values()])
+        )
+
         all_messages = self._chat_messages_to_chat_model_messages(chat.messages)
         all_messages = [
-            SystemMessage(content=self.system_message),
+            SystemMessage(content=system_message),
             *all_messages
         ]
 
@@ -379,7 +387,7 @@ if __name__ == '__main__':
     chat_model = ChatOpenAI(temperature=0.0, model='gpt-4-0613')
 
     spinner = Halo(spinner='dots')
-    ai = AIChatParticipant(name='AI Assistant', chat_model=chat_model, spinner=spinner)
+    ai = AIChatParticipant(name='Assistant', chat_model=chat_model, spinner=spinner)
     user = UserChatParticipant(name='User')
 
     main_chat = Chat(initial_participants=[ai, user])
