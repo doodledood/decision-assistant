@@ -133,4 +133,4 @@ def run_decision_assistant(
 if __name__ == '__main__':
     load_dotenv()
 
-Fire(run_decision_assistant)
+    Fire(run_decision_assistant)
