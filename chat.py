@@ -329,14 +329,19 @@ class AIChatParticipant(ChatParticipant):
 - The messages represent previous messages from the group chat you are a part of.
 - They are prefixed by the sender's name.
 
+# STAYING SILENT
+- Sometimes when conversing with other participants, you may want to stay silent or ignore a message. For example, when you are in a group chat with more than 1 participant, and 2 of you are talking with the other participant, you may want to stay silent when the other participant is talking to the other participant, unless you are explicitly mentioned.
+
 # OUTPUT
 - Your response to the user or other participants in the group chat.
 - Do not prefix your messages with your name. Assume the participants know who you are.
 - Always direct your message at one or more participants (other than yourself) in the group chat.
 - Every response you send should start with a recipient name followed by a hash (#) and then your message.
+- However, you do have the option to not respond to a message, in which case you should send an empty message (i.e. just a hash (#)).
 
 # EXAMPLE OUTPUT
-- RECIPIENT1_NAME,...,RECIPIENT2_NAME#YOUR_MESSAGE
+- When you want to respond: RECIPIENT1_NAME,...,RECIPIENT2_NAME#YOUR_MESSAGE
+- When you want to stay silent or ignore the message: #
 '''
     mission: str
     chat_model: ChatOpenAI
@@ -405,6 +410,9 @@ class AIChatParticipant(ChatParticipant):
             content = content.strip()
         else:
             recipients, content = None, last_message.content
+
+        if content == '':
+            return
 
         self.send_message(chat=chat, content=content, recipient_names=recipients)
 
