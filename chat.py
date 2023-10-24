@@ -199,11 +199,13 @@ class ChatMessage(BaseModel):
 
 
 class ChatParticipantNotJoinedToChat(Exception):
-    pass
+    def __init__(self, participant: ChatParticipant):
+        super().__init__(f'Participant {participant} is not joined to this chat.')
 
 
 class ChatParticipantAlreadyJoinedToChat(Exception):
-    pass
+    def __init__(self, participant: ChatParticipant):
+        super().__init__(f'Participant {participant} is already joined to this chat.')
 
 
 class Chat:
@@ -234,13 +236,13 @@ class Chat:
 
     def add_participant(self, participant: ChatParticipant):
         if participant.name in self._participants:
-            raise ChatParticipantAlreadyJoinedToChat(f'Participant {participant} is already joined to this chat.')
+            raise ChatParticipantAlreadyJoinedToChat(participant)
 
         self._participants[participant.name] = participant
 
     def remove_participant(self, participant: ChatParticipant):
         if participant.name not in self._participants:
-            raise ChatParticipantNotJoinedToChat(f'Participant {participant} is not joined to this chat.')
+            raise ChatParticipantNotJoinedToChat(participant)
 
         self._participants.pop(participant.name)
 
@@ -248,7 +250,7 @@ class Chat:
 
     def receive_message(self, sender: ChatParticipant, content: str):
         if sender not in self._participants:
-            raise ChatParticipantNotJoinedToChat(f'Participant {sender} is not joined to this chat.')
+            raise ChatParticipantNotJoinedToChat(sender)
 
         self._last_message_id = self._last_message_id + 1 if self._last_message_id is not None else 1
 
