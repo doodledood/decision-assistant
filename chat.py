@@ -286,7 +286,7 @@ class Chat:
 
 class UserChatParticipant(ChatParticipant):
     def __init__(self, name: str = 'User'):
-        super().__init__(name, messages_hidden=True)
+        super().__init__(name, role='User', messages_hidden=True)
 
     def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
         if message.sender_name == self.name or (
