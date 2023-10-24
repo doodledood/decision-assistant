@@ -296,6 +296,10 @@ class Chat:
         )
 
         self._unprocessed_messages.append(message)
+       
+    def run(self):
+        while self._process_new_messages():
+            pass
 
     def _process_new_messages(self) -> bool:
         new_messages = []
@@ -305,7 +309,7 @@ class Chat:
 
             sender = self.participants[message.sender_name]
             if not sender.messages_hidden:
-                self.display_new_message(message=message)
+                self._display_new_message(message=message)
 
             new_messages.append(message)
 
@@ -314,11 +318,7 @@ class Chat:
 
         return len(new_messages) > 0
 
-    def run(self):
-        while self._process_new_messages():
-            pass
-
-    def display_new_message(self, message: ChatMessage):
+    def _display_new_message(self, message: ChatMessage):
         if message.sender_name not in self.participants:
             symbol = '❓'
         else:
