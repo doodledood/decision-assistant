@@ -356,7 +356,7 @@ class AIChatParticipant(ChatParticipant):
             return
 
         if self.spinner is not None:
-            self.spinner.start(text='Thinking...')
+            self.spinner.start(text=f'{self.name} ({self.role}) is thinking...')
 
         all_messages = self._chat_messages_to_chat_model_messages(chat.messages)
         all_messages = [
