@@ -388,7 +388,7 @@ class AIChatParticipant(ChatParticipant):
             mission=self.mission,
             name=self.name,
             role=self.role,
-            participants='\n'.join([f'- {p.name} ({p.role}){" -> This is you." if p.name == self.name else ""}' \
+            participants='\n'.join([f'- {p.name} (Role: {p.role}){" -> This is you." if p.name == self.name else ""}' \
                                     for p in chat.participants.values()])
         )
 
