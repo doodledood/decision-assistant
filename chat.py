@@ -290,13 +290,13 @@ class UserChatParticipant(ChatParticipant):
 class AIChatParticipant(ChatParticipant):
     system_message: str = '''
     # MISSION
-    - Be a helpful AI assistant to the user.
+    - {mission}
     
     # NAME
     - {name}
     
     # ROLE
-    - AI Assistant
+    - {role}
     
     # INPUT
     - Messages from the user.
@@ -314,6 +314,8 @@ class AIChatParticipant(ChatParticipant):
     # TERMINATION EXAMPLE
     - The result of my mission or goal. TERMINATE
     '''
+    mission: str
+    role: str
     chat_model: ChatOpenAI
     spinner: Optional[Halo] = None
 
@@ -323,7 +325,9 @@ class AIChatParticipant(ChatParticipant):
     def __init__(self,
                  name: str,
                  chat_model: ChatOpenAI,
-                 symbol='🤖',
+                 symbol: str = '🤖',
+                 mission: str = 'Be a helpful AI assistant.',
+                 role='AI Assistant',
                  system_message: Optional[str] = None,
                  spinner: Optional[Halo] = None
                  ):
@@ -332,8 +336,10 @@ class AIChatParticipant(ChatParticipant):
         self.chat_model = chat_model
         self.system_message = system_message or self.system_message
         self.spinner = spinner
+        self.mission = mission
+        self.role = role
 
-        self.system_message = self.system_message.format(name=self.name)
+        self.system_message = self.system_message.format(name=self.name, mission=self.mission, role=self.role)
 
     def _chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
         messages = []
