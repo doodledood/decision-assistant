@@ -171,11 +171,11 @@ class ChatParticipant(abc.ABC):
 
         self._chats_joined = {}
 
-    def send_message(self, chat: 'Chat', content: str):
+    def send_message(self, chat: 'Chat', content: str, recipient_names: Optional[List[str]] = None):
         if chat.id not in self._chats_joined:
-            raise ChatParticipantNotJoinedToChat(self)
+            raise ChatParticipantNotJoinedToChat(self.name)
 
-        chat.receive_message(sender=self, content=content)
+        chat.receive_message(sender_name=self.name, content=content, recipient_names=recipient_names)
 
     def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
         raise NotImplementedError()
@@ -196,17 +196,18 @@ class ChatParticipant(abc.ABC):
 class ChatMessage(BaseModel):
     id: int
     sender_name: str
+    recipient_names: Optional[List[str]]
     content: str
 
 
 class ChatParticipantNotJoinedToChat(Exception):
-    def __init__(self, participant: ChatParticipant):
-        super().__init__(f'Participant {participant} is not joined to this chat.')
+    def __init__(self, participant_name: str):
+        super().__init__(f'Participant {participant_name} is not joined to this chat.')
 
 
 class ChatParticipantAlreadyJoinedToChat(Exception):
-    def __init__(self, participant: ChatParticipant):
-        super().__init__(f'Participant {participant} is already joined to this chat.')
+    def __init__(self, participant_name: str):
+        super().__init__(f'Participant {participant_name} is already joined to this chat.')
 
 
 class Chat:
@@ -231,7 +232,7 @@ class Chat:
 
     def add_participant(self, participant: ChatParticipant):
         if participant.name in self.participants:
-            raise ChatParticipantAlreadyJoinedToChat(participant)
+            raise ChatParticipantAlreadyJoinedToChat(participant.name)
 
         self.participants[participant.name] = participant
 
@@ -240,22 +241,29 @@ class Chat:
 
     def remove_participant(self, participant: ChatParticipant):
         if participant.name not in self.participants:
-            raise ChatParticipantNotJoinedToChat(participant)
+            raise ChatParticipantNotJoinedToChat(participant.name)
 
         self.participants.pop(participant.name)
 
         for participant in self.participants.values():
             participant.on_participant_left_chat(chat=self, participant=participant)
 
-    def receive_message(self, sender: ChatParticipant, content: str):
-        if sender.name not in self.participants:
-            raise ChatParticipantNotJoinedToChat(sender)
+    def receive_message(self, sender_name: str, content: str, recipient_names: Optional[List[str]] = None):
+        if sender_name not in self.participants:
+            raise ChatParticipantNotJoinedToChat(sender_name)
+
+        sender = self.participants[sender_name]
 
         self.last_message_id = self.last_message_id + 1 if self.last_message_id is not None else 1
+
+        if recipient_names is None:
+            recipient_names = [participant.name for participant in self.participants.values() if
+                               participant.name != sender_name]
 
         message = ChatMessage(
             id=self.last_message_id,
             sender_name=sender.name,
+            recipient_names=recipient_names,
             content=content
         )
 
@@ -265,7 +273,7 @@ class Chat:
             self.display_new_message(message=message)
 
         for participant in self.participants.values():
-            participant.on_new_chat_message(chat=self, message=self.messages[-1])
+            participant.on_new_chat_message(chat=self, message=message)
 
     def display_new_message(self, message: ChatMessage):
         if message.sender_name not in self.participants:
@@ -281,12 +289,20 @@ class UserChatParticipant(ChatParticipant):
         super().__init__(name, messages_hidden=True)
 
     def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
-        if message.sender_name == self.name:
+        if message.sender_name == self.name or (
+                message.recipient_names is not None and self.name not in message.recipient_names):
             return
 
         new_message_contents = input(f'👤 ({self.name}): ')
 
-        self.send_message(chat=chat, content=new_message_contents)
+        parts = new_message_contents.split('#', maxsplit=1)
+        if len(parts) == 2:
+            recipients, actual_message_contents = parts
+            recipients = [recipient.strip() for recipient in recipients.split(',')]
+        else:
+            recipients, actual_message_contents = None, new_message_contents
+
+        self.send_message(chat=chat, content=actual_message_contents, recipient_names=recipients)
 
 
 class AIChatParticipant(ChatParticipant):
@@ -300,24 +316,26 @@ class AIChatParticipant(ChatParticipant):
 # ROLE
 - {role}
 
-# CURRENT CHAT PARTICIPANTS
+# CHAT PARTICIPANTS
 {participants}
 
+# CONVERSATION
+- The conversation is a group chat.
+- Every participant can see all messages sent by all other participants, which means you cannot have private conversations with other participants.
+
 # INPUT
-- Messages from the user.
+- Messages from the user or other participants in the group chat.
 - The messages represent previous messages from the group chat you are a part of.
 - They are prefixed by the sender's name.
 
 # OUTPUT
 - Your response to the user or other participants in the group chat.
 - Do not prefix your messages with your name. Assume the participants know who you are.
+- Always direct your message at one or more participants (other than yourself) in the group chat.
+- Every response you send should start with a recipient name followed by a hash (#) and then your message.
 
-# TERMINATION
-- When you think you have achieved your mission or goal, please respond with final result of your mission or goal.
-- End the message with TERMINATE.
-
-# TERMINATION EXAMPLE
-- The result of my mission or goal. TERMINATE
+# EXAMPLE OUTPUT
+- RECIPIENT1_NAME,...,RECIPIENT2_NAME#YOUR_MESSAGE
 '''
     mission: str
     chat_model: ChatOpenAI
@@ -330,11 +348,12 @@ class AIChatParticipant(ChatParticipant):
                  name: str,
                  chat_model: ChatOpenAI,
                  symbol: str = '🤖',
+                 role: str = 'AI Assistant',
                  mission: str = 'Be a helpful AI assistant.',
                  system_message: Optional[str] = None,
                  spinner: Optional[Halo] = None
                  ):
-        super().__init__(name=name, symbol=symbol, role='AI Assistant')
+        super().__init__(name=name, symbol=symbol, role=role)
 
         self.chat_model = chat_model
         self.system_message = system_message or self.system_message
@@ -352,7 +371,8 @@ class AIChatParticipant(ChatParticipant):
         return messages
 
     def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
-        if message.sender_name == self.name:
+        if message.sender_name == self.name or (
+                message.recipient_names is not None and self.name not in message.recipient_names):
             return
 
         if self.spinner is not None:
@@ -377,7 +397,14 @@ class AIChatParticipant(ChatParticipant):
         if self.spinner is not None:
             self.spinner.stop()
 
-        self.send_message(chat=chat, content=last_message.content)
+        parts = last_message.content.split('#', maxsplit=1)
+        if len(parts) == 2:
+            recipients, content = parts
+            recipients = [recipient.strip() for recipient in recipients.split(',')]
+        else:
+            recipients, content = None, last_message.content
+
+        self.send_message(chat=chat, content=content, recipient_names=recipients)
 
 
 if __name__ == '__main__':
@@ -388,7 +415,10 @@ if __name__ == '__main__':
 
     spinner = Halo(spinner='dots')
     ai = AIChatParticipant(name='Assistant', chat_model=chat_model, spinner=spinner)
+    rob = AIChatParticipant(name='Rob', role='Prankster',
+                            mission='Prank the AI with the user. Collaborate with the user to prank the boring AI.',
+                            chat_model=chat_model, spinner=spinner)
     user = UserChatParticipant(name='User')
 
-    main_chat = Chat(initial_participants=[ai, user])
+    main_chat = Chat(initial_participants=[ai, rob, user])
     user.send_message(chat=main_chat, content='Hello!')
