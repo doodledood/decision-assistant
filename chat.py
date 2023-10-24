@@ -173,7 +173,7 @@ class ChatParticipant(BaseModel):
     def leave_chat(self, chat: 'Chat'):
         chat_id = chat.get_id()
         if chat_id not in self._chats_joined:
-            raise ChatParticipantNotJoinedToChat(f'Participant {self} is not joined to this chat.')
+            raise ChatParticipantNotJoinedToChat(self)
 
         chat.remove_participant(participant=self)
 
