@@ -2,7 +2,7 @@ import abc
 import json
 import uuid
 from json import JSONDecodeError
-from typing import List, Optional, Callable, Type, TypeVar, Dict
+from typing import List, Optional, Callable, Type, TypeVar, Dict, ClassVar
 
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
@@ -155,13 +155,17 @@ def chat(chat_model: ChatOpenAI,
             all_messages.append(HumanMessage(content=user_input))
 
 
-class ChatParticipant(abc.ABC, BaseModel):
+class ChatParticipant(abc.ABC):
     name: str
     symbol: str
+    messages_hidden: bool
     _chats_joined = Dict[int, 'Chat']
 
-    def __init__(self, name: str, symbol: str = '👤'):
-        super().__init__(name=name, symbol=symbol)
+    def __init__(self, name: str, symbol: str = '👤', messages_hidden: bool = False):
+
+        self.name = name
+        self.symbol = symbol
+        self.messages_hidden = messages_hidden
 
         self._chats_joined = {}
 
@@ -186,12 +190,9 @@ class ChatParticipant(abc.ABC, BaseModel):
 
             return
 
-    def __hash__(self):
-        return hash(self.name)
-
 
 class ChatMessage(BaseModel):
-    id: str
+    id: int
     sender_name: str
     content: str
 
@@ -232,8 +233,8 @@ class Chat:
 
         self.participants[participant.name] = participant
 
-        for other_participant in self.participants.values():
-            other_participant.on_participant_joined_chat(chat=self, participant=participant)
+        for participant in self.participants.values():
+            participant.on_participant_joined_chat(chat=self, participant=participant)
 
     def remove_participant(self, participant: ChatParticipant):
         if participant.name not in self.participants:
@@ -241,20 +242,25 @@ class Chat:
 
         self.participants.pop(participant.name)
 
-        for other_participant in self.participants.values():
-            other_participant.on_participant_left_chat(chat=self, participant=participant)
+        for participant in self.participants.values():
+            participant.on_participant_left_chat(chat=self, participant=participant)
 
     def receive_message(self, sender: ChatParticipant, content: str):
-        if sender not in self.participants:
+        if sender.name not in self.participants:
             raise ChatParticipantNotJoinedToChat(sender)
 
         self.last_message_id = self.last_message_id + 1 if self.last_message_id is not None else 1
 
-        self.messages.append(ChatMessage(
+        message = ChatMessage(
             id=self.last_message_id,
-            sender=sender,
+            sender_name=sender.name,
             content=content
-        ))
+        )
+
+        self.messages.append(message)
+
+        if not sender.messages_hidden:
+            self.display_new_message(message=message)
 
         for participant in self.participants.values():
             participant.on_new_chat_message(chat=self, message=self.messages[-1])
@@ -270,19 +276,19 @@ class Chat:
 
 class UserChatParticipant(ChatParticipant):
     def __init__(self, name: str = 'User'):
-        super().__init__(name)
+        super().__init__(name, messages_hidden=True)
 
     def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
         if message.sender_name == self.name:
             return
 
-        new_message_contents = input(f'👤: ')
+        new_message_contents = input(f'👤 ({self.name}): ')
 
         self.send_message(chat=chat, content=new_message_contents)
 
 
 class AIChatParticipant(ChatParticipant):
-    default_system_message = '''
+    system_message: str = '''
     # MISSION
     Be a helpful AI assistant to the user.
     
@@ -296,13 +302,23 @@ class AIChatParticipant(ChatParticipant):
     # TERMINATION EXAMPLE
     The result of my mission or goal. TERMINATE
     '''
+    chat_model: ChatOpenAI
+    spinner: Optional[Halo] = None
 
-    def __init__(self, name: str, chat_model: ChatOpenAI,
-                 system_message: str = default_system_message, symbol='🤖',
-                 spinner: Optional[Halo] = None):
+    class Config:
+        arbitrary_types_allowed = True
+
+    def __init__(self,
+                 name: str,
+                 chat_model: ChatOpenAI,
+                 symbol='🤖',
+                 system_message: Optional[str] = None,
+                 spinner: Optional[Halo] = None
+                 ):
         super().__init__(name=name, symbol=symbol)
 
-        self.system_message = system_message
+        self.chat_model = chat_model
+        self.system_message = system_message or self.system_message
         self.spinner = spinner
 
     def _chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
@@ -333,9 +349,16 @@ class AIChatParticipant(ChatParticipant):
 
         self.send_message(chat=chat, content=last_message.content)
 
-# participant1 = ChatParticipant(name='Participant 1')
-# participant2 = ChatParticipant(name='Participant 2')
-#
-# chat = Chat(initial_participants=[participant1, participant2])
-#
-# participant1.send_message(chat, 'Hello!')
+
+if __name__ == '__main__':
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    chat_model = ChatOpenAI(temperature=0.0, model='gpt-4-0613')
+
+    spinner = Halo(spinner='dots')
+    ai = AIChatParticipant(name='AI Assistant', chat_model=chat_model, spinner=spinner)
+    user = UserChatParticipant(name='User')
+
+    chat = Chat(initial_participants=[ai, user])
+    user.send_message(chat=chat, content='Hello!')
