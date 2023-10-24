@@ -163,30 +163,29 @@ class ChatParticipant(BaseModel):
         self._chats_joined = {}
 
     def send_message(self, chat: 'Chat', content: str):
+        if chat.get_id() not in self._chats_joined:
+            raise ChatParticipantNotJoinedToChat(self)
+       
         chat.receive_message(sender=self, content=content)
 
-    def join_chat(self, chat: 'Chat'):
-        chat.add_participant(participant=self)
-
-        self._chats_joined[chat.get_id()] = chat
-
-    def leave_chat(self, chat: 'Chat'):
-        chat_id = chat.get_id()
-        if chat_id not in self._chats_joined:
+    def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
+        if chat.get_id() not in self._chats_joined:
             raise ChatParticipantNotJoinedToChat(self)
 
-        chat.remove_participant(participant=self)
+        if message.sender_name == self.name:
+            return
 
-        self._chats_joined.pop(chat_id)
+    def on_new_participant_joined_chat(self, chat: 'Chat', participant: 'ChatParticipant'):
+        if participant.name == self.name:
+            self._chats_joined[chat.get_id()] = chat
 
-    def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
-        pass
+            return
 
-    def on_removed_from_chat(self, chat: 'Chat'):
-        chat_id = chat.get_id()
+    def on_participant_left_chat(self, chat: 'Chat', participant: 'ChatParticipant'):
+        if participant.name == self.name:
+            self._chats_joined.pop(chat.get_id())
 
-        if chat_id in self._chats_joined:
-            self._chats_joined.pop(chat_id)
+            return
 
     def __hash__(self):
         return hash(self.name)
@@ -240,13 +239,17 @@ class Chat:
 
         self._participants[participant.name] = participant
 
+        for other_participant in self._participants.values():
+            other_participant.on_new_participant_joined_chat(chat=self, participant=participant)
+
     def remove_participant(self, participant: ChatParticipant):
         if participant.name not in self._participants:
             raise ChatParticipantNotJoinedToChat(participant)
 
         self._participants.pop(participant.name)
 
-        participant.on_removed_from_chat(chat=self)
+        for other_participant in self._participants.values():
+            other_participant.on_participant_left_chat(chat=self, participant=participant)
 
     def receive_message(self, sender: ChatParticipant, content: str):
         if sender not in self._participants:
@@ -261,9 +264,6 @@ class Chat:
         ))
 
         for participant in self._participants.values():
-            if participant.name == sender.name:
-                continue
-
             participant.on_new_chat_message(chat=self, message=self._messages[-1])
 
 # participant1 = ChatParticipant(name='Participant 1')
