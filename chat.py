@@ -299,6 +299,7 @@ class UserChatParticipant(ChatParticipant):
         if len(parts) == 2:
             recipients, actual_message_contents = parts
             recipients = [recipient.strip() for recipient in recipients.split(',')]
+            actual_message_contents = actual_message_contents.strip()
         else:
             recipients, actual_message_contents = None, new_message_contents
 
@@ -316,12 +317,12 @@ class AIChatParticipant(ChatParticipant):
 # ROLE
 - {role}
 
+# CONVERSATION
+- The conversation is a group chat you are a part of.
+- Every participant can see all messages sent by all other participants, which means you cannot have private conversations with other participants.
+
 # CHAT PARTICIPANTS
 {participants}
-
-# CONVERSATION
-- The conversation is a group chat.
-- Every participant can see all messages sent by all other participants, which means you cannot have private conversations with other participants.
 
 # INPUT
 - Messages from the user or other participants in the group chat.
@@ -401,6 +402,7 @@ class AIChatParticipant(ChatParticipant):
         if len(parts) == 2:
             recipients, content = parts
             recipients = [recipient.strip() for recipient in recipients.split(',')]
+            content = content.strip()
         else:
             recipients, content = None, last_message.content
 
@@ -415,8 +417,8 @@ if __name__ == '__main__':
 
     spinner = Halo(spinner='dots')
     ai = AIChatParticipant(name='Assistant', chat_model=chat_model, spinner=spinner)
-    rob = AIChatParticipant(name='Rob', role='Prankster',
-                            mission='Prank the AI with the user. Collaborate with the user to prank the boring AI.',
+    rob = AIChatParticipant(name='Rob', role='Funny Prankster',
+                            mission='Collaborate with the user to prank the boring AI. Yawn.',
                             chat_model=chat_model, spinner=spinner)
     user = UserChatParticipant(name='User')
 
