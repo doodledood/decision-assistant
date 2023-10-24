@@ -1,8 +1,10 @@
 import abc
 import json
+import re
 import uuid
+from collections import deque
 from json import JSONDecodeError
-from typing import List, Optional, Callable, Type, TypeVar, Dict, ClassVar
+from typing import List, Optional, Callable, Type, TypeVar, Dict, ClassVar, Tuple
 
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
@@ -171,13 +173,34 @@ class ChatParticipant(abc.ABC):
 
         self._chats_joined = {}
 
-    def send_message(self, chat: 'Chat', content: str, recipient_names: Optional[List[str]] = None):
+    def send_message(self, chat: 'Chat', content: str, recipient_name: str):
         if chat.id not in self._chats_joined:
             raise ChatParticipantNotJoinedToChat(self.name)
 
-        chat.receive_message(sender_name=self.name, content=content, recipient_names=recipient_names)
+        chat.receive_message(sender_name=self.name, content=content, recipient_name=recipient_name)
 
-    def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
+    @staticmethod
+    def get_recipient_and_message(message: str) -> Tuple[Optional[str], str]:
+        pattern1 = r'\((.+?) to (.+?)\):\s*(.+)'
+        match1 = re.search(pattern1, message)
+
+        if match1:
+            return match1.group(2).strip(), match1.group(3).strip()
+
+        pattern2 = r'(.+?)#(.+)'
+        match2 = re.search(pattern2, message)
+        if match2:
+            return match2.group(1).strip(), match2.group(2).strip()
+
+        pattern3 = r'\((.+?) to (.+?)\)#\s*(.+)'
+        match3 = re.search(pattern3, message)
+
+        if match3:
+            return match1.group(2).strip(), match1.group(3).strip()
+
+        return None, message.strip()
+
+    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage']):
         raise NotImplementedError()
 
     def on_participant_joined_chat(self, chat: 'Chat', participant: 'ChatParticipant'):
@@ -196,7 +219,7 @@ class ChatParticipant(abc.ABC):
 class ChatMessage(BaseModel):
     id: int
     sender_name: str
-    recipient_names: Optional[List[str]]
+    recipient_name: str
     content: str
 
 
@@ -208,6 +231,11 @@ class ChatParticipantNotJoinedToChat(Exception):
 class ChatParticipantAlreadyJoinedToChat(Exception):
     def __init__(self, participant_name: str):
         super().__init__(f'Participant {participant_name} is already joined to this chat.')
+
+
+class MessageCouldNotBeParsed(Exception):
+    def __init__(self, message: str):
+        super().__init__(f'Message "{message}" could not be parsed.')
 
 
 class Chat:
@@ -226,6 +254,7 @@ class Chat:
         self.participants = {}
         self.messages = sorted(initial_messages or [], key=lambda m: m.id)
         self.last_message_id = None if len(self.messages) == 0 else self.messages[-1].id
+        self._unprocessed_messages = deque()
 
         for participant in initial_participants or []:
             self.add_participant(participant)
@@ -248,32 +277,42 @@ class Chat:
         for participant in self.participants.values():
             participant.on_participant_left_chat(chat=self, participant=participant)
 
-    def receive_message(self, sender_name: str, content: str, recipient_names: Optional[List[str]] = None):
+    def receive_message(self, sender_name: str, content: str, recipient_name: str):
         if sender_name not in self.participants:
             raise ChatParticipantNotJoinedToChat(sender_name)
+
+        if recipient_name not in self.participants:
+            raise ChatParticipantNotJoinedToChat(recipient_name)
 
         sender = self.participants[sender_name]
 
         self.last_message_id = self.last_message_id + 1 if self.last_message_id is not None else 1
 
-        if recipient_names is None:
-            recipient_names = [participant.name for participant in self.participants.values() if
-                               participant.name != sender_name]
-
         message = ChatMessage(
             id=self.last_message_id,
             sender_name=sender.name,
-            recipient_names=recipient_names,
+            recipient_name=recipient_name,
             content=content
         )
 
-        self.messages.append(message)
+        self._unprocessed_messages.append(message)
 
-        if not sender.messages_hidden:
-            self.display_new_message(message=message)
+    def process_new_messages(self) -> bool:
+        new_messages = []
+        while len(self._unprocessed_messages) > 0:
+            message = self._unprocessed_messages.popleft()
+            self.messages.append(message)
+
+            sender = self.participants[message.sender_name]
+            if not sender.messages_hidden:
+                self.display_new_message(message=message)
+
+            new_messages.append(message)
 
         for participant in self.participants.values():
-            participant.on_new_chat_message(chat=self, message=message)
+            participant.on_new_chat_messages(chat=self, messages=new_messages)
+
+        return len(new_messages) > 0
 
     def display_new_message(self, message: ChatMessage):
         if message.sender_name not in self.participants:
@@ -281,29 +320,25 @@ class Chat:
         else:
             symbol = self.participants[message.sender_name].symbol
 
-        print(f'{symbol} ({message.sender_name}): {message.content}')
+        print(
+            f'{symbol} ({message.sender_name} to {message.recipient_name}): {message.content}')
 
 
 class UserChatParticipant(ChatParticipant):
     def __init__(self, name: str = 'User'):
         super().__init__(name, role='User', messages_hidden=True)
 
-    def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
-        if message.sender_name == self.name or (
-                message.recipient_names is not None and self.name not in message.recipient_names):
+    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage']):
+        relevant_messages = [message for message in messages if self.name == message.recipient_name]
+        if len(relevant_messages) == 0:
             return
 
         new_message_contents = input(f'👤 ({self.name}): ')
 
-        parts = new_message_contents.split('#', maxsplit=1)
-        if len(parts) == 2:
-            recipients, actual_message_contents = parts
-            recipients = [recipient.strip() for recipient in recipients.split(',')]
-            actual_message_contents = actual_message_contents.strip()
-        else:
-            recipients, actual_message_contents = None, new_message_contents
+        recipient_name, actual_message_contents = ChatParticipant.get_recipient_and_message(new_message_contents)
+        recipient_name = recipient_name or relevant_messages[-1].sender_name
 
-        self.send_message(chat=chat, content=actual_message_contents, recipient_names=recipients)
+        self.send_message(chat=chat, content=actual_message_contents, recipient_name=recipient_name)
 
 
 class AIChatParticipant(ChatParticipant):
@@ -325,23 +360,24 @@ class AIChatParticipant(ChatParticipant):
 {participants}
 
 # INPUT
-- Messages from the user or other participants in the group chat.
-- The messages represent previous messages from the group chat you are a part of.
-- They are prefixed by the sender's name.
+- Messages from the group chat, including your own messages.
+  - They are prefixed by the sender's name and who the message is directed at (could also be everyone). For context only; it's not actually part of the message they sent.
+- They are prefixed by the sender's name and who the message is directed at (could also be everyone).
 
 # STAYING SILENT
 - Sometimes when conversing with other participants, you may want to stay silent or ignore a message. For example, when you are in a group chat with more than 1 participant, and 2 of you are talking with the other participant, you may want to stay silent when the other participant is talking to the other participant, unless you are explicitly mentioned.
 
 # OUTPUT
 - Your response to the user or other participants in the group chat.
-- Do not prefix your messages with your name. Assume the participants know who you are.
-- Always direct your message at one or more participants (other than yourself) in the group chat.
+- Always direct your message at one and only one (other than yourself) in the group chat.
 - Every response you send should start with a recipient name followed by a hash (#) and then your message.
+- The message after the # should not contain recipient name, as they are already specified before the #.
 - However, you do have the option to not respond to a message, in which case you should send an empty message (i.e. just a hash (#)).
+- Do not prefix your message with (your name) to (recipient name) as that is already done for you.
 
 # EXAMPLE OUTPUT
-- When you want to respond: RECIPIENT1_NAME,...,RECIPIENT2_NAME#YOUR_MESSAGE
-- When you want to stay silent or ignore the message: #
+- When you want to respond prefix the recipient name with a # symbol and then the message like: RECIPIENT_NAME#YOUR_MESSAGE
+- When you want to stay silent or ignore the message just respond with # like: #
 '''
     mission: str
     chat_model: ChatOpenAI
@@ -369,16 +405,18 @@ class AIChatParticipant(ChatParticipant):
     def _chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
         messages = []
         for message in chat_messages:
+            content = \
+                f'({message.sender_name} to {message.recipient_name}): {message.content}'
             if message.sender_name == self.name:
-                messages.append(AIMessage(content=message.content))
+                messages.append(AIMessage(content=content))
             else:
-                messages.append(HumanMessage(content=f'({message.sender_name}): {message.content}'))
+                messages.append(HumanMessage(content=content))
 
         return messages
 
-    def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
-        if message.sender_name == self.name or (
-                message.recipient_names is not None and self.name not in message.recipient_names):
+    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage']):
+        relevant_messages = [message for message in messages if self.name == message.recipient_name]
+        if len(relevant_messages) == 0:
             return
 
         if self.spinner is not None:
@@ -388,8 +426,9 @@ class AIChatParticipant(ChatParticipant):
             mission=self.mission,
             name=self.name,
             role=self.role,
-            participants='\n'.join([f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
-                                    for p in chat.participants.values()])
+            participants='\n'.join(
+                [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
+                 for p in chat.participants.values()])
         )
 
         all_messages = self._chat_messages_to_chat_model_messages(chat.messages)
@@ -403,18 +442,13 @@ class AIChatParticipant(ChatParticipant):
         if self.spinner is not None:
             self.spinner.stop()
 
-        parts = last_message.content.split('#', maxsplit=1)
-        if len(parts) == 2:
-            recipients, content = parts
-            recipients = [recipient.strip() for recipient in recipients.split(',')]
-            content = content.strip()
-        else:
-            recipients, content = None, last_message.content
+        recipient_name, content = ChatParticipant.get_recipient_and_message(last_message.content)
+        recipient_name = recipient_name or relevant_messages[-1].sender_name
 
         if content == '':
             return
 
-        self.send_message(chat=chat, content=content, recipient_names=recipients)
+        self.send_message(chat=chat, content=content, recipient_name=recipient_name)
 
 
 if __name__ == '__main__':
@@ -431,4 +465,7 @@ if __name__ == '__main__':
     user = UserChatParticipant(name='User')
 
     main_chat = Chat(initial_participants=[ai, rob, user])
-    user.send_message(chat=main_chat, content='Hello!')
+    user.send_message(chat=main_chat, content='Hello!', recipient_name='Assistant')
+
+    while main_chat.process_new_messages():
+        pass
