@@ -290,17 +290,29 @@ class UserChatParticipant(ChatParticipant):
 class AIChatParticipant(ChatParticipant):
     system_message: str = '''
     # MISSION
-    Be a helpful AI assistant to the user.
+    - Be a helpful AI assistant to the user.
+    
+    # NAME
+    - {name}
     
     # ROLE
-    AI Assistant
+    - AI Assistant
+    
+    # INPUT
+    - Messages from the user.
+    - The messages represent previous messages from the group chat you are a part of.
+    - They are prefixed by the sender's name.
+    
+    # OUTPUT
+    - Your response to the user or other participants in the group chat.
+    - Do not prefix your messages with your name. Assume the participants know who you are.
     
     # TERMINATION
-    When you think you have achieved your mission or goal, please respond with final result of your mission or goal.
-    End the message with TERMINATE.
+    - When you think you have achieved your mission or goal, please respond with final result of your mission or goal.
+    - End the message with TERMINATE.
     
     # TERMINATION EXAMPLE
-    The result of my mission or goal. TERMINATE
+    - The result of my mission or goal. TERMINATE
     '''
     chat_model: ChatOpenAI
     spinner: Optional[Halo] = None
@@ -321,13 +333,17 @@ class AIChatParticipant(ChatParticipant):
         self.system_message = system_message or self.system_message
         self.spinner = spinner
 
+        self.system_message = self.system_message.format(name=self.name)
+
     def _chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
-        return [
-            HumanMessage(content=message.content) \
-                if message.sender_name == self.name \
-                else AIMessage(content=message.content) \
-            for message in chat_messages
-        ]
+        messages = []
+        for message in chat_messages:
+            if message.sender_name == self.name:
+                messages.append(AIMessage(content=message.content))
+            else:
+                messages.append(HumanMessage(content=f'({message.sender_name}): {message.content}'))
+
+        return messages
 
     def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
         if message.sender_name == self.name:
@@ -337,7 +353,7 @@ class AIChatParticipant(ChatParticipant):
             self.spinner.start(text='Thinking...')
 
         all_messages = self._chat_messages_to_chat_model_messages(chat.messages)
-        all_message = [
+        all_messages = [
             SystemMessage(content=self.system_message),
             *all_messages
         ]
@@ -360,5 +376,5 @@ if __name__ == '__main__':
     ai = AIChatParticipant(name='AI Assistant', chat_model=chat_model, spinner=spinner)
     user = UserChatParticipant(name='User')
 
-    chat = Chat(initial_participants=[ai, user])
-    user.send_message(chat=chat, content='Hello!')
+    main_chat = Chat(initial_participants=[ai, user])
+    user.send_message(chat=main_chat, content='Hello!')
