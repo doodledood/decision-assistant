@@ -297,7 +297,7 @@ class Chat:
 
         self._unprocessed_messages.append(message)
 
-    def process_new_messages(self) -> bool:
+    def _process_new_messages(self) -> bool:
         new_messages = []
         while len(self._unprocessed_messages) > 0:
             message = self._unprocessed_messages.popleft()
@@ -313,6 +313,10 @@ class Chat:
             participant.on_new_chat_messages(chat=self, messages=new_messages)
 
         return len(new_messages) > 0
+
+    def run(self):
+        while self._process_new_messages():
+            pass
 
     def display_new_message(self, message: ChatMessage):
         if message.sender_name not in self.participants:
@@ -467,5 +471,4 @@ if __name__ == '__main__':
     main_chat = Chat(initial_participants=[ai, rob, user])
     user.send_message(chat=main_chat, content='Hello!', recipient_name='Assistant')
 
-    while main_chat.process_new_messages():
-        pass
+    main_chat.run()
