@@ -565,7 +565,7 @@ class TeamBasedChatParticipant(ChatParticipant):
         sender = chat.participants[last_message.sender_name]
 
         previous_sender_role = sender.role
-        sender.role = 'Client'
+        sender.role = 'Client (only team leader can respond to him)'
 
         sub_chat = ChatRoom(
             initial_participants=[self.team_leader, *self.other_team_participants, sender],
