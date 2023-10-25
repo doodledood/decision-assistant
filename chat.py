@@ -524,6 +524,7 @@ class AIChatParticipant(ChatParticipant):
 class TeamBasedChatParticipant(ChatParticipant):
     team_leader: ChatParticipant
     other_team_participants: List[ChatParticipant]
+    team_interaction_schema: Optional[str] = None
     hide_inner_chat: bool = True
     max_sub_chat_messages: Optional[int] = None
     team_chat_history_access: bool = True
@@ -531,6 +532,7 @@ class TeamBasedChatParticipant(ChatParticipant):
     def __init__(self,
                  team_leader: ChatParticipant,
                  other_team_participants: List[ChatParticipant],
+                 team_interaction_schema: Optional[str] = None,
                  hide_inner_chat: bool = True,
                  max_total_sub_chat_messages: Optional[int] = None,
                  team_chat_history_access: bool = True,
@@ -544,6 +546,7 @@ class TeamBasedChatParticipant(ChatParticipant):
         self.hide_inner_chat = hide_inner_chat
         self.max_sub_chat_messages = max_total_sub_chat_messages
         self.team_chat_history_access = team_chat_history_access
+        self.team_interaction_schema = team_interaction_schema
 
     def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         if termination_received:
@@ -567,12 +570,15 @@ class TeamBasedChatParticipant(ChatParticipant):
             description=f'The team leader is a part of another chat room as well as this one. '
                         f'This is a private team chat between {self.team_leader.name} and '
                         f'{", ".join([p.name for p in self.other_team_participants if p.role != "Client"])} ONLY. ' +
-                        (f'The previous messages in this chat are from the other chat the team leader is a part of. '
-                         f'No other participants can see the messages sent in this chat room other than the team members. '
-                         f'Team members should ONLY respond to the team leader and other team members. '
-                         f'The previous messages are there only for context. ' if self.team_chat_history_access else '') +
+                        (
+                            f'\n\n## Previous Chat Messages\nThe previous messages in this chat are from the other chat the team leader is a part of. '
+                            f'No other participants can see the messages sent in this chat room other than the team members. '
+                            f'Team members should ONLY respond to the team leader and other team members. '
+                            f'The previous messages are there only for context. ' if self.team_chat_history_access else '') +
                         f'Only the team leader will respond to client with the result of this chat room. '
-                        f'The team should collaborate to come up with detailed and accurate response in the team leader\'s name.',
+                        f'The team should collaborate to come up with detailed and accurate response in the team leader\'s name. ' +
+                        (
+                            f'\n\n ## Team Interaction Schema\n{self.team_interaction_schema}' if self.team_interaction_schema is not None else ''),
             is_termination_message=lambda message: message.content.strip().endswith(
                 'TERMINATE') or message.recipient_name == sender.name
         )
@@ -726,6 +732,7 @@ if __name__ == '__main__':
                               can_terminate_conversation=False,
                               spinner=spinner),
         ],
+        team_interaction_schema='The team leader will ask the lead researcher to come up with an answer. The lead researcher will draft an hypothesis and validate it with the other researcher. They will go back and forth, providing counterfactual evidence and validating it with each other. Once they have a good answer, the lead researcher will send it to the team leader, who will then send it back to the client.',
         hide_inner_chat=False
     )
     user = UserChatParticipant(name='User')
