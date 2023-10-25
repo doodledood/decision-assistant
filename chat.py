@@ -528,6 +528,7 @@ class TeamBasedChatParticipant(ChatParticipant):
     hide_inner_chat: bool = True
     max_sub_chat_messages: Optional[int] = None
     team_chat_history_access: bool = True
+    spinner: Optional[Halo] = None
 
     def __init__(self,
                  team_leader: ChatParticipant,
@@ -536,6 +537,7 @@ class TeamBasedChatParticipant(ChatParticipant):
                  hide_inner_chat: bool = True,
                  max_total_sub_chat_messages: Optional[int] = None,
                  team_chat_history_access: bool = True,
+                 spinner: Optional[Halo] = None,
                  **kwargs):
         super().__init__(name=team_leader.name, role=team_leader.role, **kwargs)
 
@@ -547,6 +549,7 @@ class TeamBasedChatParticipant(ChatParticipant):
         self.max_sub_chat_messages = max_total_sub_chat_messages
         self.team_chat_history_access = team_chat_history_access
         self.team_interaction_schema = team_interaction_schema
+        self.spinner = spinner
 
     def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         if termination_received:
@@ -562,6 +565,9 @@ class TeamBasedChatParticipant(ChatParticipant):
         previous_sender_role = sender.role
         sender.role = 'Client'
 
+        if self.spinner is not None:
+            self.spinner.stop_and_persist(symbol='👥', text=f'{self.team_leader.name}\'s team is discussing the request.')
+
         sub_chat = ChatRoom(
             initial_participants=[self.team_leader, *self.other_team_participants, sender],
             initial_messages=chat.messages if self.team_chat_history_access else None,
@@ -575,10 +581,10 @@ class TeamBasedChatParticipant(ChatParticipant):
                             f'No other participants can see the messages sent in this chat room other than the team members. '
                             f'Team members should ONLY respond to the team leader and other team members. '
                             f'The previous messages are there only for context. ' if self.team_chat_history_access else '') +
-                        f'Only the team leader will respond to client with the result of this chat room. '
+                        f'\n\n## Response To Client\nOnly the team leader will respond to client with the result of this chat room. '
                         f'The team should collaborate to come up with detailed and accurate response in the team leader\'s name. ' +
                         (
-                            f'\n\n ## Team Interaction Schema\n{self.team_interaction_schema}' if self.team_interaction_schema is not None else ''),
+                            f'\n\n## Team Interaction Schema\n{self.team_interaction_schema}' if self.team_interaction_schema is not None else ''),
             is_termination_message=lambda message: message.content.strip().endswith(
                 'TERMINATE') or message.recipient_name == sender.name
         )
@@ -597,6 +603,9 @@ class TeamBasedChatParticipant(ChatParticipant):
         recipient_name = last_message.sender_name
 
         self.send_message(chat=chat, content=actual_message_contents, recipient_name=recipient_name)
+
+        if self.spinner is not None:
+            self.spinner.succeed(text=f'{self.team_leader.name}\'s team discussion was concluded.')
 
 
 class JSONOutputParserChatParticipant(ChatParticipant):
@@ -709,7 +718,7 @@ if __name__ == '__main__':
     # )
 
     ai = AIChatParticipant(name='Assistant',
-                           mission=f'Be a helpful AI assistant. However, do not answer any questions about animals yourself; instead, ask the user to ask the research team, and only then respond with the answer the research team came up with.',
+                           mission=f'Be a helpful AI assistant. However, do not answer any questions about geography yourself; instead, ask the user to ask the research team, and only then respond with the answer the research team came up with.',
                            chat_model=chat_model,
                            spinner=spinner)
     research_team = TeamBasedChatParticipant(
@@ -721,19 +730,20 @@ if __name__ == '__main__':
         other_team_participants=[
             AIChatParticipant(name='Lead Researcher',
                               role='Researcher',
-                              mission='Research whatever was asked of you by the research team leader. Always consult the other researchers in the team to make sure the answer is the best you can give.',
+                              mission='Research whatever was asked of you by the research team leader. Come up with an initial hypothesis and validate it with the other researchers; iterate on it until you all agree on a good answer. Once you have a good answer, send it to the team leader.',
                               chat_model=chat_model,
                               can_terminate_conversation=False,
                               spinner=spinner),
             AIChatParticipant(name='Researcher 1',
                               role='Researcher',
-                              mission='Collaborate with the researchers in the team to come up with the best answer, together.',
+                              mission='Collaborate with the researchers in the team to come up with the best answer. Come up with counterfactual evidence, try to disprove the hypothesis, and validate the hypothesis with the other researchers; iterate on it, until you all agree on a good answer.',
                               chat_model=chat_model,
                               can_terminate_conversation=False,
                               spinner=spinner),
         ],
         team_interaction_schema='The team leader will ask the lead researcher to come up with an answer. The lead researcher will draft an hypothesis and validate it with the other researcher. They will go back and forth, providing counterfactual evidence and validating it with each other. Once they have a good answer, the lead researcher will send it to the team leader, who will then send it back to the client.',
-        hide_inner_chat=False
+        hide_inner_chat=False,
+        spinner=spinner
     )
     user = UserChatParticipant(name='User')
     participants = [ai, research_team, user]
