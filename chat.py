@@ -538,11 +538,14 @@ class TeamBasedChatParticipant(ChatParticipant):
     other_team_participants: List[ChatParticipant]
     hide_inner_chat: bool = True
     max_sub_chat_messages: Optional[int] = None
+    team_chat_history_access: bool = True
 
-    def __init__(self, team_leader: ChatParticipant,
+    def __init__(self,
+                 team_leader: ChatParticipant,
                  other_team_participants: List[ChatParticipant],
                  hide_inner_chat: bool = True,
                  max_total_sub_chat_messages: Optional[int] = None,
+                 team_chat_history_access: bool = True,
                  **kwargs):
         super().__init__(name=team_leader.name, role=team_leader.role, **kwargs)
 
@@ -552,6 +555,7 @@ class TeamBasedChatParticipant(ChatParticipant):
         self.team_leader = team_leader
         self.hide_inner_chat = hide_inner_chat
         self.max_sub_chat_messages = max_total_sub_chat_messages
+        self.team_chat_history_access = team_chat_history_access
 
     def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         if termination_received:
@@ -565,22 +569,22 @@ class TeamBasedChatParticipant(ChatParticipant):
         sender = chat.participants[last_message.sender_name]
 
         previous_sender_role = sender.role
-        sender.role = 'Client (only team leader can respond to him)'
+        sender.role = 'Client'
 
         sub_chat = ChatRoom(
             initial_participants=[self.team_leader, *self.other_team_participants, sender],
-            initial_messages=chat.messages,
+            initial_messages=chat.messages if self.team_chat_history_access else None,
             hide_messages=self.hide_inner_chat,
             max_total_messages=self.max_sub_chat_messages,
             description=f'The team leader is a part of another chat room as well as this one. '
                         f'This is a private team chat between {self.team_leader.name} and '
-                        f'{", ".join([p.name for p in self.other_team_participants])} ONLY. '
-                        f'The previous messages in this chat are from the other chat the team leader is a part of. '
-                        f'No other participants can see the messages sent in this chat room other than the team members. '
-                        f'Team members should ONLY respond to the team leader and other team members. '
-                        f'The previous messages are there only for context. '
-                        f'The team leader will respond to the other chat room with the result of this chat room. '
-                        f'The team should collaborate to come up with a decent response in the team leader\'s name.',
+                        f'{", ".join([p.name for p in self.other_team_participants if p.role != "Client"])} ONLY. ' +
+                        (f'The previous messages in this chat are from the other chat the team leader is a part of. '
+                         f'No other participants can see the messages sent in this chat room other than the team members. '
+                         f'Team members should ONLY respond to the team leader and other team members. '
+                         f'The previous messages are there only for context. ' if self.team_chat_history_access else '') +
+                        f'Only the team leader will respond to client with the result of this chat room. '
+                        f'The team should collaborate to come up with detailed and accurate response in the team leader\'s name.',
             is_termination_message=lambda message: message.content.strip().endswith(
                 'TERMINATE') or message.recipient_name == sender.name
         )
