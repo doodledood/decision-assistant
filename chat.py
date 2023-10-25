@@ -16,7 +16,7 @@ from pydantic.v1 import ValidationError
 
 from utils import fix_invalid_json
 
-TOutputSchema = TypeVar("TOutputSchema", bound=BaseModel)
+TOutputSchema = TypeVar("TOutputSchema", bound=Union[str, BaseModel])
 
 
 def pydantic_to_json_schema(pydantic_model: Type[BaseModel]) -> dict:
@@ -237,8 +237,6 @@ class MessageCouldNotBeParsed(Exception):
     def __init__(self, message: str):
         super().__init__(f'Message "{message}" could not be parsed.')
 
-
-TResultSchema = TypeVar('TResultSchema', bound=Union[BaseModel, str])
 
 
 class Chat:
@@ -526,11 +524,11 @@ class AIChatParticipant(ChatParticipant):
 
 
 class JSONOutputParserChatParticipant(ChatParticipant):
-    output_schema: Type[TResultSchema]
-    output: Optional[TResultSchema] = None
+    output_schema: Type[TOutputSchema]
+    output: Optional[TOutputSchema] = None
 
     def __init__(self,
-                 output_schema: Type[TResultSchema],
+                 output_schema: Type[TOutputSchema],
                  name: str = 'JSON Output Parser',
                  role: str = 'JSON Output Parser'
                  ):
@@ -551,6 +549,7 @@ class JSONOutputParserChatParticipant(ChatParticipant):
         if self.output_schema is str:
             self.send_message(chat=chat, content=f'{last_message.content} TERMINATE',
                               recipient_name=last_message.sender_name)
+            self.output = last_message.content
         else:
             try:
                 json_string = last_message.content[last_message.content.index('{'):last_message.content.rindex('}') + 1]
@@ -563,10 +562,10 @@ class JSONOutputParserChatParticipant(ChatParticipant):
                                   recipient_name=last_message.sender_name)
 
 
-def string_output_to_pydantic(output: str, chat_model: ChatOpenAI, output_schema: Type[TResultSchema],
+def string_output_to_pydantic(output: str, chat_model: ChatOpenAI, output_schema: Type[TOutputSchema],
                               spinner: Optional[Halo] = None,
                               n_retries: int = 3,
-                              hide_message: bool = True) -> TResultSchema:
+                              hide_message: bool = True) -> TOutputSchema:
     text_to_json_ai = AIChatParticipant(
         chat_model=chat_model,
         name='Text to JSON Converter',
