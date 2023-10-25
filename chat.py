@@ -173,7 +173,7 @@ class ChatParticipant(abc.ABC):
 
         self._chats_joined = {}
 
-    def send_message(self, chat: 'Chat', content: str, recipient_name: str):
+    def send_message(self, chat: 'ChatRoom', content: str, recipient_name: str):
         if chat.id not in self._chats_joined:
             raise ChatParticipantNotJoinedToChat(self.name)
 
@@ -181,35 +181,36 @@ class ChatParticipant(abc.ABC):
 
     @staticmethod
     def get_recipient_and_message(message: str) -> Tuple[Optional[str], str]:
-        pattern1 = r'\((.+?) to (.+?)\):\s*(.+)'
+        pattern1 = r'\((.+?) to (.+?)\):(.+)'
         match1 = re.search(pattern1, message)
 
         if match1:
             return match1.group(2).strip(), match1.group(3).strip()
 
-        pattern2 = r'(.+?)#(.+)'
+        pattern2 = r'\((.+?) to (.+?)\)#(.+)'
         match2 = re.search(pattern2, message)
-        if match2:
-            return match2.group(1).strip(), match2.group(2).strip()
 
-        pattern3 = r'\((.+?) to (.+?)\)#\s*(.+)'
+        if match2:
+            return match2.group(2).strip(), match2.group(3).strip()
+
+        pattern3 = r'(.+?)#(.+)'
         match3 = re.search(pattern3, message)
 
         if match3:
-            return match1.group(2).strip(), match1.group(3).strip()
+            return match3.group(1).strip(), match3.group(2).strip()
 
         return None, message.strip()
 
-    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage'], termination_received: bool = False):
+    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         raise NotImplementedError()
 
-    def on_participant_joined_chat(self, chat: 'Chat', participant: 'ChatParticipant'):
+    def on_participant_joined_chat(self, chat: 'ChatRoom', participant: 'ChatParticipant'):
         if participant.name == self.name:
             self._chats_joined[chat.id] = chat
 
             return
 
-    def on_participant_left_chat(self, chat: 'Chat', participant: 'ChatParticipant'):
+    def on_participant_left_chat(self, chat: 'ChatRoom', participant: 'ChatParticipant'):
         if participant.name == self.name:
             self._chats_joined.pop(chat.id)
 
@@ -238,12 +239,12 @@ class MessageCouldNotBeParsed(Exception):
         super().__init__(f'Message "{message}" could not be parsed.')
 
 
-
-class Chat:
+class ChatRoom:
     id: str
     messages: List[ChatMessage]
     participants: Dict[str, ChatParticipant]
     is_termination_message: Callable[[str], bool]
+    description: str
     max_messages: Optional[int] = None
     last_message_id: Optional[int] = None
     hide_messages: bool = False
@@ -256,7 +257,8 @@ class Chat:
             initial_messages: Optional[List[ChatMessage]] = None,
             max_total_messages: Optional[int] = None,
             is_termination_message: Optional[Callable[[str], bool]] = None,
-            hide_messages: bool = False
+            hide_messages: bool = False,
+            description: str = 'This chat room is a regular group chat. Everybody can talk to everybody else.'
     ):
         assert max_total_messages is None or max_total_messages > 0, 'Max total messages must be None or greater than 0.'
 
@@ -264,10 +266,12 @@ class Chat:
         self.participants = {}
         self.messages = sorted(initial_messages or [], key=lambda m: m.id)
         self.last_message_id = None if len(self.messages) == 0 else self.messages[-1].id
-        self.is_termination_message = is_termination_message or (lambda message: message.strip().endswith('TERMINATE'))
+        self.is_termination_message = is_termination_message or (
+            lambda message: message.content.strip().endswith('TERMINATE'))
         self._unprocessed_messages = deque()
         self.hide_messages = hide_messages
         self.max_messages = max_total_messages
+        self.description = description
 
         for participant in initial_participants or []:
             self.add_participant(participant)
@@ -365,7 +369,7 @@ class Chat:
             # Terminate if the max was reached, or if a termination message was received.
             # All messages after the termination message are dropped.
             if (self.max_messages is not None and len(self.messages) >= self.max_messages) or \
-                    self.is_termination_message(message.content):
+                    self.is_termination_message(message):
                 termination_received = True
 
         for participant in self.participants.values():
@@ -388,7 +392,7 @@ class UserChatParticipant(ChatParticipant):
     def __init__(self, name: str = 'User', **kwargs):
         super().__init__(name, role='User', messages_hidden=True, **kwargs)
 
-    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage'], termination_received: bool = False):
+    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         if termination_received:
             return
 
@@ -419,20 +423,25 @@ class AIChatParticipant(ChatParticipant):
 - The conversation is a group chat you are a part of.
 - Every participant can see all messages sent by all other participants, which means you cannot have private conversations with other participants.
 
-# CHAT PARTICIPANTS
+# CHAT ROOM
+
+## Description
+{chat_room_description}
+
+## Participants
 {participants}
 
 # INPUT
 - Messages from the group chat, including your own messages.
   - They are prefixed by the sender's name and who the message is directed at (could also be everyone). For context only; it's not actually part of the message they sent.
-- They are prefixed by the sender's name and who the message is directed at (could also be everyone).
+  - Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not respond to them.
 
 # OUTPUT
 - Your response to the user or other participants in the group chat.
 - Always direct your message at one and only one (other than yourself) in the group chat.
 - Every response you send should start with a recipient name followed by a hash (#) and then your message.
 - The message after the # should not contain recipient name, as they are already specified before the #.
-- However, you do have the option to not respond to a message, in which case you should send an empty message (i.e. just a hash (#)).
+- A recipient MUST be one of the CURRENT participants in the group chat.
 - Do not prefix your message with (your name) to (recipient name) as that is already done for you.
 
 # EXAMPLE OUTPUT
@@ -466,11 +475,12 @@ class AIChatParticipant(ChatParticipant):
         self.mission = mission
         self.can_terminate_conversation = can_terminate_conversation
 
-    def _create_system_message(self, chat: Chat):
+    def _create_system_message(self, chat: ChatRoom):
         system_message = self.system_message_template.format(
             mission=self.mission,
             name=self.name,
             role=self.role,
+            chat_room_description=chat.description,
             participants='\n'.join(
                 [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
                  for p in chat.participants.values()])
@@ -493,7 +503,7 @@ class AIChatParticipant(ChatParticipant):
 
         return messages
 
-    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage'], termination_received: bool = False):
+    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         if termination_received:
             return
 
@@ -523,6 +533,74 @@ class AIChatParticipant(ChatParticipant):
         self.send_message(chat=chat, content=content, recipient_name=recipient_name)
 
 
+class TeamBasedChatParticipant(ChatParticipant):
+    team_leader: ChatParticipant
+    other_team_participants: List[ChatParticipant]
+    hide_inner_chat: bool = True
+    max_sub_chat_messages: Optional[int] = None
+
+    def __init__(self, team_leader: ChatParticipant,
+                 other_team_participants: List[ChatParticipant],
+                 hide_inner_chat: bool = True,
+                 max_total_sub_chat_messages: Optional[int] = None,
+                 **kwargs):
+        super().__init__(name=team_leader.name, role=team_leader.role, **kwargs)
+
+        assert len(other_team_participants) >= 1, 'At least one team leader and 1 other team participant are required.'
+
+        self.other_team_participants = other_team_participants
+        self.team_leader = team_leader
+        self.hide_inner_chat = hide_inner_chat
+        self.max_sub_chat_messages = max_total_sub_chat_messages
+
+    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
+        if termination_received:
+            return
+
+        relevant_messages = [message for message in messages if self.name == message.recipient_name]
+        if len(relevant_messages) == 0:
+            return
+
+        last_message = relevant_messages[-1]
+        sender = chat.participants[last_message.sender_name]
+
+        previous_sender_role = sender.role
+        sender.role = 'Client'
+
+        sub_chat = ChatRoom(
+            initial_participants=[self.team_leader, *self.other_team_participants, sender],
+            initial_messages=chat.messages,
+            hide_messages=self.hide_inner_chat,
+            max_total_messages=self.max_sub_chat_messages,
+            description=f'The team leader is a part of another chat room as well as this one. '
+                        f'This is a private team chat between {self.team_leader.name} and '
+                        f'{", ".join([p.name for p in self.other_team_participants])} ONLY. '
+                        f'The previous messages in this chat are from the other chat the team leader is a part of. '
+                        f'No other participants can see the messages sent in this chat room other than the team members. '
+                        f'Team members should ONLY respond to the team leader and other team members. '
+                        f'The previous messages are there only for context. '
+                        f'The team leader will respond to the other chat room with the result of this chat room. '
+                        f'The team should collaborate to come up with a decent response in the team leader\'s name.',
+            is_termination_message=lambda message: message.content.strip().endswith(
+                'TERMINATE') or message.recipient_name == sender.name
+        )
+
+        _, last_message_actual_content = self.get_recipient_and_message(last_message.content)
+
+        response_from_team = sub_chat.initiate_chat_with_result(
+            first_message=f'{last_message.sender_name} has told me this: "{last_message_actual_content}". What should I respond with?',
+            from_participant=self.team_leader,
+            to_participant=self.other_team_participants[0],
+        )
+
+        sender.role = previous_sender_role
+
+        _, actual_message_contents = ChatParticipant.get_recipient_and_message(response_from_team)
+        recipient_name = last_message.sender_name
+
+        self.send_message(chat=chat, content=actual_message_contents, recipient_name=recipient_name)
+
+
 class JSONOutputParserChatParticipant(ChatParticipant):
     output_schema: Type[TOutputSchema]
     output: Optional[TOutputSchema] = None
@@ -536,7 +614,7 @@ class JSONOutputParserChatParticipant(ChatParticipant):
 
         self.output_schema = output_schema
 
-    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage'], termination_received: bool = False):
+    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         if termination_received:
             return
 
@@ -576,7 +654,7 @@ def string_output_to_pydantic(output: str, chat_model: ChatOpenAI, output_schema
     )
     json_parser = JSONOutputParserChatParticipant(output_schema=output_schema)
 
-    parser_chat = Chat(
+    parser_chat = ChatRoom(
         initial_participants=[text_to_json_ai, json_parser],
         hide_messages=hide_message,
         max_total_messages=n_retries * 2
@@ -608,27 +686,64 @@ if __name__ == '__main__':
     #                         chat_model=chat_model, spinner=spinner)
     # user = UserChatParticipant(name='User')
     # participants = [ai, rob, user]
-    ai = AIChatParticipant(name='AI', role='Math Expert',
-                           mission='Solve the user\'s math problem and TERMINATE immediately (only if you have the solution). The user has only one problem.',
-                           chat_model=chat_model, spinner=spinner)
-    user = UserChatParticipant(name='User')
-    participants = [ai, user]
 
+    # ai = AIChatParticipant(name='AI', role='Math Expert',
+    #                        mission='Solve the user\'s math problem and TERMINATE immediately (only if you have the solution). The user has only one problem.',
+    #                        chat_model=chat_model, spinner=spinner)
+    # user = UserChatParticipant(name='User')
+    # participants = [ai, user]
+    #
+    #
+    # class MathResult(BaseModel):
+    #     result: float = Field(description='The result of the math problem.')
+    #
+    #
+    # main_chat = ChatRoom(initial_participants=participants)
+    # parsed_output = string_output_to_pydantic(
+    #     output=main_chat.initiate_chat_with_result(
+    #         first_message="Hey",
+    #         from_participant=user,
+    #         to_participant=ai
+    #     ),
+    #     chat_model=chat_model,
+    #     output_schema=MathResult,
+    #     spinner=spinner
+    # )
 
-    class MathResult(BaseModel):
-        result: float = Field(description='The result of the math problem.')
-
-
-    main_chat = Chat(initial_participants=participants)
-    parsed_output = string_output_to_pydantic(
-        output=main_chat.initiate_chat_with_result(
-            first_message="Hey",
-            from_participant=user,
-            to_participant=ai
-        ),
-        chat_model=chat_model,
-        output_schema=MathResult,
-        spinner=spinner
+    ai = AIChatParticipant(name='Assistant',
+                           mission=f'Be a helpful AI assistant. However, do not answer any questions about animals yourself; instead, ask the user to ask the research team, and only then respond with the answer the research team came up with.',
+                           chat_model=chat_model,
+                           spinner=spinner)
+    research_team = TeamBasedChatParticipant(
+        team_leader=AIChatParticipant(name='Research Team Leader',
+                                      role='Research Team Leader',
+                                      mission=f'Respond back with a great well-researched answer to the question asked of you. Do this by collaborating with the internal research team to answer questions. Respond as if you came up with the answer yourself. TERMINATE immediately when the research team gives you the answer.',
+                                      chat_model=chat_model,
+                                      spinner=spinner),
+        other_team_participants=[
+            AIChatParticipant(name='Lead Researcher',
+                              role='Researcher',
+                              mission='Research whatever was asked of you by the research team leader. Always consult the other researchers in the team to make sure the answer is the best you can give.',
+                              chat_model=chat_model,
+                              can_terminate_conversation=False,
+                              spinner=spinner),
+            AIChatParticipant(name='Researcher 1',
+                              role='Researcher',
+                              mission='Collaborate with the researchers in the team to come up with the best answer, together.',
+                              chat_model=chat_model,
+                              can_terminate_conversation=False,
+                              spinner=spinner),
+        ],
+        hide_inner_chat=False
     )
+    user = UserChatParticipant(name='User')
+    participants = [ai, research_team, user]
 
-    print(f'Result: {dict(parsed_output)}')
+    main_chat = ChatRoom(initial_participants=participants)
+    result = main_chat.initiate_chat_with_result(
+        first_message="Hey",
+        from_participant=user,
+        to_participant=ai
+    ),
+
+    print(f'Result: {result}')
