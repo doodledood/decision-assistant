@@ -4,19 +4,19 @@ import re
 import uuid
 from collections import deque
 from json import JSONDecodeError
-from typing import List, Optional, Callable, Type, TypeVar, Dict, ClassVar, Tuple, Union
+from typing import List, Optional, Callable, Type, TypeVar, Dict, Tuple, Union
 
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import BaseMessage, FunctionMessage, HumanMessage, AIMessage, SystemMessage
 from langchain.tools import Tool
 from langchain.tools.render import format_tool_to_openai_function
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic.v1 import ValidationError
 
 from utils import fix_invalid_json
 
-ResultSchema = TypeVar("T", bound=BaseModel)
+TOutputSchema = TypeVar("T", bound=BaseModel)
 
 
 def pydantic_to_json_schema(pydantic_model: Type[BaseModel]) -> dict:
@@ -46,7 +46,7 @@ def chat(chat_model: ChatOpenAI,
          max_ai_messages: Optional[int] = None,
          max_consecutive_arg_error_count: int = 3,
          get_immediate_answer: bool = False,
-         ) -> ResultSchema:
+         ) -> TOutputSchema:
     assert len(messages) > 0, 'At least one message is required.'
 
     if get_user_input is None:
@@ -200,7 +200,7 @@ class ChatParticipant(abc.ABC):
 
         return None, message.strip()
 
-    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage']):
+    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage'], termination_received: bool = False):
         raise NotImplementedError()
 
     def on_participant_joined_chat(self, chat: 'Chat', participant: 'ChatParticipant'):
@@ -245,22 +245,31 @@ class Chat:
     id: str
     messages: List[ChatMessage]
     participants: Dict[str, ChatParticipant]
-    last_message_id: Optional[int]
     is_termination_message: Callable[[str], bool]
+    max_messages: Optional[int] = None
+    last_message_id: Optional[int] = None
+    hide_messages: bool = False
+    _unprocessed_messages: deque
 
     def __init__(
             self,
             id: Optional[str] = None,
             initial_participants: Optional[List[ChatParticipant]] = None,
             initial_messages: Optional[List[ChatMessage]] = None,
-            is_termination_message: Optional[Callable[[str], bool]] = None
+            max_total_messages: Optional[int] = None,
+            is_termination_message: Optional[Callable[[str], bool]] = None,
+            hide_messages: bool = False
     ):
+        assert max_total_messages is None or max_total_messages > 0, 'Max total messages must be None or greater than 0.'
+
         self.id = str(uuid.uuid4()) if id is None else id
         self.participants = {}
         self.messages = sorted(initial_messages or [], key=lambda m: m.id)
         self.last_message_id = None if len(self.messages) == 0 else self.messages[-1].id
-        self.is_termination_message = is_termination_message or (lambda message: message.endswith('TERMINATE'))
+        self.is_termination_message = is_termination_message or (lambda message: message.strip().endswith('TERMINATE'))
         self._unprocessed_messages = deque()
+        self.hide_messages = hide_messages
+        self.max_messages = max_total_messages
 
         for participant in initial_participants or []:
             self.add_participant(participant)
@@ -316,9 +325,8 @@ class Chat:
             self,
             first_message: str,
             from_participant: Union[str, ChatParticipant],
-            to_participant: Union[str, ChatParticipant],
-            result_schema: Type[TResultSchema] = str
-    ) -> TResultSchema:
+            to_participant: Union[str, ChatParticipant]
+    ) -> str:
         if isinstance(to_participant, ChatParticipant):
             to_participant = to_participant.name
 
@@ -340,10 +348,7 @@ class Chat:
         result = self.messages[-1].content
         result = result.replace('TERMINATE', '').strip()
 
-        if result_schema is str:
-            return result
-
-        return json_string_to_pydantic(result, result_schema)
+        return result
 
     def _process_new_messages(self) -> bool:
         termination_received = False
@@ -354,12 +359,15 @@ class Chat:
             self.messages.append(message)
 
             sender = self.participants[message.sender_name]
-            if not sender.messages_hidden:
+            if not self.hide_messages and not sender.messages_hidden:
                 self._display_new_message(message=message)
 
             new_messages.append(message)
 
-            if self.is_termination_message(message.content):
+            # Terminate if the max was reached, or if a termination message was received.
+            # All messages after the termination message are dropped.
+            if (self.max_messages is not None and len(self.messages) >= self.max_messages) or \
+                    self.is_termination_message(message.content):
                 termination_received = True
 
         for participant in self.participants.values():
@@ -438,7 +446,7 @@ class AIChatParticipant(ChatParticipant):
     can_terminate_conversation: bool = False
     termination_section: str = '''# TERMINATION
 - You can terminate the conversation by sending a message ending with the word "TERMINATE".
-- Terminate only when you have achieved your mission or goal OR when you are explicitly asked to terminate another chat participant.'''
+- You should terminate the conversation when you have achieved your mission or goal OR when you are explicitly asked to terminate by another chat participant.'''
 
     class Config:
         arbitrary_types_allowed = True
@@ -449,7 +457,7 @@ class AIChatParticipant(ChatParticipant):
                  symbol: str = '🤖',
                  role: str = 'AI Assistant',
                  mission: str = 'Be a helpful AI assistant.',
-                 can_terminate_conversation: bool = False,
+                 can_terminate_conversation: bool = True,
                  spinner: Optional[Halo] = None,
                  **kwargs
                  ):
@@ -472,6 +480,8 @@ class AIChatParticipant(ChatParticipant):
 
         if self.can_terminate_conversation:
             system_message += '\n\n' + self.termination_section
+
+        return system_message
 
     def _chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
         messages = []
@@ -515,13 +525,16 @@ class AIChatParticipant(ChatParticipant):
         self.send_message(chat=chat, content=content, recipient_name=recipient_name)
 
 
-class OutputParserChatParticipant(ChatParticipant):
+class JSONOutputParserChatParticipant(ChatParticipant):
+    output_schema: Type[TResultSchema]
+    output: Optional[TResultSchema] = None
+
     def __init__(self,
                  output_schema: Type[TResultSchema],
                  name: str = 'JSON Output Parser',
                  role: str = 'JSON Output Parser'
                  ):
-        super().__init__(name=name, role=role, messages_hidden=True)
+        super().__init__(name=name, role=role)
 
         self.output_schema = output_schema
 
@@ -541,26 +554,45 @@ class OutputParserChatParticipant(ChatParticipant):
         else:
             try:
                 json_string = last_message.content[last_message.content.index('{'):last_message.content.rindex('}') + 1]
-                message = json_string_to_pydantic(json_string, self.output_schema)
+                self.output = model = json_string_to_pydantic(json_string, self.output_schema)
 
-                self.send_message(chat=chat, content=f'{message.model_dump_json()} TERMINATE',
+                self.send_message(chat=chat, content=f'{model.model_dump_json()} TERMINATE',
                                   recipient_name=last_message.sender_name)
             except Exception as e:
                 self.send_message(chat=chat, content=f'I could not parse the JSON. This was the error: {e}',
                                   recipient_name=last_message.sender_name)
 
 
-def string_output_to_pydantic(output: str, chat_model: ChatOpenAI, result_schema: Type[TResultSchema]) -> TResultSchema:
-    parser_chat = Chat(initial_participants=[
-        AIChatParticipant(
-            chat_model=chat_model,
-            name='Text to JSON Converter',
-            role='Text to JSON Converter',
-            mission='You will be provided some TEXT and an output JSON SCHEMA. Your only mission is to convert the '
-                    'TEXT to a JSON that follows the JSON SCHEMA provided. Do not talk at all; just output JSON.'
-        ),
-        OutputParserChatParticipant(output_schema=result_schema)
-    ])
+def string_output_to_pydantic(output: str, chat_model: ChatOpenAI, output_schema: Type[TResultSchema],
+                              spinner: Optional[Halo] = None,
+                              n_retries: int = 3,
+                              hide_message: bool = True) -> TResultSchema:
+    text_to_json_ai = AIChatParticipant(
+        chat_model=chat_model,
+        name='Text to JSON Converter',
+        role='Text to JSON Converter',
+        mission='You will be provided some TEXT and a JSON SCHEMA. Your only mission is to convert the TEXT '
+                'to a JSON that follows the JSON SCHEMA provided. Your message should include only correct JSON.',
+        spinner=spinner
+    )
+    json_parser = JSONOutputParserChatParticipant(output_schema=output_schema)
+
+    parser_chat = Chat(
+        initial_participants=[text_to_json_ai, json_parser],
+        hide_messages=hide_message,
+        max_total_messages=n_retries * 2
+    )
+
+    _ = parser_chat.initiate_chat_with_result(
+        first_message=f'# TEXT\n{output}\n\n# JSON SCHEMA\n{pydantic_to_json_schema(output_schema)}',
+        from_participant=json_parser,
+        to_participant=text_to_json_ai
+    )
+
+    if json_parser.output is None:
+        raise MessageCouldNotBeParsed(output)
+
+    return json_parser.output
 
 
 if __name__ == '__main__':
@@ -570,17 +602,34 @@ if __name__ == '__main__':
     chat_model = ChatOpenAI(temperature=0.0, model='gpt-4-0613')
 
     spinner = Halo(spinner='dots')
-    ai = AIChatParticipant(name='Assistant', chat_model=chat_model, spinner=spinner)
-    rob = AIChatParticipant(name='Rob', role='Funny Prankster',
-                            mission='Collaborate with the user to prank the boring AI. Yawn.',
-                            chat_model=chat_model, spinner=spinner)
-    user = UserChatParticipant(name='User')
 
-    main_chat = Chat(initial_participants=[ai, rob, user])
-    result = main_chat.initiate_chat_with_result(
-        first_message="Hey",
-        from_participant=user,
-        to_participant=ai
+    # ai = AIChatParticipant(name='Assistant', chat_model=chat_model, spinner=spinner)
+    # rob = AIChatParticipant(name='Rob', role='Funny Prankster',
+    #                         mission='Collaborate with the user to prank the boring AI. Yawn.',
+    #                         chat_model=chat_model, spinner=spinner)
+    # user = UserChatParticipant(name='User')
+    # participants = [ai, rob, user]
+    ai = AIChatParticipant(name='AI', role='Math Expert',
+                           mission='Solve the user\'s math problem and TERMINATE immediately (only if you have the solution). The user has only one problem.',
+                           chat_model=chat_model, spinner=spinner)
+    user = UserChatParticipant(name='User')
+    participants = [ai, user]
+
+
+    class MathResult(BaseModel):
+        result: float = Field(description='The result of the math problem.')
+
+
+    main_chat = Chat(initial_participants=participants)
+    parsed_output = string_output_to_pydantic(
+        output=main_chat.initiate_chat_with_result(
+            first_message="Hey",
+            from_participant=user,
+            to_participant=ai
+        ),
+        chat_model=chat_model,
+        output_schema=MathResult,
+        spinner=spinner
     )
 
-    print(f'Result: {result}')
+    print(f'Result: {dict(parsed_output)}')
