@@ -181,23 +181,11 @@ class ChatParticipant(abc.ABC):
 
     @staticmethod
     def get_recipient_and_message(message: str) -> Tuple[Optional[str], str]:
-        pattern1 = r'\((.+?) to (.+?)\):(.+)'
-        match1 = re.search(pattern1, message)
+        pattern = r'\(?((.+?) to )?(.+?)\)?[#:](.+)'
+        match = re.search(pattern, message, re.DOTALL)
 
-        if match1:
-            return match1.group(2).strip(), match1.group(3).strip()
-
-        pattern2 = r'\((.+?) to (.+?)\)#(.+)'
-        match2 = re.search(pattern2, message)
-
-        if match2:
-            return match2.group(2).strip(), match2.group(3).strip()
-
-        pattern3 = r'(.+?)#(.+)'
-        match3 = re.search(pattern3, message)
-
-        if match3:
-            return match3.group(1).strip(), match3.group(2).strip()
+        if match:
+            return match.group(3).strip(), match.group(4).strip()
 
         return None, message.strip()
 
@@ -226,12 +214,12 @@ class ChatMessage(BaseModel):
 
 class ChatParticipantNotJoinedToChat(Exception):
     def __init__(self, participant_name: str):
-        super().__init__(f'Participant {participant_name} is not joined to this chat.')
+        super().__init__(f'Participant "{participant_name}" is not joined to this chat.')
 
 
 class ChatParticipantAlreadyJoinedToChat(Exception):
     def __init__(self, participant_name: str):
-        super().__init__(f'Participant {participant_name} is already joined to this chat.')
+        super().__init__(f'Participant "{participant_name}" is already joined to this chat.')
 
 
 class MessageCouldNotBeParsed(Exception):
@@ -441,7 +429,7 @@ class AIChatParticipant(ChatParticipant):
 - Always direct your message at one and only one (other than yourself) in the group chat.
 - Every response you send should start with a recipient name followed by a hash (#) and then your message.
 - The message after the # should not contain recipient name, as they are already specified before the #.
-- A recipient MUST be one of the CURRENT participants in the group chat.
+- A recipient MUST be one of the CURRENT participants in the group chat. However you CANNOT send a message to yourself.
 - Do not prefix your message with (your name) to (recipient name) as that is already done for you.
 
 # EXAMPLE OUTPUT
