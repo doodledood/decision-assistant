@@ -227,6 +227,91 @@ class MessageCouldNotBeParsed(Exception):
         super().__init__(f'Message "{message}" could not be parsed.')
 
 
+class ChatConductor(abc.ABC):
+    @abc.abstractmethod
+    def select_next_speaker(self, chat: 'ChatRoom') -> ChatParticipant:
+        raise NotImplementedError()
+
+
+class BasicChatConductor(ChatConductor):
+    def select_next_speaker(self, chat: 'ChatRoom') -> ChatParticipant:
+        last_speaker = chat.messages[-1].sender_name if len(chat.messages) > 0 else None
+
+        if last_speaker is None:
+            return next(iter(chat.participants.values()))
+
+        # Rotate to the next participant in the list.
+        participant_names = list(chat.participants.keys())
+        last_speaker_index = participant_names.index(last_speaker)
+        next_speaker_index = (last_speaker_index + 1) % len(participant_names)
+        next_speaker_name = participant_names[next_speaker_index]
+        next_speaker = chat.participants[next_speaker_name]
+
+        return next_speaker
+
+
+class SmartChatConductor(ChatConductor):
+    chat_model: ChatOpenAI
+    speaker_interaction_schema: Optional[str]
+
+    def __init__(self, chat_model: ChatOpenAI, speaker_interaction_schema: Optional[str] = None):
+        self.chat_model = chat_model
+        self.speaker_interaction_schema = speaker_interaction_schema
+
+    def select_next_speaker(self, chat: 'ChatRoom') -> ChatParticipant:
+        last_speaker = chat.messages[-1].sender_name if len(chat.messages) > 0 else None
+
+        if last_speaker is None:
+            return next(iter(chat.participants.values()))
+
+        # Ask the AI to select the next speaker.
+        messages_str = '\n'.join(
+            [f'- ({message.sender_name} to {message.recipient_name}): {message.content}' for message in chat.messages])
+        messages = [
+            SystemMessage(content=f'''
+# MISSION
+- Select the next speaker in the conversation based on the previous messages in the conversation.
+
+# PARTICIPANTS
+{', '.join([participant.name for participant in chat.participants.values()])}
+
+# RULES
+- You can only select one of the participants in the group chat.
+
+# SPEAKER INTERACTION SCHEMA
+{self.speaker_interaction_schema or 'Not provided.'}
+
+# PROCESS
+- Look at the last message in the conversation and determine who should speak next based on the speaker interaction schema, if provided.
+
+# INPUT
+- The previous messages in the conversation.
+
+# OUTPUT
+- The name of the next speaker in the conversation.
+
+# EXAMPLE OUTPUT
+- John
+            '''),
+            HumanMessage(content=f'# PREVIOUS MESSAGES\n\n{messages_str}')
+        ]
+
+        result = self.chat_model.predict_messages(messages)
+        next_speaker_name = result.content.strip()
+
+        while next_speaker_name not in chat.participants:
+            messages.append(result)
+            messages.append(HumanMessage(
+                content=f'Speaker "{next_speaker_name}" is not a participant in the chat. Choose another one.'))
+
+            result = self.chat_model.predict_messages(messages)
+            next_speaker_name = result.content.strip()
+
+        next_speaker = chat.participants[next_speaker_name]
+
+        return next_speaker
+
+
 class ChatRoom:
     id: str
     messages: List[ChatMessage]
