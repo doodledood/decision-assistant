@@ -419,6 +419,12 @@ class AIChatParticipant(ChatParticipant):
 ## Participants
 {participants}
 
+# RULES
+- You can only send messages to other participants in the group chat. You cannot send messages to yourself ({name}).
+- Do not prefix your message with (your name) to (recipient name) as that is already done for you.
+- You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.
+- If you refer directly to someone in the chat, make sure to have them as the recipient of your message as well. For example: 1. (From John to Don) "Don#Could you ask Freddie to help me out here?" 2. (From Don to Freddie) "Freddie#Sure thing. Freddie, could you help John out, please?"
+
 # INPUT
 - Messages from the group chat, including your own messages.
   - They are prefixed by the sender's name and who the message is directed at (could also be everyone). For context only; it's not actually part of the message they sent.
@@ -429,8 +435,6 @@ class AIChatParticipant(ChatParticipant):
 - Always direct your message at one and only one (other than yourself) in the group chat.
 - Every response you send should start with a recipient name followed by a hash (#) and then your message.
 - The message after the # should not contain recipient name, as they are already specified before the #.
-- A recipient MUST be one of the CURRENT participants in the group chat. However you CANNOT send a message to yourself.
-- Do not prefix your message with (your name) to (recipient name) as that is already done for you.
 
 # EXAMPLE OUTPUT
 - When you want to respond prefix the recipient name with a # symbol and then the message like: RECIPIENT_NAME#YOUR_MESSAGE
@@ -583,7 +587,8 @@ class TeamBasedChatParticipant(ChatParticipant):
                             f'No other participants can see the messages sent in this chat room other than the team members. '
                             f'Team members should ONLY respond to the team leader and other team members. '
                             f'The previous messages are there only for context. ' if self.team_chat_history_access else '') +
-                        f'\n\n## Response To Client\nOnly the team leader will respond to client with the result of this chat room. '
+                        f'\n\n## Response To Client\nOnly the team leader will respond to client with the result of '
+                        f'this chat room and only once they have an appropriate answer. No intermediate responses to the client are allowed.' +
                         f'The team should collaborate to come up with detailed and accurate response in the team leader\'s name. ' +
                         (
                             f'\n\n## Team Interaction Schema\n{self.team_interaction_schema}' if self.team_interaction_schema is not None else ''),
@@ -719,42 +724,39 @@ if __name__ == '__main__':
     #     spinner=spinner
     # )
 
-    ai = AIChatParticipant(name='Assistant',
-                           mission=f'Be a helpful AI assistant. However, do not answer any questions about geography yourself; instead, ask the user to ask the research team, and only then respond with the answer the research team came up with.',
-                           chat_model=chat_model,
-                           spinner=spinner)
-    research_team = TeamBasedChatParticipant(
-        team_leader=AIChatParticipant(name='Research Team Leader',
-                                      role='Research Team Leader',
-                                      mission=f'Respond back with a great well-researched answer to the question asked of you. Do this by collaborating with the internal research team to answer questions. Respond as if you came up with the answer yourself. TERMINATE immediately when the research team gives you the answer.',
+    criteria_generation_team = TeamBasedChatParticipant(
+        team_leader=AIChatParticipant(name='Tom',
+                                      role='Criteria Generation Team Leader',
+                                      mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem. Respond as if you came up with the answer yourself. TERMINATE immediately when the research team gives you the answer.',
                                       chat_model=chat_model,
                                       spinner=spinner),
         other_team_participants=[
-            AIChatParticipant(name='Lead Researcher',
-                              role='Researcher',
-                              mission='Research whatever was asked of you by the research team leader. Come up with an initial hypothesis and validate it with the other researchers; iterate on it until you all agree on a good answer. Once you have a good answer, send it to the team leader.',
+            AIChatParticipant(name='Rob',
+                              role='First-Principles Criteria Generator',
+                              mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
                               chat_model=chat_model,
                               can_terminate_conversation=False,
                               spinner=spinner),
-            AIChatParticipant(name='Researcher 1',
-                              role='Researcher',
-                              mission='Collaborate with the researchers in the team to come up with the best answer. Come up with counterfactual evidence, try to disprove the hypothesis, and validate the hypothesis with the other researchers; iterate on it, until you all agree on a good answer.',
+            AIChatParticipant(name='John',
+                              role='Criteria Generation Critic',
+                              mission='Collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Iterate on it, as needed.',
                               chat_model=chat_model,
                               can_terminate_conversation=False,
                               spinner=spinner),
         ],
-        team_interaction_schema='The team leader will ask the lead researcher to come up with an answer. The lead researcher will draft an hypothesis and validate it with the other researcher. They will go back and forth, providing counterfactual evidence and validating it with each other. Once they have a good answer, the lead researcher will send it to the team leader, who will then send it back to the client.',
+        team_interaction_schema='The team leader will ask Rob to come up with a list of criteria. Rob will summarize the first principle approach to problem solving, and then come up with a list of initial criteria and give it John to criticize. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, Rob will send the final set to the team leader, who will then send it back to the client.',
         hide_inner_chat=False,
+        team_chat_history_access=False,
         spinner=spinner
     )
     user = UserChatParticipant(name='User')
-    participants = [ai, research_team, user]
+    participants = [criteria_generation_team, user]
 
     main_chat = ChatRoom(initial_participants=participants)
     result = main_chat.initiate_chat_with_result(
-        first_message="Hey",
+        first_message="Please generate a list of criteria for choosing the breed of my next puppy.",
         from_participant=user,
-        to_participant=ai
+        to_participant=criteria_generation_team
     ),
 
     print(f'Result: {result}')
