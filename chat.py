@@ -566,7 +566,9 @@ class TeamBasedChatParticipant(ChatParticipant):
         sender.role = 'Client'
 
         if self.spinner is not None:
-            self.spinner.stop_and_persist(symbol='👥', text=f'{self.team_leader.name}\'s team is discussing the request.')
+            self.spinner.stop_and_persist(symbol='👥',
+                                          text=f'{self.team_leader.name}\'s team started discussing the request.')
+            self.spinner.start(text=f'{self.team_leader.name}\'s team is actively discussing the request...')
 
         sub_chat = ChatRoom(
             initial_participants=[self.team_leader, *self.other_team_participants, sender],
