@@ -4,7 +4,7 @@ import re
 import uuid
 from collections import deque
 from json import JSONDecodeError
-from typing import List, Optional, Callable, Type, TypeVar, Dict, ClassVar, Tuple
+from typing import List, Optional, Callable, Type, TypeVar, Dict, ClassVar, Tuple, Union
 
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
@@ -238,6 +238,9 @@ class MessageCouldNotBeParsed(Exception):
         super().__init__(f'Message "{message}" could not be parsed.')
 
 
+TResultSchema = TypeVar('TResultSchema', bound=Union[BaseModel, str])
+
+
 class Chat:
     id: str
     messages: List[ChatMessage]
@@ -296,10 +299,48 @@ class Chat:
         )
 
         self._unprocessed_messages.append(message)
-       
-    def run(self):
+
+    def reset(self, remove_participants: bool = False):
+        self.messages = []
+        self.last_message_id = None
+        self._unprocessed_messages = deque()
+
+        if remove_participants:
+            for participant in list(self.participants.values()):
+                self.remove_participant(participant)
+
+    def initiate_chat_with_result(
+            self,
+            first_message: str,
+            from_participant: Union[str, ChatParticipant],
+            to_participant: Union[str, ChatParticipant],
+            result_schema: Type[TResultSchema] = str
+    ) -> TResultSchema:
+        if isinstance(to_participant, ChatParticipant):
+            to_participant = to_participant.name
+
+        if to_participant not in self.participants:
+            raise ChatParticipantNotJoinedToChat(to_participant)
+
+        if isinstance(from_participant, ChatParticipant):
+            from_participant = from_participant.name
+
+        if from_participant not in self.participants:
+            raise ChatParticipantNotJoinedToChat(from_participant)
+
+        sender = self.participants[from_participant]
+        sender.send_message(chat=self, content=first_message, recipient_name=to_participant)
+
         while self._process_new_messages():
             pass
+
+        result = self.messages[-1].content
+        result = result.replace('TERMINATE', '').strip()
+
+        if result_schema is str:
+            return result
+
+        return json_string_to_pydantic(result, result_schema)
 
     def _process_new_messages(self) -> bool:
         new_messages = []
@@ -469,6 +510,10 @@ if __name__ == '__main__':
     user = UserChatParticipant(name='User')
 
     main_chat = Chat(initial_participants=[ai, rob, user])
-    user.send_message(chat=main_chat, content='Hello!', recipient_name='Assistant')
+    result = main_chat.initiate_chat_with_result(
+        first_message="Hey",
+        from_participant=user,
+        to_participant=ai
+    )
 
-    main_chat.run()
+    print(f'Result: {result}')
