@@ -246,17 +246,20 @@ class Chat:
     messages: List[ChatMessage]
     participants: Dict[str, ChatParticipant]
     last_message_id: Optional[int]
+    is_termination_message: Callable[[str], bool]
 
     def __init__(
             self,
             id: Optional[str] = None,
             initial_participants: Optional[List[ChatParticipant]] = None,
-            initial_messages: Optional[List[ChatMessage]] = None
+            initial_messages: Optional[List[ChatMessage]] = None,
+            is_termination_message: Optional[Callable[[str], bool]] = None
     ):
         self.id = str(uuid.uuid4()) if id is None else id
         self.participants = {}
         self.messages = sorted(initial_messages or [], key=lambda m: m.id)
         self.last_message_id = None if len(self.messages) == 0 else self.messages[-1].id
+        self.is_termination_message = is_termination_message or (lambda message: message.endswith('TERMINATE'))
         self._unprocessed_messages = deque()
 
         for participant in initial_participants or []:
@@ -343,6 +346,8 @@ class Chat:
         return json_string_to_pydantic(result, result_schema)
 
     def _process_new_messages(self) -> bool:
+        termination_received = False
+
         new_messages = []
         while len(self._unprocessed_messages) > 0:
             message = self._unprocessed_messages.popleft()
@@ -354,10 +359,14 @@ class Chat:
 
             new_messages.append(message)
 
-        for participant in self.participants.values():
-            participant.on_new_chat_messages(chat=self, messages=new_messages)
+            if self.is_termination_message(message.content):
+                termination_received = True
 
-        return len(new_messages) > 0
+        for participant in self.participants.values():
+            participant.on_new_chat_messages(chat=self, messages=new_messages,
+                                             termination_received=termination_received)
+
+        return len(new_messages) > 0 and not termination_received
 
     def _display_new_message(self, message: ChatMessage):
         if message.sender_name not in self.participants:
@@ -370,10 +379,13 @@ class Chat:
 
 
 class UserChatParticipant(ChatParticipant):
-    def __init__(self, name: str = 'User'):
-        super().__init__(name, role='User', messages_hidden=True)
+    def __init__(self, name: str = 'User', **kwargs):
+        super().__init__(name, role='User', messages_hidden=True, **kwargs)
 
-    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage']):
+    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage'], termination_received: bool = False):
+        if termination_received:
+            return
+
         relevant_messages = [message for message in messages if self.name == message.recipient_name]
         if len(relevant_messages) == 0:
             return
@@ -387,7 +399,7 @@ class UserChatParticipant(ChatParticipant):
 
 
 class AIChatParticipant(ChatParticipant):
-    system_message: str = '''
+    system_message_template: str = '''
 # MISSION
 - {mission}
 
@@ -409,9 +421,6 @@ class AIChatParticipant(ChatParticipant):
   - They are prefixed by the sender's name and who the message is directed at (could also be everyone). For context only; it's not actually part of the message they sent.
 - They are prefixed by the sender's name and who the message is directed at (could also be everyone).
 
-# STAYING SILENT
-- Sometimes when conversing with other participants, you may want to stay silent or ignore a message. For example, when you are in a group chat with more than 1 participant, and 2 of you are talking with the other participant, you may want to stay silent when the other participant is talking to the other participant, unless you are explicitly mentioned.
-
 # OUTPUT
 - Your response to the user or other participants in the group chat.
 - Always direct your message at one and only one (other than yourself) in the group chat.
@@ -422,11 +431,14 @@ class AIChatParticipant(ChatParticipant):
 
 # EXAMPLE OUTPUT
 - When you want to respond prefix the recipient name with a # symbol and then the message like: RECIPIENT_NAME#YOUR_MESSAGE
-- When you want to stay silent or ignore the message just respond with # like: #
-'''
+- When you want to stay silent or ignore the message just respond with # like: #'''
     mission: str
     chat_model: ChatOpenAI
     spinner: Optional[Halo] = None
+    can_terminate_conversation: bool = False
+    termination_section: str = '''# TERMINATION
+- You can terminate the conversation by sending a message ending with the word "TERMINATE".
+- Terminate only when you have achieved your mission or goal OR when you are explicitly asked to terminate another chat participant.'''
 
     class Config:
         arbitrary_types_allowed = True
@@ -437,15 +449,29 @@ class AIChatParticipant(ChatParticipant):
                  symbol: str = '🤖',
                  role: str = 'AI Assistant',
                  mission: str = 'Be a helpful AI assistant.',
-                 system_message: Optional[str] = None,
-                 spinner: Optional[Halo] = None
+                 can_terminate_conversation: bool = False,
+                 spinner: Optional[Halo] = None,
+                 **kwargs
                  ):
-        super().__init__(name=name, symbol=symbol, role=role)
+        super().__init__(name=name, symbol=symbol, role=role, **kwargs)
 
         self.chat_model = chat_model
-        self.system_message = system_message or self.system_message
         self.spinner = spinner
         self.mission = mission
+        self.can_terminate_conversation = can_terminate_conversation
+
+    def _create_system_message(self, chat: Chat):
+        system_message = self.system_message_template.format(
+            mission=self.mission,
+            name=self.name,
+            role=self.role,
+            participants='\n'.join(
+                [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
+                 for p in chat.participants.values()])
+        )
+
+        if self.can_terminate_conversation:
+            system_message += '\n\n' + self.termination_section
 
     def _chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
         messages = []
@@ -459,7 +485,10 @@ class AIChatParticipant(ChatParticipant):
 
         return messages
 
-    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage']):
+    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage'], termination_received: bool = False):
+        if termination_received:
+            return
+
         relevant_messages = [message for message in messages if self.name == message.recipient_name]
         if len(relevant_messages) == 0:
             return
@@ -467,14 +496,7 @@ class AIChatParticipant(ChatParticipant):
         if self.spinner is not None:
             self.spinner.start(text=f'{self.name} ({self.role}) is thinking...')
 
-        system_message = self.system_message.format(
-            mission=self.mission,
-            name=self.name,
-            role=self.role,
-            participants='\n'.join(
-                [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
-                 for p in chat.participants.values()])
-        )
+        system_message = self._create_system_message(chat=chat)
 
         all_messages = self._chat_messages_to_chat_model_messages(chat.messages)
         all_messages = [
@@ -490,10 +512,55 @@ class AIChatParticipant(ChatParticipant):
         recipient_name, content = ChatParticipant.get_recipient_and_message(last_message.content)
         recipient_name = recipient_name or relevant_messages[-1].sender_name
 
-        if content == '':
+        self.send_message(chat=chat, content=content, recipient_name=recipient_name)
+
+
+class OutputParserChatParticipant(ChatParticipant):
+    def __init__(self,
+                 output_schema: Type[TResultSchema],
+                 name: str = 'JSON Output Parser',
+                 role: str = 'JSON Output Parser'
+                 ):
+        super().__init__(name=name, role=role, messages_hidden=True)
+
+        self.output_schema = output_schema
+
+    def on_new_chat_messages(self, chat: 'Chat', messages: List['ChatMessage'], termination_received: bool = False):
+        if termination_received:
             return
 
-        self.send_message(chat=chat, content=content, recipient_name=recipient_name)
+        relevant_messages = [message for message in messages if self.name == message.recipient_name]
+        if len(relevant_messages) == 0:
+            return
+
+        last_message = relevant_messages[-1]
+
+        if self.output_schema is str:
+            self.send_message(chat=chat, content=f'{last_message.content} TERMINATE',
+                              recipient_name=last_message.sender_name)
+        else:
+            try:
+                json_string = last_message.content[last_message.content.index('{'):last_message.content.rindex('}') + 1]
+                message = json_string_to_pydantic(json_string, self.output_schema)
+
+                self.send_message(chat=chat, content=f'{message.model_dump_json()} TERMINATE',
+                                  recipient_name=last_message.sender_name)
+            except Exception as e:
+                self.send_message(chat=chat, content=f'I could not parse the JSON. This was the error: {e}',
+                                  recipient_name=last_message.sender_name)
+
+
+def string_output_to_pydantic(output: str, chat_model: ChatOpenAI, result_schema: Type[TResultSchema]) -> TResultSchema:
+    parser_chat = Chat(initial_participants=[
+        AIChatParticipant(
+            chat_model=chat_model,
+            name='Text to JSON Converter',
+            role='Text to JSON Converter',
+            mission='You will be provided some TEXT and an output JSON SCHEMA. Your only mission is to convert the '
+                    'TEXT to a JSON that follows the JSON SCHEMA provided. Do not talk at all; just output JSON.'
+        ),
+        OutputParserChatParticipant(output_schema=result_schema)
+    ])
 
 
 if __name__ == '__main__':
