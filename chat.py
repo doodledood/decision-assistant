@@ -16,7 +16,7 @@ from pydantic.v1 import ValidationError
 
 from utils import fix_invalid_json
 
-TOutputSchema = TypeVar("T", bound=BaseModel)
+TOutputSchema = TypeVar("TOutputSchema", bound=BaseModel)
 
 
 def pydantic_to_json_schema(pydantic_model: Type[BaseModel]) -> dict:
