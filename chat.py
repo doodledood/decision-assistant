@@ -591,7 +591,7 @@ class AIChatParticipant(ChatParticipant):
     def _create_system_message(self, chat: ChatRoom):
         if self.other_instructions is not None:
             other_instructions_str = '# OTHER INSTRUCTIONS\n'
-            other_instructions_str = '\n'.join(
+            other_instructions_str += '\n'.join(
                 [f'## {k.capitalize()}\n{v}\n\n' for k, v in self.other_instructions.items()])
         else:
             other_instructions_str = ''
