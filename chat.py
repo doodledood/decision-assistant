@@ -1,17 +1,14 @@
 import abc
 import json
-import re
-import uuid
-from collections import deque
 from json import JSONDecodeError
-from typing import List, Optional, Callable, Type, TypeVar, Dict, Tuple, Union
+from typing import List, Optional, Callable, Type, TypeVar, Dict
 
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import BaseMessage, FunctionMessage, HumanMessage, AIMessage, SystemMessage
 from langchain.tools import Tool
 from langchain.tools.render import format_tool_to_openai_function
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from pydantic.v1 import ValidationError
 
 from utils import fix_invalid_json
@@ -226,40 +223,46 @@ class ChatConductor(abc.ABC):
         raise NotImplementedError()
 
     def get_chat_result(self, chat: 'ChatRoom') -> str:
-        if len(chat.messages) == 0:
+        messages = chat.chat_backing_store.get_messages()
+        if len(messages) == 0:
             return ''
 
-        last_message = chat.messages[-1]
+        last_message = messages[-1]
 
         return last_message.content
 
     def elect_new_chat_leader(self, chat: 'ChatRoom') -> ChatParticipant:
-        if len(chat.participants) == 0:
+        participants = chat.chat_backing_store.get_participants()
+        if len(participants) == 0:
             raise NotEnoughParticipantsInChat()
 
-        return next(iter(chat.participants.values()))
+        return next(iter(participants))
 
 
 class BasicChatConductor(ChatConductor):
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
-        if len(chat.participants) <= 1:
+        participants = chat.chat_backing_store.get_participants()
+        if len(participants) <= 1:
             return None
 
-        last_message = chat.messages[-1] if len(chat.messages) > 0 else None
+        messages = chat.chat_backing_store.get_messages()
+        last_message = messages[-1] if len(messages) > 0 else None
 
         if last_message is not None and self.is_termination_message(last_message):
             return None
 
         last_speaker = last_message.sender_name if last_message is not None else None
         if last_speaker is None:
-            return next(iter(chat.participants.values()))
+            return next(iter(participants))
 
         # Rotate to the next participant in the list.
-        participant_names = list(chat.participants.keys())
+        participant_names = [participant.name for participant in participants]
         last_speaker_index = participant_names.index(last_speaker)
         next_speaker_index = (last_speaker_index + 1) % len(participant_names)
         next_speaker_name = participant_names[next_speaker_index]
-        next_speaker = chat.participants[next_speaker_name]
+        next_speaker = chat.chat_backing_store.get_participant_by_name(next_speaker_name)
+        if next_speaker is None:
+            raise ChatParticipantNotJoinedToChat(next_speaker_name)
 
         return next_speaker
 
@@ -292,22 +295,24 @@ class AIChatConductor(ChatConductor):
         self.spinner = spinner
 
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
-        if len(chat.participants) <= 1:
+        participants = chat.chat_backing_store.get_participants()
+        if len(participants) <= 1:
             return None
 
         if self.spinner is not None:
             self.spinner.start(text='AI Chat Conductor is selecting the next speaker...')
 
         # Ask the AI to select the next speaker.
+        messages = chat.chat_backing_store.get_messages()
         messages_str = '\n'.join(
-            [f'- {message.sender_name}: {message.content}' for message in chat.messages])
+            [f'- {message.sender_name}: {message.content}' for message in messages])
         messages = [
             SystemMessage(content=f'''# MISSION
 - Select the next speaker in the conversation based on the previous messages in the conversation and an optional SPEAKER INTERACTION SCHEMA.
 - If it seems to you that the chat should end instead of selecting a next speaker, terminate it.
 
 # PARTICIPANTS
-{', '.join([participant.name for participant in chat.participants.values()])}
+{', '.join([participant.name for participant in participants])}
 
 # RULES
 - You can only select one of the participants in the group chat.
@@ -339,7 +344,7 @@ OR
         result = self.chat_model.predict_messages(messages)
         next_speaker_name = result.content.strip()
 
-        while next_speaker_name not in chat.participants and next_speaker_name != 'TERMINATE':
+        while not chat.chat_backing_store.has_participant_with_name(next_speaker_name) and next_speaker_name != 'TERMINATE':
             messages.append(result)
             messages.append(HumanMessage(
                 content=f'Speaker "{next_speaker_name}" is not a participant in the chat. Choose another one.'))
@@ -353,7 +358,9 @@ OR
 
             return None
 
-        next_speaker = chat.participants[next_speaker_name]
+        next_speaker = chat.chat_backing_store.get_participant_by_name(next_speaker_name)
+        if next_speaker is None:
+            raise ChatParticipantNotJoinedToChat(next_speaker_name)
 
         if self.spinner is not None:
             self.spinner.succeed(text=f'AI Chat Conductor has selected "{next_speaker_name}" as the next speaker.')
@@ -376,33 +383,113 @@ class TerminalChatRenderer(ChatRenderer):
         if chat.hide_messages:
             return
 
-        if message.sender_name not in chat.participants:
+        sender = chat.chat_backing_store.get_participant_by_name(message.sender_name)
+        if sender is None:
             symbol = '❓'
         else:
-            participant = chat.participants[message.sender_name]
-            if participant.messages_hidden:
+            if sender.messages_hidden:
                 return
 
-            symbol = participant.symbol
+            symbol = sender.symbol
 
         print(f'{symbol} {message.sender_name}: {message.content}')
 
 
-class ChatRoom:
+class ChatDataBackingStore(abc.ABC):
+    @abc.abstractmethod
+    def get_messages(self) -> List[ChatMessage]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def add_message(self, sender_name: str, content: str) -> ChatMessage:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def get_participants(self) -> List[ChatParticipant]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def get_participant_by_name(self, name: str) -> Optional[ChatParticipant]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def add_participant(self, participant: ChatParticipant):
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def remove_participant(self, participant: ChatParticipant):
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def has_participant_with_name(self, participant_name: str) -> bool:
+        raise NotImplementedError()
+
+
+class InMemoryChatDataBackingStore(ChatDataBackingStore):
     messages: List[ChatMessage]
     participants: Dict[str, ChatParticipant]
+    last_message_id: Optional[int] = None
+
+    def __init__(self, messages: Optional[List[ChatMessage]] = None,
+                 participants: Optional[List[ChatParticipant]] = None):
+        self.messages = sorted(messages or [], key=lambda m: m.id)
+        self.participants = {participant.name: participant for participant in (participants or [])}
+        self.last_message_id = None if len(self.messages) == 0 else self.messages[-1].id
+
+    def get_messages(self) -> List[ChatMessage]:
+        return self.messages
+
+    def add_message(self, sender_name: str, content: str) -> ChatMessage:
+        self.last_message_id = self.last_message_id + 1 if self.last_message_id is not None else 1
+
+        message = ChatMessage(
+            id=self.last_message_id,
+            sender_name=sender_name,
+            content=content
+        )
+
+        self.messages.append(message)
+
+        return message
+
+    def get_participants(self) -> List[ChatParticipant]:
+        return list(self.participants.values())
+
+    def get_participant_by_name(self, name: str) -> Optional[ChatParticipant]:
+        if name not in self.participants:
+            return None
+
+        return self.participants[name]
+
+    def add_participant(self, participant: ChatParticipant):
+        if participant.name in self.participants:
+            raise ChatParticipantAlreadyJoinedToChat(participant.name)
+
+        self.participants[participant.name] = participant
+
+    def remove_participant(self, participant: ChatParticipant):
+        if participant.name not in self.participants:
+            raise ChatParticipantNotJoinedToChat(participant.name)
+
+        self.participants.pop(participant.name)
+
+    def has_participant_with_name(self, participant_name: str) -> bool:
+        return participant_name in self.participants
+
+
+class ChatRoom:
+    chat_backing_store: ChatDataBackingStore
     chat_conductor: ChatConductor
     chat_renderer: ChatRenderer
     description: str
     chat_leader: Optional[ChatParticipant] = None
     max_total_messages: Optional[int] = None
-    last_message_id: Optional[int] = None
     hide_messages: bool = False
 
     def __init__(
             self,
             initial_participants: Optional[List[ChatParticipant]] = None,
-            initial_messages: Optional[List[ChatMessage]] = None,
+            chat_backing_data_store: Optional[ChatDataBackingStore] = None,
             chat_conductor: Optional[ChatConductor] = None,
             chat_renderer: Optional[ChatRenderer] = None,
             max_total_messages: Optional[int] = None,
@@ -411,95 +498,73 @@ class ChatRoom:
     ):
         assert max_total_messages is None or max_total_messages > 0, 'Max total messages must be None or greater than 0.'
 
-        self.participants = {}
-        self.messages = sorted(initial_messages or [], key=lambda m: m.id)
-        self.last_message_id = None if len(self.messages) == 0 else self.messages[-1].id
+        self.chat_backing_store = chat_backing_data_store or InMemoryChatDataBackingStore()
         self.chat_conductor = chat_conductor or BasicChatConductor()
         self.chat_renderer = chat_renderer or TerminalChatRenderer()
         self.hide_messages = hide_messages
         self.max_total_messages = max_total_messages
         self.description = description
 
-        for i, participant in enumerate(initial_participants or []):
+        for i, participant in enumerate(initial_participants):
             self.add_participant(participant, should_elect_new_leader=i == 0)
 
     def add_participant(self, participant: ChatParticipant, should_elect_new_leader: bool = False):
-        if participant.name in self.participants:
-            raise ChatParticipantAlreadyJoinedToChat(participant.name)
-
-        self.participants[participant.name] = participant
+        self.chat_backing_store.add_participant(participant)
 
         if self.chat_leader is None:
             self.chat_leader = participant
         elif should_elect_new_leader:
             self.chat_leader = self.chat_conductor.elect_new_chat_leader(chat=self)
 
-            for participant in self.participants.values():
+            for participant in self.chat_backing_store.get_participants():
                 participant.on_new_chat_leader_elected(chat=self, new_leader=self.chat_leader)
 
-        for participant in self.participants.values():
+        for participant in self.chat_backing_store.get_participants():
             participant.on_participant_joined_chat(chat=self, participant=participant)
 
     def remove_participant(self, participant: ChatParticipant):
-        if participant.name not in self.participants:
-            raise ChatParticipantNotJoinedToChat(participant.name)
+        self.chat_backing_store.remove_participant(participant)
 
-        self.participants.pop(participant.name)
-
-        for participant in self.participants.values():
+        participants = self.chat_backing_store.get_participants()
+        for participant in participants:
             participant.on_participant_left_chat(chat=self, participant=participant)
 
         if self.chat_leader == participant:
-            if len(self.participants) == 0:
+            if len(participants) == 0:
                 self.chat_leader = None
             else:
                 self.chat_leader = self.chat_conductor.elect_new_chat_leader(chat=self)
 
-            for participant in self.participants.values():
+            for participant in participants:
                 participant.on_new_chat_leader_elected(chat=self, new_leader=self.chat_leader)
 
     def receive_message(self, sender_name: str, content: str):
-        if sender_name not in self.participants:
+        sender = self.chat_backing_store.get_participant_by_name(sender_name)
+        if sender is None:
             raise ChatParticipantNotJoinedToChat(sender_name)
 
-        sender = self.participants[sender_name]
-
-        self.last_message_id = self.last_message_id + 1 if self.last_message_id is not None else 1
-
-        message = ChatMessage(
-            id=self.last_message_id,
-            sender_name=sender.name,
-            content=content
-        )
-
-        self.messages.append(message)
+        message = self.chat_backing_store.add_message(sender_name=sender_name, content=content)
 
         self.chat_renderer.render_new_chat_message(chat=self, message=message)
 
-        for participant in self.participants.values():
+        for participant in self.chat_backing_store.get_participants():
             participant.on_new_chat_message(chat=self, message=message)
-
-    def reset(self, remove_participants: bool = False):
-        self.messages = []
-        self.last_message_id = None
-
-        if remove_participants:
-            for participant in list(self.participants.values()):
-                self.remove_participant(participant)
 
     def initiate_chat_with_result(
             self,
             initial_message: Optional[str] = None
     ) -> str:
-        if len(self.participants) <= 1:
-            raise NotEnoughParticipantsInChat(len(self.participants))
+        participants = self.chat_backing_store.get_participants()
+        if len(participants) <= 1:
+            raise NotEnoughParticipantsInChat(len(participants))
 
         if initial_message is not None:
             self.receive_message(sender_name=self.chat_leader.name, content=initial_message)
 
         next_speaker = self.chat_conductor.select_next_speaker(chat=self)
         while next_speaker is not None:
-            if self.max_total_messages is not None and len(self.messages) >= self.max_total_messages:
+            messages = self.chat_backing_store.get_messages()
+            if self.max_total_messages is not None and len(messages) >= self.max_total_messages:
                 break
 
             message_content = next_speaker.respond_to_chat(chat=self)
@@ -508,12 +573,10 @@ class ChatRoom:
 
             next_speaker = self.chat_conductor.select_next_speaker(chat=self)
 
-        for participant in self.participants.values():
+        for participant in self.chat_backing_store.get_participants():
             participant.on_chat_ended(chat=self)
 
-        result = self.chat_conductor.get_chat_result(chat=self)
-
-        return result
+        return self.chat_conductor.get_chat_result(chat=self)
 
 
 class UserChatParticipant(ChatParticipant):
@@ -596,6 +659,7 @@ class AIChatParticipant(ChatParticipant):
         else:
             other_instructions_str = ''
 
+        participants = chat.chat_backing_store.get_participants()
         system_message = self.system_message_template.format(
             mission=self.mission,
             name=self.name,
@@ -603,7 +667,7 @@ class AIChatParticipant(ChatParticipant):
             chat_room_description=chat.description,
             participants='\n'.join(
                 [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
-                 for p in chat.participants.values()]),
+                 for p in participants]),
             other_instructions=other_instructions_str
         )
 
@@ -630,7 +694,9 @@ class AIChatParticipant(ChatParticipant):
 
         system_message = self._create_system_message(chat=chat)
 
-        all_messages = self._chat_messages_to_chat_model_messages(chat.messages)
+        chat_messages = chat.chat_backing_store.get_messages()
+
+        all_messages = self._chat_messages_to_chat_model_messages(chat_messages)
         all_messages = [
             SystemMessage(content=system_message),
             *all_messages
@@ -678,7 +744,8 @@ class GroupBasedChatParticipant(ChatParticipant):
             self.spinner.stop_and_persist(symbol='👥', text=f'{self.name}\'s group started a discussion.')
             self.spinner.start(text=f'{self.name}\'s group is discussing...')
 
-        conversation_str = '\n'.join([f'- {message.sender_name}: {message.content}' for message in chat.messages])
+        messages = chat.chat_backing_store.get_messages()
+        conversation_str = '\n'.join([f'- {message.sender_name}: {message.content}' for message in messages])
         response = self.inner_chat.initiate_chat_with_result(
             initial_message=f'''# ANOTHER EXTERNAL CONVERSATION\n{conversation_str}\n\n# TASK\nAs this group\'s leader, I need to respond in our group's name. What do you all think should I respond with? Let's collaborate on this.'''
         )
@@ -703,10 +770,11 @@ class JSONOutputParserChatParticipant(ChatParticipant):
         self.output_schema = output_schema
 
     def respond_to_chat(self, chat: 'ChatRoom') -> str:
-        if len(chat.messages) == 0:
+        messages = chat.chat_backing_store.get_messages()
+        if len(messages) == 0:
             raise NoMessagesInChat()
 
-        last_message = chat.messages[-1]
+        last_message = messages[-1]
 
         try:
             json_string = last_message.content[last_message.content.index('{'):last_message.content.rindex('}') + 1]
@@ -717,7 +785,9 @@ class JSONOutputParserChatParticipant(ChatParticipant):
             return f'I could not parse the JSON. This was the error: {e}'
 
 
-def string_output_to_pydantic(output: str, chat_model: ChatOpenAI, output_schema: Type[TOutputSchema],
+def string_output_to_pydantic(output: str,
+                              chat_model: ChatOpenAI,
+                              output_schema: Type[TOutputSchema],
                               spinner: Optional[Halo] = None,
                               n_retries: int = 3,
                               hide_message: bool = True) -> TOutputSchema:
@@ -825,7 +895,7 @@ if __name__ == '__main__':
                                   role='Criteria Generation Critic',
                                   mission='Think from frist principles and collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Are some criteria overlapping and need to be merged? Is some criterion too general and need to be broken down? Are there criteria missing? Is the naming of each criteria suitable and reflects that a higher value is better? Iterate on it, as needed.',
                                   other_instructions={
-                                        'Receiving Feedback': 'Rob might criticize your criticism and provide counter-counterfactual evidence to support his response, if applicable.'
+                                      'Receiving Feedback': 'Rob might criticize your criticism and provide counter-counterfactual evidence to support his response, if applicable.'
                                   },
                                   chat_model=chat_model,
                                   spinner=spinner),
