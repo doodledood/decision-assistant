@@ -276,19 +276,19 @@ class BasicChatConductor(ChatConductor):
 class AIChatConductor(ChatConductor):
     chat_model: ChatOpenAI
     speaker_interaction_schema: Optional[str]
+    spinner: Optional[Halo] = None
 
-    def __init__(self, chat_model: ChatOpenAI, speaker_interaction_schema: Optional[str] = None):
+    def __init__(self, chat_model: ChatOpenAI, speaker_interaction_schema: Optional[str] = None, spinner: Optional[Halo] = None):
         self.chat_model = chat_model
         self.speaker_interaction_schema = speaker_interaction_schema
+        self.spinner = spinner
 
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
         if len(chat.participants) <= 1:
             return None
 
-        last_speaker = chat.messages[-1].sender_name if len(chat.messages) > 0 else None
-
-        if last_speaker is None:
-            return next(iter(chat.participants.values()))
+        if self.spinner is not None:
+            self.spinner.start(text='AI Conductor is selecting the next speaker...')
 
         # Ask the AI to select the next speaker.
         messages_str = '\n'.join(
@@ -321,7 +321,7 @@ class AIChatConductor(ChatConductor):
 - "John"
 OR
 - "TERMINATE"'''),
-            HumanMessage(content=f'# PREVIOUS MESSAGES\n\n{messages_str}')
+            HumanMessage(content=f'# PREVIOUS MESSAGES\n\n{messages_str if len(messages_str) > 0 else "No messages yet."}')
         ]
 
         result = self.chat_model.predict_messages(messages)
@@ -336,9 +336,15 @@ OR
             next_speaker_name = result.content.strip()
 
         if next_speaker_name == 'TERMINATE':
+            if self.spinner is not None:
+                self.spinner.stop_and_persist(symbol='👥', text='AI Conductor has decided to terminate the chat.')
+
             return None
 
         next_speaker = chat.participants[next_speaker_name]
+
+        if self.spinner is not None:
+            self.spinner.succeed(text=f'AI Conductor has selected "{next_speaker_name}" as the next speaker.')
 
         return next_speaker
 
@@ -466,12 +472,13 @@ class ChatRoom:
 
     def initiate_chat_with_result(
             self,
-            initial_message: str
+            initial_message: Optional[str] = None
     ) -> str:
         if len(self.participants) <= 1:
             raise NotEnoughParticipantsInChat(len(self.participants))
 
-        self.receive_message(sender_name=self.chat_leader.name, content=initial_message)
+        if initial_message is not None:
+            self.receive_message(sender_name=self.chat_leader.name, content=initial_message)
 
         next_speaker = self.chat_conductor.select_next_speaker(chat=self)
         while next_speaker is not None:
@@ -585,6 +592,9 @@ class AIChatParticipant(ChatParticipant):
                 messages.append(AIMessage(content=content))
             else:
                 messages.append(HumanMessage(content=content))
+
+        if len(messages) == 0:
+            messages.append(HumanMessage(content=f'SYSTEM: The chat has started.'))
 
         return messages
 
@@ -744,15 +754,22 @@ if __name__ == '__main__':
 
     spinner = Halo(spinner='dots')
 
-    ai = AIChatParticipant(name='Assistant', chat_model=chat_model, spinner=spinner)
+    ai = AIChatParticipant(name='Assistant', role='Boring AI Assistant', chat_model=chat_model, spinner=spinner)
     rob = AIChatParticipant(name='Rob', role='Funny Prankster',
                             mission='Collaborate with the user to prank the boring AI. Yawn.',
                             chat_model=chat_model, spinner=spinner)
     user = UserChatParticipant(name='User')
     participants = [user, ai, rob]
 
-    main_chat = ChatRoom(initial_participants=participants)
-    main_chat.initiate_chat_with_result(f'Hey {ai.name}, how are you?')
+    main_chat = ChatRoom(
+        initial_participants=participants,
+        chat_conductor=AIChatConductor(
+            chat_model=chat_model,
+            speaker_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to prank him big time. Rob can and should talk to the user to get them in on the prank, however the majority of the prank should be done by Rob. The chat should end when the AI is successfuly pranked once, when the user decides to end the chat, or if the AI is being too boring after 3 tries.',
+            spinner=spinner
+        ),
+    )
+    main_chat.initiate_chat_with_result()
 
     # ai = AIChatParticipant(name='AI', role='Math Expert',
     #                        mission='Solve the user\'s math problem and TERMINATE immediately (only if you have the solution). The user has only one problem.',
