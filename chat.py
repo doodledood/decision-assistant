@@ -366,6 +366,11 @@ class ChatRenderer(abc.ABC):
         raise NotImplementedError()
 
 
+class NoChatRenderer(ChatRenderer):
+    def render_new_chat_message(self, chat: 'ChatRoom', message: ChatMessage):
+        pass
+
+
 class TerminalChatRenderer(ChatRenderer):
     def render_new_chat_message(self, chat: 'ChatRoom', message: ChatMessage):
         if chat.hide_messages:
@@ -390,7 +395,7 @@ class ChatRoom:
     chat_renderer: ChatRenderer
     description: str
     chat_leader: Optional[ChatParticipant] = None
-    max_messages: Optional[int] = None
+    max_total_messages: Optional[int] = None
     last_message_id: Optional[int] = None
     hide_messages: bool = False
 
@@ -412,7 +417,7 @@ class ChatRoom:
         self.chat_conductor = chat_conductor or BasicChatConductor()
         self.chat_renderer = chat_renderer or TerminalChatRenderer()
         self.hide_messages = hide_messages
-        self.max_messages = max_total_messages
+        self.max_total_messages = max_total_messages
         self.description = description
 
         for i, participant in enumerate(initial_participants or []):
@@ -494,6 +499,9 @@ class ChatRoom:
 
         next_speaker = self.chat_conductor.select_next_speaker(chat=self)
         while next_speaker is not None:
+            if self.max_total_messages is not None and len(self.messages) >= self.max_total_messages:
+                break
+
             message_content = next_speaker.respond_to_chat(chat=self)
 
             self.receive_message(sender_name=next_speaker.name, content=message_content)
@@ -636,68 +644,43 @@ class AIChatParticipant(ChatParticipant):
         return message_content
 
 
-# class TeamBasedChatParticipant(ChatParticipant):
-#     team_leader: ChatParticipant
-#     other_team_participants: List[ChatParticipant]
-#     team_interaction_schema: Optional[str] = None
-#     hide_inner_chat: bool = True
-#     max_sub_chat_messages: Optional[int] = None
-#     team_chat_history_access: bool = True
-#     spinner: Optional[Halo] = None
-#
-#     def __init__(self,
-#                  team_leader: ChatParticipant,
-#                  other_team_participants: List[ChatParticipant],
-#                  team_interaction_schema: Optional[str] = None,
-#                  hide_inner_chat: bool = True,
-#                  max_total_sub_chat_messages: Optional[int] = None,
-#                  team_chat_history_access: bool = True,
-#                  spinner: Optional[Halo] = None,
-#                  **kwargs):
-#         super().__init__(name=team_leader.name, role=team_leader.role, **kwargs)
-#
-#         assert len(other_team_participants) >= 1, 'At least one team leader and 1 other team participant are required.'
-#
-#         self.other_team_participants = other_team_participants
-#         self.team_leader = team_leader
-#         self.hide_inner_chat = hide_inner_chat
-#         self.max_sub_chat_messages = max_total_sub_chat_messages
-#         self.team_chat_history_access = team_chat_history_access
-#         self.team_interaction_schema = team_interaction_schema
-#         self.spinner = spinner
-#
-#     def on_new_chat_message(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
-#         if termination_received:
-#             return
-#
-#         relevant_messages = [message for message in messages if self.name == message.recipient_name]
-#         if len(relevant_messages) == 0:
-#             return
-#
-#         last_message = relevant_messages[-1]
-#
-#         if self.spinner is not None:
-#             self.spinner.stop_and_persist(symbol='👥',
-#                                           text=f'{self.team_leader.name}\'s team started discussing the request.')
-#             self.spinner.start(text=f'{self.team_leader.name}\'s team is actively discussing the request...')
-#
-#         sub_chat = ChatRoom(
-#             initial_participants=[self.team_leader, *self.other_team_participants],
-#             initial_messages=chat.messages if self.team_chat_history_access else None,
-#             hide_messages=self.hide_inner_chat,
-#             max_total_messages=self.max_sub_chat_messages,
-#             chat_conductor=AIChatConductor()
-#         )
-#
-#         response_from_team = sub_chat.initiate_chat_with_result(
-#             first_message=f'{last_message.sender_name} has told me this: "{last_message.content}". What should I respond with?',
-#             from_participant=self.team_leader,
-#         )
-#
-#         self.send_message(chat=chat, content=response_from_team)
-#
-#         if self.spinner is not None:
-#             self.spinner.succeed(text=f'{self.team_leader.name}\'s team discussion was concluded.')
+class GroupBasedChatParticipant(ChatParticipant):
+    inner_chat: ChatRoom
+    spinner: Optional[Halo] = None
+
+    def __init__(self,
+                 chat: ChatRoom,
+                 spinner: Optional[Halo] = None,
+                 **kwargs):
+        if chat.chat_leader is None:
+            raise NotEnoughParticipantsInChat()
+
+        super().__init__(name=chat.chat_leader.name, role=chat.chat_leader.role, **kwargs)
+
+        self.inner_chat = chat
+        self.spinner = spinner
+
+    def on_new_chat_leader_elected(self, chat: 'ChatRoom', new_leader: Optional['ChatParticipant']):
+        if new_leader is None:
+            return
+
+        self.name = new_leader.name
+        self.role = new_leader.role
+
+    def respond_to_chat(self, chat: 'ChatRoom') -> str:
+        if self.spinner is not None:
+            self.spinner.stop_and_persist(symbol='👥', text=f'{self.name}\'s group started a discussion.')
+            self.spinner.start(text=f'{self.name}\'s group is discussing...')
+
+        conversation_str = '\n'.join([f'- {message.sender_name}: {message.content}' for message in chat.messages])
+        response = self.inner_chat.initiate_chat_with_result(
+            initial_message=f'''# ANOTHER EXTERNAL CONVERSATION\n{conversation_str}\n\n# TASK\nAs this group\'s leader, I need to respond in our team's name. What do you all think should I respond with? Let's collaborate on this.'''
+        )
+
+        if self.spinner is not None:
+            self.spinner.succeed(text=f'{self.name}\'s group discussion was concluded.')
+
+        return response
 
 
 class JSONOutputParserChatParticipant(ChatParticipant):
@@ -788,59 +771,62 @@ if __name__ == '__main__':
     # )
     # main_chat.initiate_chat_with_result()
 
-    ai = AIChatParticipant(name='AI', role='Math Expert',
-                           mission='Solve the user\'s math problem (only one). Respond with the correct answer and end with the word "TERMINATE"',
-                           chat_model=chat_model, spinner=spinner)
-    user = UserChatParticipant(name='User')
-    participants = [user, ai]
-
-
-    class MathResult(BaseModel):
-        result: float = Field(description='The result of the math problem.')
-
-
-    main_chat = ChatRoom(initial_participants=participants)
-    parsed_output = string_output_to_pydantic(
-        output=main_chat.initiate_chat_with_result(),
-        chat_model=chat_model,
-        output_schema=MathResult,
-        spinner=spinner
-    )
-
-    print(f'Result: {dict(parsed_output)}')
-    #
-    #
-    # criteria_generation_team = TeamBasedChatParticipant(
-    #     team_leader=AIChatParticipant(name='Tom',
-    #                                   role='Criteria Generation Team Leader',
-    #                                   mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem. Respond as if you came up with the answer yourself. TERMINATE immediately when the research team gives you the answer.',
-    #                                   chat_model=chat_model,
-    #                                   spinner=spinner),
-    #     other_team_participants=[
-    #         AIChatParticipant(name='Rob',
-    #                           role='Criteria Generator',
-    #                           mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
-    #                           chat_model=chat_model,
-    #                           spinner=spinner),
-    #         AIChatParticipant(name='John',
-    #                           role='Criteria Generation Critic',
-    #                           mission='Collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Iterate on it, as needed.',
-    #                           chat_model=chat_model,
-    #                           spinner=spinner),
-    #     ],
-    #     team_interaction_schema='The team leader will ask Rob to come up with a list of criteria. Rob will summarize the first principle approach to problem solving, and then come up with a list of initial criteria and give it John to criticize. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, Rob will send the final set to the team leader, who will then send it back to the client.',
-    #     hide_inner_chat=False,
-    #     team_chat_history_access=False,
-    #     spinner=spinner
-    # )
+    # ai = AIChatParticipant(name='AI', role='Math Expert',
+    #                        mission='Solve the user\'s math problem (only one). Respond with the correct answer and end with the word "TERMINATE"',
+    #                        chat_model=chat_model, spinner=spinner)
     # user = UserChatParticipant(name='User')
-    # participants = [user, criteria_generation_team]
+    # participants = [user, ai]
+    #
+    #
+    # class MathResult(BaseModel):
+    #     result: float = Field(description='The result of the math problem.')
+    #
     #
     # main_chat = ChatRoom(initial_participants=participants)
-    # result = main_chat.initiate_chat_with_result(
-    #     initial_message="Please generate a list of criteria for choosing the breed of my next puppy.",
-    #     from_participant=user,
-    #     to_participant=criteria_generation_team
-    # ),
+    # parsed_output = string_output_to_pydantic(
+    #     output=main_chat.initiate_chat_with_result(),
+    #     chat_model=chat_model,
+    #     output_schema=MathResult,
+    #     spinner=spinner
+    # )
+    #
+    # print(f'Result: {dict(parsed_output)}')
 
-    # print(f'Result: {result}')
+    criteria_generation_team = GroupBasedChatParticipant(
+        chat=ChatRoom(
+            initial_participants=[
+                AIChatParticipant(name='Tom',
+                                  role='Criteria Generation Team Leader',
+                                  mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem. When the set is finalized, respond as if you are responding to the external chat you are also a a part of.',
+                                  chat_model=chat_model,
+                                  spinner=spinner),
+                AIChatParticipant(name='Rob',
+                                  role='Criteria Generator',
+                                  mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
+                                  chat_model=chat_model,
+                                  spinner=spinner),
+                AIChatParticipant(name='John',
+                                  role='Criteria Generation Critic',
+                                  mission='Collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Are some criteria overlapping and need to be merged? Is some criterion too general and need to be broken down? Are there criteria missing? Iterate on it, as needed.',
+                                  chat_model=chat_model,
+                                  spinner=spinner),
+            ],
+            chat_conductor=AIChatConductor(
+                chat_model=chat_model,
+                speaker_interaction_schema='The team leader initiates the conversation about the criteria. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, once they both agree the set is good enough, the team leader will send a message to the external conversation with the final criteria set.',
+                termination_condition='Terminate the chat when the team leader thinks the criteria set is good enough, or if the team leader asks you to terminate the chat.',
+                spinner=spinner
+            ),
+            description='This chat room is a group chat for the criteria generation team. Everybody can talk to everybody else. The goal is to generate a list of criteria for a decision-making problem.',
+        ),
+        spinner=spinner
+    )
+    user = UserChatParticipant(name='User')
+    participants = [user, criteria_generation_team]
+
+    main_chat = ChatRoom(initial_participants=participants)
+    result = main_chat.initiate_chat_with_result(
+        initial_message="Please generate a list of criteria for choosing the breed of my next puppy.",
+    ),
+
+    print(f'Result: {result}')
