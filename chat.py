@@ -350,10 +350,17 @@ class ChatRenderer(abc.ABC):
 
 class TerminalChatRenderer(ChatRenderer):
     def render_new_chat_message(self, chat: 'ChatRoom', message: ChatMessage):
+        if chat.hide_messages:
+            return
+
         if message.sender_name not in chat.participants:
             symbol = '❓'
         else:
-            symbol = chat.participants[message.sender_name].symbol
+            participant = chat.participants[message.sender_name]
+            if participant.messages_hidden:
+                return
+
+            symbol = participant.symbol
 
         print(f'{symbol} {message.sender_name}: {message.content}')
 
@@ -515,16 +522,25 @@ class AIChatParticipant(ChatParticipant):
 
 # RULES
 - You can only send messages to other participants in the group chat. You cannot send messages to yourself ({name}).
-- Do not prefix your message with (your name) as that is already done for you .i.e. you do not need to send messages like: "YOUR_NAME: MESSAGE", but instead just send "MESSAGE".
 - You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.
 
 # INPUT
 - Messages from the group chat, including your own messages.
-  - They are prefixed by the sender's name and who the message is directed at (could also be everyone). For context only; it's not actually part of the message they sent.
-  - Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not respond to them.
+  - They are prefixed by the sender's name (could also be everyone). For context only; it's not actually part of the message they sent. Example: "John: Hello, how are you?"
+  - Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not talk to them.
 
 # OUTPUT
-- Your response to a participant in the group chat.'''
+- Your response to a participant in the group chat.
+- Do not prefix your message with your name. The system will do that for you.
+
+# GOOD OUTPUT EXAMPLES
+- "Hello, how are you?"
+- "I am doing well, thanks. How are you?"
+
+# BAD OUTPUT
+- "John: Hello, how are you?"
+- "Assistant: I am doing well, thanks. How are you?"
+'''
     mission: str
     chat_model: ChatOpenAI
     spinner: Optional[Halo] = None
@@ -564,7 +580,7 @@ class AIChatParticipant(ChatParticipant):
         messages = []
         for message in chat_messages:
             content = \
-                f'({message.sender_name} to {message.recipient_name}): {message.content}'
+                f'{message.sender_name}: {message.content}'
             if message.sender_name == self.name:
                 messages.append(AIMessage(content=content))
             else:
@@ -589,7 +605,13 @@ class AIChatParticipant(ChatParticipant):
         if self.spinner is not None:
             self.spinner.stop()
 
-        return last_message.content
+        message_content = last_message.content
+
+        potential_prefix = f'{self.name}:'
+        if message_content.startswith(potential_prefix):
+            message_content = message_content[len(potential_prefix):].strip()
+
+        return message_content
 
 
 # class TeamBasedChatParticipant(ChatParticipant):
@@ -722,18 +744,21 @@ if __name__ == '__main__':
 
     spinner = Halo(spinner='dots')
 
-    # ai = AIChatParticipant(name='Assistant', chat_model=chat_model, spinner=spinner)
-    # rob = AIChatParticipant(name='Rob', role='Funny Prankster',
-    #                         mission='Collaborate with the user to prank the boring AI. Yawn.',
-    #                         chat_model=chat_model, spinner=spinner)
-    # user = UserChatParticipant(name='User')
-    # participants = [ai, rob, user]
+    ai = AIChatParticipant(name='Assistant', chat_model=chat_model, spinner=spinner)
+    rob = AIChatParticipant(name='Rob', role='Funny Prankster',
+                            mission='Collaborate with the user to prank the boring AI. Yawn.',
+                            chat_model=chat_model, spinner=spinner)
+    user = UserChatParticipant(name='User')
+    participants = [user, ai, rob]
+
+    main_chat = ChatRoom(initial_participants=participants)
+    main_chat.initiate_chat_with_result(f'Hey {ai.name}, how are you?')
 
     # ai = AIChatParticipant(name='AI', role='Math Expert',
     #                        mission='Solve the user\'s math problem and TERMINATE immediately (only if you have the solution). The user has only one problem.',
     #                        chat_model=chat_model, spinner=spinner)
     # user = UserChatParticipant(name='User')
-    # participants = [ai, user]
+    # participants = [user, ai]
     #
     #
     # class MathResult(BaseModel):
@@ -751,38 +776,41 @@ if __name__ == '__main__':
     #     output_schema=MathResult,
     #     spinner=spinner
     # )
+    #
+    # print(f'Result: {parsed_output}')
+    #
+    #
+    # criteria_generation_team = TeamBasedChatParticipant(
+    #     team_leader=AIChatParticipant(name='Tom',
+    #                                   role='Criteria Generation Team Leader',
+    #                                   mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem. Respond as if you came up with the answer yourself. TERMINATE immediately when the research team gives you the answer.',
+    #                                   chat_model=chat_model,
+    #                                   spinner=spinner),
+    #     other_team_participants=[
+    #         AIChatParticipant(name='Rob',
+    #                           role='Criteria Generator',
+    #                           mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
+    #                           chat_model=chat_model,
+    #                           spinner=spinner),
+    #         AIChatParticipant(name='John',
+    #                           role='Criteria Generation Critic',
+    #                           mission='Collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Iterate on it, as needed.',
+    #                           chat_model=chat_model,
+    #                           spinner=spinner),
+    #     ],
+    #     team_interaction_schema='The team leader will ask Rob to come up with a list of criteria. Rob will summarize the first principle approach to problem solving, and then come up with a list of initial criteria and give it John to criticize. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, Rob will send the final set to the team leader, who will then send it back to the client.',
+    #     hide_inner_chat=False,
+    #     team_chat_history_access=False,
+    #     spinner=spinner
+    # )
+    # user = UserChatParticipant(name='User')
+    # participants = [user, criteria_generation_team]
+    #
+    # main_chat = ChatRoom(initial_participants=participants)
+    # result = main_chat.initiate_chat_with_result(
+    #     initial_message="Please generate a list of criteria for choosing the breed of my next puppy.",
+    #     from_participant=user,
+    #     to_participant=criteria_generation_team
+    # ),
 
-    criteria_generation_team = TeamBasedChatParticipant(
-        team_leader=AIChatParticipant(name='Tom',
-                                      role='Criteria Generation Team Leader',
-                                      mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem. Respond as if you came up with the answer yourself. TERMINATE immediately when the research team gives you the answer.',
-                                      chat_model=chat_model,
-                                      spinner=spinner),
-        other_team_participants=[
-            AIChatParticipant(name='Rob',
-                              role='First-Principles Criteria Generator',
-                              mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
-                              chat_model=chat_model,
-                              spinner=spinner),
-            AIChatParticipant(name='John',
-                              role='Criteria Generation Critic',
-                              mission='Collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Iterate on it, as needed.',
-                              chat_model=chat_model,
-                              spinner=spinner),
-        ],
-        team_interaction_schema='The team leader will ask Rob to come up with a list of criteria. Rob will summarize the first principle approach to problem solving, and then come up with a list of initial criteria and give it John to criticize. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, Rob will send the final set to the team leader, who will then send it back to the client.',
-        hide_inner_chat=False,
-        team_chat_history_access=False,
-        spinner=spinner
-    )
-    user = UserChatParticipant(name='User')
-    participants = [criteria_generation_team, user]
-
-    main_chat = ChatRoom(initial_participants=participants)
-    result = main_chat.initiate_chat_with_result(
-        initial_message="Please generate a list of criteria for choosing the breed of my next puppy.",
-        from_participant=user,
-        to_participant=criteria_generation_team
-    ),
-
-    print(f'Result: {result}')
+    # print(f'Result: {result}')
