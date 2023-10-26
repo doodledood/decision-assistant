@@ -162,53 +162,36 @@ class ChatParticipant(abc.ABC):
     symbol: str
     role: str
     messages_hidden: bool
-    _chats_joined = Dict[int, 'Chat']
 
     def __init__(self, name: str, symbol: str = '👤', role: str = 'Chat Participant', messages_hidden: bool = False):
-
         self.name = name
         self.symbol = symbol
         self.role = role
         self.messages_hidden = messages_hidden
 
-        self._chats_joined = {}
-
-    def send_message(self, chat: 'ChatRoom', content: str, recipient_name: str):
-        if chat.id not in self._chats_joined:
-            raise ChatParticipantNotJoinedToChat(self.name)
-
-        chat.receive_message(sender_name=self.name, content=content, recipient_name=recipient_name)
-
-    @staticmethod
-    def get_recipient_and_message(message: str) -> Tuple[Optional[str], str]:
-        pattern = r'\(?((.+?) to )?(.+?)\)?[#:](.+)'
-        match = re.search(pattern, message, re.DOTALL)
-
-        if match:
-            return match.group(3).strip(), match.group(4).strip()
-
-        return None, message.strip()
-
-    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
+    @abc.abstractmethod
+    def respond_to_chat(self, chat: 'ChatRoom') -> str:
         raise NotImplementedError()
 
-    def on_participant_joined_chat(self, chat: 'ChatRoom', participant: 'ChatParticipant'):
-        if participant.name == self.name:
-            self._chats_joined[chat.id] = chat
+    def on_new_chat_message(self, chat: 'ChatRoom', message: 'ChatMessage'):
+        pass
 
-            return
+    def on_chat_ended(self, chat: 'ChatRoom'):
+        pass
+
+    def on_participant_joined_chat(self, chat: 'ChatRoom', participant: 'ChatParticipant'):
+        pass
 
     def on_participant_left_chat(self, chat: 'ChatRoom', participant: 'ChatParticipant'):
-        if participant.name == self.name:
-            self._chats_joined.pop(chat.id)
+        pass
 
-            return
+    def on_new_chat_leader_elected(self, chat: 'ChatRoom', new_leader: Optional['ChatParticipant']):
+        pass
 
 
 class ChatMessage(BaseModel):
     id: int
     sender_name: str
-    recipient_name: str
     content: str
 
 
@@ -227,16 +210,42 @@ class MessageCouldNotBeParsed(Exception):
         super().__init__(f'Message "{message}" could not be parsed.')
 
 
+class NoParticipantsInChat(Exception):
+    def __init__(self):
+        super().__init__('There are no participants in this chat.')
+
+
 class ChatConductor(abc.ABC):
     @abc.abstractmethod
-    def select_next_speaker(self, chat: 'ChatRoom') -> ChatParticipant:
+    def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
         raise NotImplementedError()
+
+    def get_chat_result(self, chat: 'ChatRoom') -> str:
+        if len(chat.messages) == 0:
+            return ''
+
+        last_message = chat.messages[-1]
+
+        return last_message.content
+
+    def elect_new_chat_leader(self, chat: 'ChatRoom') -> ChatParticipant:
+        if len(chat.participants) == 0:
+            raise NoParticipantsInChat()
+
+        return next(iter(chat.participants.values()))
 
 
 class BasicChatConductor(ChatConductor):
-    def select_next_speaker(self, chat: 'ChatRoom') -> ChatParticipant:
-        last_speaker = chat.messages[-1].sender_name if len(chat.messages) > 0 else None
+    def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
+        if len(chat.participants) <= 1:
+            return None
 
+        last_message = chat.messages[-1] if len(chat.messages) > 0 else None
+
+        if last_message is not None and self.is_termination_message(last_message):
+            return None
+
+        last_speaker = last_message.sender_name if last_message is not None else None
         if last_speaker is None:
             return next(iter(chat.participants.values()))
 
@@ -249,8 +258,17 @@ class BasicChatConductor(ChatConductor):
 
         return next_speaker
 
+    def get_chat_result(self, chat: 'ChatRoom') -> str:
+        result = super().get_chat_result(chat=chat)
+        result = result.replace('TERMINATE', '').strip()
 
-class SmartChatConductor(ChatConductor):
+        return result
+
+    def is_termination_message(self, message: ChatMessage):
+        return message.content.strip().endswith('TERMINATE')
+
+
+class AIChatConductor(ChatConductor):
     chat_model: ChatOpenAI
     speaker_interaction_schema: Optional[str]
 
@@ -258,7 +276,10 @@ class SmartChatConductor(ChatConductor):
         self.chat_model = chat_model
         self.speaker_interaction_schema = speaker_interaction_schema
 
-    def select_next_speaker(self, chat: 'ChatRoom') -> ChatParticipant:
+    def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
+        if len(chat.participants) <= 1:
+            return None
+
         last_speaker = chat.messages[-1].sender_name if len(chat.messages) > 0 else None
 
         if last_speaker is None:
@@ -266,11 +287,11 @@ class SmartChatConductor(ChatConductor):
 
         # Ask the AI to select the next speaker.
         messages_str = '\n'.join(
-            [f'- ({message.sender_name} to {message.recipient_name}): {message.content}' for message in chat.messages])
+            [f'- {message.sender_name}: {message.content}' for message in chat.messages])
         messages = [
-            SystemMessage(content=f'''
-# MISSION
-- Select the next speaker in the conversation based on the previous messages in the conversation.
+            SystemMessage(content=f'''# MISSION
+- Select the next speaker in the conversation based on the previous messages in the conversation and an optional interaction schema.
+- If it seems to you that the chat should end instead of selecting a next speaker, terminate it.
 
 # PARTICIPANTS
 {', '.join([participant.name for participant in chat.participants.values()])}
@@ -283,23 +304,25 @@ class SmartChatConductor(ChatConductor):
 
 # PROCESS
 - Look at the last message in the conversation and determine who should speak next based on the speaker interaction schema, if provided.
+- If, based on the interaction schema, it seems to you that the chat should end instead, you should return the string TERMINATE instead of a participant name.
 
 # INPUT
 - The previous messages in the conversation.
 
 # OUTPUT
-- The name of the next speaker in the conversation.
+- The name of the next speaker in the conversation. Or, TERMINATE if the chat should end, instead.
 
-# EXAMPLE OUTPUT
-- John
-            '''),
+# EXAMPLE OUTPUTS
+- "John"
+OR
+- "TERMINATE"'''),
             HumanMessage(content=f'# PREVIOUS MESSAGES\n\n{messages_str}')
         ]
 
         result = self.chat_model.predict_messages(messages)
         next_speaker_name = result.content.strip()
 
-        while next_speaker_name not in chat.participants:
+        while next_speaker_name not in chat.participants and next_speaker_name != 'TERMINATE':
             messages.append(result)
             messages.append(HumanMessage(
                 content=f'Speaker "{next_speaker_name}" is not a participant in the chat. Choose another one.'))
@@ -307,53 +330,77 @@ class SmartChatConductor(ChatConductor):
             result = self.chat_model.predict_messages(messages)
             next_speaker_name = result.content.strip()
 
+        if next_speaker_name == 'TERMINATE':
+            return None
+
         next_speaker = chat.participants[next_speaker_name]
 
         return next_speaker
 
 
+class ChatRenderer(abc.ABC):
+    def display_new_message(self, chat: 'ChatRoom', message: ChatMessage):
+        raise NotImplementedError()
+
+
+class TerminalChatRenderer(ChatRenderer):
+    def display_new_message(self, chat: 'ChatRoom', message: ChatMessage):
+        if message.sender_name not in chat.participants:
+            symbol = '❓'
+        else:
+            symbol = chat.participants[message.sender_name].symbol
+
+        print(f'{symbol} {message.sender_name}: {message.content}')
+
+
 class ChatRoom:
-    id: str
     messages: List[ChatMessage]
     participants: Dict[str, ChatParticipant]
-    is_termination_message: Callable[[str], bool]
+    chat_conductor: ChatConductor
+    chat_renderer: ChatRenderer
     description: str
+    chat_leader: Optional[ChatParticipant] = None
     max_messages: Optional[int] = None
     last_message_id: Optional[int] = None
     hide_messages: bool = False
-    _unprocessed_messages: deque
 
     def __init__(
             self,
-            id: Optional[str] = None,
             initial_participants: Optional[List[ChatParticipant]] = None,
             initial_messages: Optional[List[ChatMessage]] = None,
+            chat_conductor: Optional[ChatConductor] = None,
+            chat_renderer: Optional[ChatRenderer] = None,
             max_total_messages: Optional[int] = None,
-            is_termination_message: Optional[Callable[[str], bool]] = None,
             hide_messages: bool = False,
             description: str = 'This chat room is a regular group chat. Everybody can talk to everybody else.'
     ):
         assert max_total_messages is None or max_total_messages > 0, 'Max total messages must be None or greater than 0.'
 
-        self.id = str(uuid.uuid4()) if id is None else id
         self.participants = {}
         self.messages = sorted(initial_messages or [], key=lambda m: m.id)
         self.last_message_id = None if len(self.messages) == 0 else self.messages[-1].id
-        self.is_termination_message = is_termination_message or (
-            lambda message: message.content.strip().endswith('TERMINATE'))
-        self._unprocessed_messages = deque()
+        self.chat_conductor = chat_conductor or BasicChatConductor()
+        self.chat_renderer = chat_renderer or TerminalChatRenderer()
         self.hide_messages = hide_messages
         self.max_messages = max_total_messages
         self.description = description
 
-        for participant in initial_participants or []:
-            self.add_participant(participant)
+        for i, participant in enumerate(initial_participants or []):
+            self.add_participant(participant, should_elect_new_leader=i == 0)
 
-    def add_participant(self, participant: ChatParticipant):
+    def add_participant(self, participant: ChatParticipant, should_elect_new_leader: bool = False):
         if participant.name in self.participants:
             raise ChatParticipantAlreadyJoinedToChat(participant.name)
 
         self.participants[participant.name] = participant
+
+        if self.chat_leader is None:
+            self.chat_leader = participant
+        elif should_elect_new_leader:
+            self.chat_leader = self.chat_conductor.elect_new_chat_leader(chat=self)
+
+            for participant in self.participants.values():
+                participant.on_new_chat_leader_elected(chat=self, new_leader=self.chat_leader)
 
         for participant in self.participants.values():
             participant.on_participant_joined_chat(chat=self, participant=participant)
@@ -367,12 +414,18 @@ class ChatRoom:
         for participant in self.participants.values():
             participant.on_participant_left_chat(chat=self, participant=participant)
 
-    def receive_message(self, sender_name: str, content: str, recipient_name: str):
+        if self.chat_leader == participant:
+            if len(self.participants) == 0:
+                self.chat_leader = None
+            else:
+                self.chat_leader = self.chat_conductor.elect_new_chat_leader(chat=self)
+
+            for participant in self.participants.values():
+                participant.on_new_chat_leader_elected(chat=self, new_leader=self.chat_leader)
+
+    def receive_message(self, sender_name: str, content: str):
         if sender_name not in self.participants:
             raise ChatParticipantNotJoinedToChat(sender_name)
-
-        if recipient_name not in self.participants:
-            raise ChatParticipantNotJoinedToChat(recipient_name)
 
         sender = self.participants[sender_name]
 
@@ -381,16 +434,17 @@ class ChatRoom:
         message = ChatMessage(
             id=self.last_message_id,
             sender_name=sender.name,
-            recipient_name=recipient_name,
             content=content
         )
 
-        self._unprocessed_messages.append(message)
+        self.messages.append(message)
+
+        for participant in self.participants.values():
+            participant.on_new_chat_message(chat=self, message=message)
 
     def reset(self, remove_participants: bool = False):
         self.messages = []
         self.last_message_id = None
-        self._unprocessed_messages = deque()
 
         if remove_participants:
             for participant in list(self.participants.values()):
@@ -399,86 +453,38 @@ class ChatRoom:
     def initiate_chat_with_result(
             self,
             first_message: str,
-            from_participant: Union[str, ChatParticipant],
-            to_participant: Union[str, ChatParticipant]
+            from_participant: Union[str, ChatParticipant]
     ) -> str:
-        if isinstance(to_participant, ChatParticipant):
-            to_participant = to_participant.name
-
-        if to_participant not in self.participants:
-            raise ChatParticipantNotJoinedToChat(to_participant)
-
         if isinstance(from_participant, ChatParticipant):
             from_participant = from_participant.name
 
         if from_participant not in self.participants:
             raise ChatParticipantNotJoinedToChat(from_participant)
 
-        sender = self.participants[from_participant]
-        sender.send_message(chat=self, content=first_message, recipient_name=to_participant)
+        self.receive_message(sender_name=from_participant, content=first_message)
 
-        while self._process_new_messages():
-            pass
+        next_speaker = self.chat_conductor.select_next_speaker(chat=self)
+        while next_speaker is not None:
+            message_content = next_speaker.respond_to_chat(chat=self)
 
-        result = self.messages[-1].content
-        result = result.replace('TERMINATE', '').strip()
+            self.receive_message(sender_name=next_speaker.name, content=message_content)
 
-        return result
-
-    def _process_new_messages(self) -> bool:
-        termination_received = False
-
-        new_messages = []
-        while len(self._unprocessed_messages) > 0:
-            message = self._unprocessed_messages.popleft()
-            self.messages.append(message)
-
-            sender = self.participants[message.sender_name]
-            if not self.hide_messages and not sender.messages_hidden:
-                self._display_new_message(message=message)
-
-            new_messages.append(message)
-
-            # Terminate if the max was reached, or if a termination message was received.
-            # All messages after the termination message are dropped.
-            if (self.max_messages is not None and len(self.messages) >= self.max_messages) or \
-                    self.is_termination_message(message):
-                termination_received = True
+            next_speaker = self.chat_conductor.select_next_speaker(chat=self)
 
         for participant in self.participants.values():
-            participant.on_new_chat_messages(chat=self, messages=new_messages,
-                                             termination_received=termination_received)
+            participant.on_chat_ended(chat=self)
 
-        return len(new_messages) > 0 and not termination_received
+        result = self.chat_conductor.get_chat_result(chat=self)
 
-    def _display_new_message(self, message: ChatMessage):
-        if message.sender_name not in self.participants:
-            symbol = '❓'
-        else:
-            symbol = self.participants[message.sender_name].symbol
-
-        print(
-            f'{symbol} ({message.sender_name} to {message.recipient_name}): {message.content}')
+        return result
 
 
 class UserChatParticipant(ChatParticipant):
     def __init__(self, name: str = 'User', **kwargs):
         super().__init__(name, role='User', messages_hidden=True, **kwargs)
 
-    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
-        if termination_received:
-            return
-
-        relevant_messages = [message for message in messages if self.name == message.recipient_name]
-        if len(relevant_messages) == 0:
-            return
-
-        new_message_contents = input(f'👤 ({self.name}): ')
-
-        recipient_name, actual_message_contents = ChatParticipant.get_recipient_and_message(new_message_contents)
-        recipient_name = recipient_name or relevant_messages[-1].sender_name
-
-        self.send_message(chat=chat, content=actual_message_contents, recipient_name=recipient_name)
+    def respond_to_chat(self, chat: 'ChatRoom') -> str:
+        return input(f'👤 ({self.name}): ')
 
 
 class AIChatParticipant(ChatParticipant):
@@ -506,9 +512,8 @@ class AIChatParticipant(ChatParticipant):
 
 # RULES
 - You can only send messages to other participants in the group chat. You cannot send messages to yourself ({name}).
-- Do not prefix your message with (your name) to (recipient name) as that is already done for you.
+- Do not prefix your message with (your name) as that is already done for you .i.e. you do not need to send messages like: "YOUR_NAME: MESSAGE", but instead just send "MESSAGE".
 - You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.
-- If you refer directly to someone in the chat, make sure to have them as the recipient of your message as well. For example: 1. (From John to Don) "Don#Could you ask Freddie to help me out here?" 2. (From Don to Freddie) "Freddie#Sure thing. Freddie, could you help John out, please?"
 
 # INPUT
 - Messages from the group chat, including your own messages.
@@ -516,21 +521,10 @@ class AIChatParticipant(ChatParticipant):
   - Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not respond to them.
 
 # OUTPUT
-- Your response to the user or other participants in the group chat.
-- Always direct your message at one and only one (other than yourself) in the group chat.
-- Every response you send should start with a recipient name followed by a hash (#) and then your message.
-- The message after the # should not contain recipient name, as they are already specified before the #.
-
-# EXAMPLE OUTPUT
-- When you want to respond prefix the recipient name with a # symbol and then the message like: RECIPIENT_NAME#YOUR_MESSAGE
-- When you want to stay silent or ignore the message just respond with # like: #'''
+- Your response to a participant in the group chat.'''
     mission: str
     chat_model: ChatOpenAI
     spinner: Optional[Halo] = None
-    can_terminate_conversation: bool = False
-    termination_section: str = '''# TERMINATION
-- You can terminate the conversation by sending a message ending with the word "TERMINATE".
-- You should terminate the conversation when you have achieved your mission or goal OR when you are explicitly asked to terminate by another chat participant.'''
 
     class Config:
         arbitrary_types_allowed = True
@@ -541,7 +535,6 @@ class AIChatParticipant(ChatParticipant):
                  symbol: str = '🤖',
                  role: str = 'AI Assistant',
                  mission: str = 'Be a helpful AI assistant.',
-                 can_terminate_conversation: bool = True,
                  spinner: Optional[Halo] = None,
                  **kwargs
                  ):
@@ -550,7 +543,6 @@ class AIChatParticipant(ChatParticipant):
         self.chat_model = chat_model
         self.spinner = spinner
         self.mission = mission
-        self.can_terminate_conversation = can_terminate_conversation
 
     def _create_system_message(self, chat: ChatRoom):
         system_message = self.system_message_template.format(
@@ -562,9 +554,6 @@ class AIChatParticipant(ChatParticipant):
                 [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
                  for p in chat.participants.values()])
         )
-
-        if self.can_terminate_conversation:
-            system_message += '\n\n' + self.termination_section
 
         return system_message
 
@@ -580,7 +569,7 @@ class AIChatParticipant(ChatParticipant):
 
         return messages
 
-    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
+    def on_new_chat_message(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         if termination_received:
             return
 
@@ -604,10 +593,7 @@ class AIChatParticipant(ChatParticipant):
         if self.spinner is not None:
             self.spinner.stop()
 
-        recipient_name, content = ChatParticipant.get_recipient_and_message(last_message.content)
-        recipient_name = recipient_name or relevant_messages[-1].sender_name
-
-        self.send_message(chat=chat, content=content, recipient_name=recipient_name)
+        self.send_message(chat=chat, content=last_message.content)
 
 
 class TeamBasedChatParticipant(ChatParticipant):
@@ -640,7 +626,7 @@ class TeamBasedChatParticipant(ChatParticipant):
         self.team_interaction_schema = team_interaction_schema
         self.spinner = spinner
 
-    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
+    def on_new_chat_message(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         if termination_received:
             return
 
@@ -649,10 +635,6 @@ class TeamBasedChatParticipant(ChatParticipant):
             return
 
         last_message = relevant_messages[-1]
-        sender = chat.participants[last_message.sender_name]
-
-        previous_sender_role = sender.role
-        sender.role = 'Client'
 
         if self.spinner is not None:
             self.spinner.stop_and_persist(symbol='👥',
@@ -660,10 +642,11 @@ class TeamBasedChatParticipant(ChatParticipant):
             self.spinner.start(text=f'{self.team_leader.name}\'s team is actively discussing the request...')
 
         sub_chat = ChatRoom(
-            initial_participants=[self.team_leader, *self.other_team_participants, sender],
+            initial_participants=[self.team_leader, *self.other_team_participants],
             initial_messages=chat.messages if self.team_chat_history_access else None,
             hide_messages=self.hide_inner_chat,
             max_total_messages=self.max_sub_chat_messages,
+            chat_conductor=AIChatConductor(),
             description=f'The team leader is a part of another chat room as well as this one. '
                         f'This is a private team chat between {self.team_leader.name} and '
                         f'{", ".join([p.name for p in self.other_team_participants if p.role != "Client"])} ONLY. ' +
@@ -676,25 +659,15 @@ class TeamBasedChatParticipant(ChatParticipant):
                         f'this chat room and only once they have an appropriate answer. No intermediate responses to the client are allowed.' +
                         f'The team should collaborate to come up with detailed and accurate response in the team leader\'s name. ' +
                         (
-                            f'\n\n## Team Interaction Schema\n{self.team_interaction_schema}' if self.team_interaction_schema is not None else ''),
-            is_termination_message=lambda message: message.content.strip().endswith(
-                'TERMINATE') or message.recipient_name == sender.name
+                            f'\n\n## Team Interaction Schema\n{self.team_interaction_schema}' if self.team_interaction_schema is not None else '')
         )
-
-        _, last_message_actual_content = self.get_recipient_and_message(last_message.content)
 
         response_from_team = sub_chat.initiate_chat_with_result(
-            first_message=f'{last_message.sender_name} has told me this: "{last_message_actual_content}". What should I respond with?',
+            first_message=f'{last_message.sender_name} has told me this: "{last_message.content}". What should I respond with?',
             from_participant=self.team_leader,
-            to_participant=self.other_team_participants[0],
         )
 
-        sender.role = previous_sender_role
-
-        _, actual_message_contents = ChatParticipant.get_recipient_and_message(response_from_team)
-        recipient_name = last_message.sender_name
-
-        self.send_message(chat=chat, content=actual_message_contents, recipient_name=recipient_name)
+        self.send_message(chat=chat, content=response_from_team)
 
         if self.spinner is not None:
             self.spinner.succeed(text=f'{self.team_leader.name}\'s team discussion was concluded.')
@@ -713,7 +686,7 @@ class JSONOutputParserChatParticipant(ChatParticipant):
 
         self.output_schema = output_schema
 
-    def on_new_chat_messages(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
+    def on_new_chat_message(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
         if termination_received:
             return
 
@@ -820,13 +793,11 @@ if __name__ == '__main__':
                               role='First-Principles Criteria Generator',
                               mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
                               chat_model=chat_model,
-                              can_terminate_conversation=False,
                               spinner=spinner),
             AIChatParticipant(name='John',
                               role='Criteria Generation Critic',
                               mission='Collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Iterate on it, as needed.',
                               chat_model=chat_model,
-                              can_terminate_conversation=False,
                               spinner=spinner),
         ],
         team_interaction_schema='The team leader will ask Rob to come up with a list of criteria. Rob will summarize the first principle approach to problem solving, and then come up with a list of initial criteria and give it John to criticize. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, Rob will send the final set to the team leader, who will then send it back to the client.',
