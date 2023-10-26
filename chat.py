@@ -16,7 +16,7 @@ from pydantic.v1 import ValidationError
 
 from utils import fix_invalid_json
 
-TOutputSchema = TypeVar("TOutputSchema", bound=Union[str, BaseModel])
+TOutputSchema = TypeVar("TOutputSchema", bound=BaseModel)
 
 
 def pydantic_to_json_schema(pydantic_model: Type[BaseModel]) -> dict:
@@ -210,9 +210,14 @@ class MessageCouldNotBeParsed(Exception):
         super().__init__(f'Message "{message}" could not be parsed.')
 
 
-class NoParticipantsInChat(Exception):
+class NotEnoughParticipantsInChat(Exception):
+    def __init__(self, n_participants: int = 0):
+        super().__init__(f'There are not enough participants in this chat ({n_participants})')
+
+
+class NoMessagesInChat(Exception):
     def __init__(self):
-        super().__init__('There are no participants in this chat.')
+        super().__init__('There are no messages in this chat.')
 
 
 class ChatConductor(abc.ABC):
@@ -230,7 +235,7 @@ class ChatConductor(abc.ABC):
 
     def elect_new_chat_leader(self, chat: 'ChatRoom') -> ChatParticipant:
         if len(chat.participants) == 0:
-            raise NoParticipantsInChat()
+            raise NotEnoughParticipantsInChat()
 
         return next(iter(chat.participants.values()))
 
@@ -454,16 +459,12 @@ class ChatRoom:
 
     def initiate_chat_with_result(
             self,
-            first_message: str,
-            from_participant: Union[str, ChatParticipant]
+            first_message: str
     ) -> str:
-        if isinstance(from_participant, ChatParticipant):
-            from_participant = from_participant.name
+        if len(self.participants) <= 1:
+            raise NotEnoughParticipantsInChat(len(self.participants))
 
-        if from_participant not in self.participants:
-            raise ChatParticipantNotJoinedToChat(from_participant)
-
-        self.receive_message(sender_name=from_participant, content=first_message)
+        self.receive_message(sender_name=self.chat_leader.name, content=first_message)
 
         next_speaker = self.chat_conductor.select_next_speaker(chat=self)
         while next_speaker is not None:
@@ -571,14 +572,7 @@ class AIChatParticipant(ChatParticipant):
 
         return messages
 
-    def on_new_chat_message(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
-        if termination_received:
-            return
-
-        relevant_messages = [message for message in messages if self.name == message.recipient_name]
-        if len(relevant_messages) == 0:
-            return
-
+    def respond_to_chat(self, chat: 'ChatRoom') -> str:
         if self.spinner is not None:
             self.spinner.start(text=f'{self.name} ({self.role}) is thinking...')
 
@@ -595,7 +589,7 @@ class AIChatParticipant(ChatParticipant):
         if self.spinner is not None:
             self.spinner.stop()
 
-        self.send_message(chat=chat, content=last_message.content)
+        return last_message.content
 
 
 class TeamBasedChatParticipant(ChatParticipant):
@@ -648,20 +642,7 @@ class TeamBasedChatParticipant(ChatParticipant):
             initial_messages=chat.messages if self.team_chat_history_access else None,
             hide_messages=self.hide_inner_chat,
             max_total_messages=self.max_sub_chat_messages,
-            chat_conductor=AIChatConductor(),
-            description=f'The team leader is a part of another chat room as well as this one. '
-                        f'This is a private team chat between {self.team_leader.name} and '
-                        f'{", ".join([p.name for p in self.other_team_participants if p.role != "Client"])} ONLY. ' +
-                        (
-                            f'\n\n## Previous Chat Messages\nThe previous messages in this chat are from the other chat the team leader is a part of. '
-                            f'No other participants can see the messages sent in this chat room other than the team members. '
-                            f'Team members should ONLY respond to the team leader and other team members. '
-                            f'The previous messages are there only for context. ' if self.team_chat_history_access else '') +
-                        f'\n\n## Response To Client\nOnly the team leader will respond to client with the result of '
-                        f'this chat room and only once they have an appropriate answer. No intermediate responses to the client are allowed.' +
-                        f'The team should collaborate to come up with detailed and accurate response in the team leader\'s name. ' +
-                        (
-                            f'\n\n## Team Interaction Schema\n{self.team_interaction_schema}' if self.team_interaction_schema is not None else '')
+            chat_conductor=AIChatConductor()
         )
 
         response_from_team = sub_chat.initiate_chat_with_result(
@@ -688,30 +669,19 @@ class JSONOutputParserChatParticipant(ChatParticipant):
 
         self.output_schema = output_schema
 
-    def on_new_chat_message(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
-        if termination_received:
-            return
+    def respond_to_chat(self, chat: 'ChatRoom') -> str:
+        if len(chat.messages) == 0:
+            raise NoMessagesInChat()
 
-        relevant_messages = [message for message in messages if self.name == message.recipient_name]
-        if len(relevant_messages) == 0:
-            return
+        last_message = chat.messages[-1]
 
-        last_message = relevant_messages[-1]
+        try:
+            json_string = last_message.content[last_message.content.index('{'):last_message.content.rindex('}') + 1]
+            self.output = model = json_string_to_pydantic(json_string, self.output_schema)
 
-        if self.output_schema is str:
-            self.send_message(chat=chat, content=f'{last_message.content} TERMINATE',
-                              recipient_name=last_message.sender_name)
-            self.output = last_message.content
-        else:
-            try:
-                json_string = last_message.content[last_message.content.index('{'):last_message.content.rindex('}') + 1]
-                self.output = model = json_string_to_pydantic(json_string, self.output_schema)
-
-                self.send_message(chat=chat, content=f'{model.model_dump_json()} TERMINATE',
-                                  recipient_name=last_message.sender_name)
-            except Exception as e:
-                self.send_message(chat=chat, content=f'I could not parse the JSON. This was the error: {e}',
-                                  recipient_name=last_message.sender_name)
+            return f'{model.model_dump_json()} TERMINATE'
+        except Exception as e:
+            return f'I could not parse the JSON. This was the error: {e}'
 
 
 def string_output_to_pydantic(output: str, chat_model: ChatOpenAI, output_schema: Type[TOutputSchema],
@@ -729,15 +699,13 @@ def string_output_to_pydantic(output: str, chat_model: ChatOpenAI, output_schema
     json_parser = JSONOutputParserChatParticipant(output_schema=output_schema)
 
     parser_chat = ChatRoom(
-        initial_participants=[text_to_json_ai, json_parser],
+        initial_participants=[json_parser, text_to_json_ai],
         hide_messages=hide_message,
         max_total_messages=n_retries * 2
     )
 
     _ = parser_chat.initiate_chat_with_result(
-        first_message=f'# TEXT\n{output}\n\n# JSON SCHEMA\n{pydantic_to_json_schema(output_schema)}',
-        from_participant=json_parser,
-        to_participant=text_to_json_ai
+        initial_message=f'# TEXT\n{output}\n\n# JSON SCHEMA\n{pydantic_to_json_schema(output_schema)}'
     )
 
     if json_parser.output is None:
