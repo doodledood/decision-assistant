@@ -535,23 +535,18 @@ class AIChatParticipant(ChatParticipant):
 # ROLE
 - {role}
 
-# CONVERSATION
-- The conversation is a group chat you are a part of.
-- Every participant can see all messages sent by all other participants, which means you cannot have private conversations with other participants.
-
 # CHAT ROOM
-
 ## Description
 {chat_room_description}
 
 ## Participants
 {participants}
 
-# RULES
-- You can only send messages to other participants in the group chat. You cannot send messages to yourself ({name}).
+## Rules
 - You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.
+- You cannot have private conversations with other participants. Everyone can see all messages sent by all other participants.
 
-# INPUT
+{other_instructions}# INPUT
 - Messages from the group chat, including your own messages.
   - They are prefixed by the sender's name (could also be everyone). For context only; it's not actually part of the message they sent. Example: "John: Hello, how are you?"
   - Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not talk to them.
@@ -570,6 +565,7 @@ class AIChatParticipant(ChatParticipant):
 '''
     mission: str
     chat_model: ChatOpenAI
+    other_instructions: Optional[Dict[str, str]] = None
     spinner: Optional[Halo] = None
 
     class Config:
@@ -581,16 +577,25 @@ class AIChatParticipant(ChatParticipant):
                  symbol: str = '🤖',
                  role: str = 'AI Assistant',
                  mission: str = 'Be a helpful AI assistant.',
+                 other_instructions: Optional[Dict[str, str]] = None,
                  spinner: Optional[Halo] = None,
                  **kwargs
                  ):
         super().__init__(name=name, symbol=symbol, role=role, **kwargs)
 
         self.chat_model = chat_model
+        self.other_instructions = other_instructions
         self.spinner = spinner
         self.mission = mission
 
     def _create_system_message(self, chat: ChatRoom):
+        if self.other_instructions is not None:
+            other_instructions_str = '# OTHER INSTRUCTIONS\n'
+            other_instructions_str = '\n'.join(
+                [f'## {k.capitalize()}\n{v}\n\n' for k, v in self.other_instructions.items()])
+        else:
+            other_instructions_str = ''
+
         system_message = self.system_message_template.format(
             mission=self.mission,
             name=self.name,
@@ -598,7 +603,8 @@ class AIChatParticipant(ChatParticipant):
             chat_room_description=chat.description,
             participants='\n'.join(
                 [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
-                 for p in chat.participants.values()])
+                 for p in chat.participants.values()]),
+            other_instructions=other_instructions_str
         )
 
         return system_message
@@ -674,7 +680,7 @@ class GroupBasedChatParticipant(ChatParticipant):
 
         conversation_str = '\n'.join([f'- {message.sender_name}: {message.content}' for message in chat.messages])
         response = self.inner_chat.initiate_chat_with_result(
-            initial_message=f'''# ANOTHER EXTERNAL CONVERSATION\n{conversation_str}\n\n# TASK\nAs this group\'s leader, I need to respond in our team's name. What do you all think should I respond with? Let's collaborate on this.'''
+            initial_message=f'''# ANOTHER EXTERNAL CONVERSATION\n{conversation_str}\n\n# TASK\nAs this group\'s leader, I need to respond in our group's name. What do you all think should I respond with? Let's collaborate on this.'''
         )
 
         if self.spinner is not None:
@@ -797,23 +803,36 @@ if __name__ == '__main__':
             initial_participants=[
                 AIChatParticipant(name='Tom',
                                   role='Criteria Generation Team Leader',
-                                  mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem. When the set is finalized, respond as if you are responding to the external chat you are also a a part of.',
+                                  mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem.',
+                                  other_instructions={
+                                      'Last Message': '''
+                                      - Once the criteria set is finalized you will send the last message.
+                                      - This last message will be sent to the external conversation verbatim. Act as if you are responding directly to the other chat yourself.
+                                      - Ignore the group and their efforts in the last message as this isn't relevant for the other chat.
+                                      '''
+                                  },
                                   chat_model=chat_model,
                                   spinner=spinner),
                 AIChatParticipant(name='Rob',
                                   role='Criteria Generator',
                                   mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
+                                  other_instructions={
+                                      'Receiving Feedback': 'John might criticize your criteria and provide counterfactual evidence to support his criticism. You should respond to his criticism and provide counter-counterfactual evidence to support your response, if applicable.'
+                                  },
                                   chat_model=chat_model,
                                   spinner=spinner),
                 AIChatParticipant(name='John',
                                   role='Criteria Generation Critic',
-                                  mission='Collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Are some criteria overlapping and need to be merged? Is some criterion too general and need to be broken down? Are there criteria missing? Iterate on it, as needed.',
+                                  mission='Think from frist principles and collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Are some criteria overlapping and need to be merged? Is some criterion too general and need to be broken down? Are there criteria missing? Is the naming of each criteria suitable and reflects that a higher value is better? Iterate on it, as needed.',
+                                  other_instructions={
+                                        'Receiving Feedback': 'Rob might criticize your criticism and provide counter-counterfactual evidence to support his response, if applicable.'
+                                  },
                                   chat_model=chat_model,
                                   spinner=spinner),
             ],
             chat_conductor=AIChatConductor(
                 chat_model=chat_model,
-                speaker_interaction_schema='The team leader initiates the conversation about the criteria. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, once they both agree the set is good enough, the team leader will send a message to the external conversation with the final criteria set.',
+                speaker_interaction_schema='The team leader initiates the conversation about the criteria. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, finally, once they both agree the set is good enough, the team leader responds with a message to the external conversation with the final criteria set.',
                 termination_condition='Terminate the chat when the team leader thinks the criteria set is good enough, or if the team leader asks you to terminate the chat.',
                 spinner=spinner
             ),
