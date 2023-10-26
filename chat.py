@@ -781,8 +781,8 @@ if __name__ == '__main__':
         initial_participants=participants,
         chat_conductor=AIChatConductor(
             chat_model=chat_model,
-            speaker_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to prank him big time. Rob can and should talk to the user to get them in on the prank, however the majority of the prank should be done by Rob. By prank, I mean the AI should be confused and not know what to do (funny).',
-            termination_condition=f'Terminate the chat when the AI is confused and does not know what to do, or is unable to be pranked within a few tries (2/3), OR if the user asks you to terminate the chat.',
+            speaker_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to prank him big time. Rob can and should talk to the user to get them in on the prank, however the majority of the prank should be done by Rob. By prank, I mean the AI should be confused and not know what to do, or laughs at the prank (funny).',
+            termination_condition=f'Terminate the chat when the is successfuly pranked, or is unable to be pranked or does not go along with the pranks within a 2 tries, OR if the user asks you to terminate the chat.',
             spinner=spinner
         ),
     )
