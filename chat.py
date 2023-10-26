@@ -276,11 +276,19 @@ class BasicChatConductor(ChatConductor):
 class AIChatConductor(ChatConductor):
     chat_model: ChatOpenAI
     speaker_interaction_schema: Optional[str]
+    termination_condition: str = f'''Terminate the chat on the following conditions:
+    - When you think it has concluded
+    - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
     spinner: Optional[Halo] = None
 
-    def __init__(self, chat_model: ChatOpenAI, speaker_interaction_schema: Optional[str] = None, spinner: Optional[Halo] = None):
+    def __init__(self,
+                 chat_model: ChatOpenAI,
+                 speaker_interaction_schema: Optional[str] = None,
+                 termination_condition: Optional[str] = None,
+                 spinner: Optional[Halo] = None):
         self.chat_model = chat_model
         self.speaker_interaction_schema = speaker_interaction_schema
+        self.termination_condition = termination_condition
         self.spinner = spinner
 
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
@@ -288,14 +296,14 @@ class AIChatConductor(ChatConductor):
             return None
 
         if self.spinner is not None:
-            self.spinner.start(text='AI Conductor is selecting the next speaker...')
+            self.spinner.start(text='AI Chat Conductor is selecting the next speaker...')
 
         # Ask the AI to select the next speaker.
         messages_str = '\n'.join(
             [f'- {message.sender_name}: {message.content}' for message in chat.messages])
         messages = [
             SystemMessage(content=f'''# MISSION
-- Select the next speaker in the conversation based on the previous messages in the conversation and an optional interaction schema.
+- Select the next speaker in the conversation based on the previous messages in the conversation and an optional SPEAKER INTERACTION SCHEMA.
 - If it seems to you that the chat should end instead of selecting a next speaker, terminate it.
 
 # PARTICIPANTS
@@ -305,11 +313,14 @@ class AIChatConductor(ChatConductor):
 - You can only select one of the participants in the group chat.
 
 # SPEAKER INTERACTION SCHEMA
-{self.speaker_interaction_schema or 'Not provided.'}
+{self.speaker_interaction_schema or 'Not provided. Use your best judgement.'}
+
+# TERMINATION CONDITION
+{self.termination_condition}
 
 # PROCESS
-- Look at the last message in the conversation and determine who should speak next based on the speaker interaction schema, if provided.
-- If, based on the interaction schema, it seems to you that the chat should end instead, you should return the string TERMINATE instead of a participant name.
+- Look at the last message in the conversation and determine who should speak next based on the SPEAKER INTERACTION SCHEMA, if provided.
+- If based on TERMINATION CONDITION you determine that the chat should end, you should return the string TERMINATE instead of a participant name.
 
 # INPUT
 - The previous messages in the conversation.
@@ -321,7 +332,8 @@ class AIChatConductor(ChatConductor):
 - "John"
 OR
 - "TERMINATE"'''),
-            HumanMessage(content=f'# PREVIOUS MESSAGES\n\n{messages_str if len(messages_str) > 0 else "No messages yet."}')
+            HumanMessage(
+                content=f'# PREVIOUS MESSAGES\n\n{messages_str if len(messages_str) > 0 else "No messages yet."}')
         ]
 
         result = self.chat_model.predict_messages(messages)
@@ -337,14 +349,14 @@ OR
 
         if next_speaker_name == 'TERMINATE':
             if self.spinner is not None:
-                self.spinner.stop_and_persist(symbol='👥', text='AI Conductor has decided to terminate the chat.')
+                self.spinner.stop_and_persist(symbol='👥', text='AI Chat Conductor has decided to terminate the chat.')
 
             return None
 
         next_speaker = chat.participants[next_speaker_name]
 
         if self.spinner is not None:
-            self.spinner.succeed(text=f'AI Conductor has selected "{next_speaker_name}" as the next speaker.')
+            self.spinner.succeed(text=f'AI Chat Conductor has selected "{next_speaker_name}" as the next speaker.')
 
         return next_speaker
 
@@ -754,10 +766,14 @@ if __name__ == '__main__':
 
     spinner = Halo(spinner='dots')
 
-    ai = AIChatParticipant(name='Assistant', role='Boring AI Assistant', chat_model=chat_model, spinner=spinner)
+    ai = AIChatParticipant(name='Assistant',
+                           role='Boring Serious AI Assistant',
+                           chat_model=chat_model,
+                           spinner=spinner)
     rob = AIChatParticipant(name='Rob', role='Funny Prankster',
                             mission='Collaborate with the user to prank the boring AI. Yawn.',
-                            chat_model=chat_model, spinner=spinner)
+                            chat_model=chat_model,
+                            spinner=spinner)
     user = UserChatParticipant(name='User')
     participants = [user, ai, rob]
 
@@ -765,7 +781,8 @@ if __name__ == '__main__':
         initial_participants=participants,
         chat_conductor=AIChatConductor(
             chat_model=chat_model,
-            speaker_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to prank him big time. Rob can and should talk to the user to get them in on the prank, however the majority of the prank should be done by Rob. The chat should end when the AI is successfuly pranked once, when the user decides to end the chat, or if the AI is being too boring after 3 tries.',
+            speaker_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to prank him big time. Rob can and should talk to the user to get them in on the prank, however the majority of the prank should be done by Rob. By prank, I mean the AI should be confused and not know what to do (funny).',
+            termination_condition=f'Terminate the chat when the AI is confused and does not know what to do, or is unable to be pranked within a few tries (2/3), OR if the user asks you to terminate the chat.',
             spinner=spinner
         ),
     )
