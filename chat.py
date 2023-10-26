@@ -459,12 +459,12 @@ class ChatRoom:
 
     def initiate_chat_with_result(
             self,
-            first_message: str
+            initial_message: str
     ) -> str:
         if len(self.participants) <= 1:
             raise NotEnoughParticipantsInChat(len(self.participants))
 
-        self.receive_message(sender_name=self.chat_leader.name, content=first_message)
+        self.receive_message(sender_name=self.chat_leader.name, content=initial_message)
 
         next_speaker = self.chat_conductor.select_next_speaker(chat=self)
         while next_speaker is not None:
@@ -592,68 +592,68 @@ class AIChatParticipant(ChatParticipant):
         return last_message.content
 
 
-class TeamBasedChatParticipant(ChatParticipant):
-    team_leader: ChatParticipant
-    other_team_participants: List[ChatParticipant]
-    team_interaction_schema: Optional[str] = None
-    hide_inner_chat: bool = True
-    max_sub_chat_messages: Optional[int] = None
-    team_chat_history_access: bool = True
-    spinner: Optional[Halo] = None
-
-    def __init__(self,
-                 team_leader: ChatParticipant,
-                 other_team_participants: List[ChatParticipant],
-                 team_interaction_schema: Optional[str] = None,
-                 hide_inner_chat: bool = True,
-                 max_total_sub_chat_messages: Optional[int] = None,
-                 team_chat_history_access: bool = True,
-                 spinner: Optional[Halo] = None,
-                 **kwargs):
-        super().__init__(name=team_leader.name, role=team_leader.role, **kwargs)
-
-        assert len(other_team_participants) >= 1, 'At least one team leader and 1 other team participant are required.'
-
-        self.other_team_participants = other_team_participants
-        self.team_leader = team_leader
-        self.hide_inner_chat = hide_inner_chat
-        self.max_sub_chat_messages = max_total_sub_chat_messages
-        self.team_chat_history_access = team_chat_history_access
-        self.team_interaction_schema = team_interaction_schema
-        self.spinner = spinner
-
-    def on_new_chat_message(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
-        if termination_received:
-            return
-
-        relevant_messages = [message for message in messages if self.name == message.recipient_name]
-        if len(relevant_messages) == 0:
-            return
-
-        last_message = relevant_messages[-1]
-
-        if self.spinner is not None:
-            self.spinner.stop_and_persist(symbol='👥',
-                                          text=f'{self.team_leader.name}\'s team started discussing the request.')
-            self.spinner.start(text=f'{self.team_leader.name}\'s team is actively discussing the request...')
-
-        sub_chat = ChatRoom(
-            initial_participants=[self.team_leader, *self.other_team_participants],
-            initial_messages=chat.messages if self.team_chat_history_access else None,
-            hide_messages=self.hide_inner_chat,
-            max_total_messages=self.max_sub_chat_messages,
-            chat_conductor=AIChatConductor()
-        )
-
-        response_from_team = sub_chat.initiate_chat_with_result(
-            first_message=f'{last_message.sender_name} has told me this: "{last_message.content}". What should I respond with?',
-            from_participant=self.team_leader,
-        )
-
-        self.send_message(chat=chat, content=response_from_team)
-
-        if self.spinner is not None:
-            self.spinner.succeed(text=f'{self.team_leader.name}\'s team discussion was concluded.')
+# class TeamBasedChatParticipant(ChatParticipant):
+#     team_leader: ChatParticipant
+#     other_team_participants: List[ChatParticipant]
+#     team_interaction_schema: Optional[str] = None
+#     hide_inner_chat: bool = True
+#     max_sub_chat_messages: Optional[int] = None
+#     team_chat_history_access: bool = True
+#     spinner: Optional[Halo] = None
+#
+#     def __init__(self,
+#                  team_leader: ChatParticipant,
+#                  other_team_participants: List[ChatParticipant],
+#                  team_interaction_schema: Optional[str] = None,
+#                  hide_inner_chat: bool = True,
+#                  max_total_sub_chat_messages: Optional[int] = None,
+#                  team_chat_history_access: bool = True,
+#                  spinner: Optional[Halo] = None,
+#                  **kwargs):
+#         super().__init__(name=team_leader.name, role=team_leader.role, **kwargs)
+#
+#         assert len(other_team_participants) >= 1, 'At least one team leader and 1 other team participant are required.'
+#
+#         self.other_team_participants = other_team_participants
+#         self.team_leader = team_leader
+#         self.hide_inner_chat = hide_inner_chat
+#         self.max_sub_chat_messages = max_total_sub_chat_messages
+#         self.team_chat_history_access = team_chat_history_access
+#         self.team_interaction_schema = team_interaction_schema
+#         self.spinner = spinner
+#
+#     def on_new_chat_message(self, chat: 'ChatRoom', messages: List['ChatMessage'], termination_received: bool = False):
+#         if termination_received:
+#             return
+#
+#         relevant_messages = [message for message in messages if self.name == message.recipient_name]
+#         if len(relevant_messages) == 0:
+#             return
+#
+#         last_message = relevant_messages[-1]
+#
+#         if self.spinner is not None:
+#             self.spinner.stop_and_persist(symbol='👥',
+#                                           text=f'{self.team_leader.name}\'s team started discussing the request.')
+#             self.spinner.start(text=f'{self.team_leader.name}\'s team is actively discussing the request...')
+#
+#         sub_chat = ChatRoom(
+#             initial_participants=[self.team_leader, *self.other_team_participants],
+#             initial_messages=chat.messages if self.team_chat_history_access else None,
+#             hide_messages=self.hide_inner_chat,
+#             max_total_messages=self.max_sub_chat_messages,
+#             chat_conductor=AIChatConductor()
+#         )
+#
+#         response_from_team = sub_chat.initiate_chat_with_result(
+#             first_message=f'{last_message.sender_name} has told me this: "{last_message.content}". What should I respond with?',
+#             from_participant=self.team_leader,
+#         )
+#
+#         self.send_message(chat=chat, content=response_from_team)
+#
+#         if self.spinner is not None:
+#             self.spinner.succeed(text=f'{self.team_leader.name}\'s team discussion was concluded.')
 
 
 class JSONOutputParserChatParticipant(ChatParticipant):
@@ -780,7 +780,7 @@ if __name__ == '__main__':
 
     main_chat = ChatRoom(initial_participants=participants)
     result = main_chat.initiate_chat_with_result(
-        first_message="Please generate a list of criteria for choosing the breed of my next puppy.",
+        initial_message="Please generate a list of criteria for choosing the breed of my next puppy.",
         from_participant=user,
         to_participant=criteria_generation_team
     ),
