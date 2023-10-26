@@ -339,12 +339,12 @@ OR
 
 
 class ChatRenderer(abc.ABC):
-    def display_new_message(self, chat: 'ChatRoom', message: ChatMessage):
+    def render_new_chat_message(self, chat: 'ChatRoom', message: ChatMessage):
         raise NotImplementedError()
 
 
 class TerminalChatRenderer(ChatRenderer):
-    def display_new_message(self, chat: 'ChatRoom', message: ChatMessage):
+    def render_new_chat_message(self, chat: 'ChatRoom', message: ChatMessage):
         if message.sender_name not in chat.participants:
             symbol = '❓'
         else:
@@ -438,6 +438,8 @@ class ChatRoom:
         )
 
         self.messages.append(message)
+
+        self.chat_renderer.render_new_chat_message(chat=self, message=message)
 
         for participant in self.participants.values():
             participant.on_new_chat_message(chat=self, message=message)
