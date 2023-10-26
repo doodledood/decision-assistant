@@ -766,52 +766,48 @@ if __name__ == '__main__':
 
     spinner = Halo(spinner='dots')
 
-    ai = AIChatParticipant(name='Assistant',
-                           role='Boring Serious AI Assistant',
-                           chat_model=chat_model,
-                           spinner=spinner)
-    rob = AIChatParticipant(name='Rob', role='Funny Prankster',
-                            mission='Collaborate with the user to prank the boring AI. Yawn.',
-                            chat_model=chat_model,
-                            spinner=spinner)
-    user = UserChatParticipant(name='User')
-    participants = [user, ai, rob]
-
-    main_chat = ChatRoom(
-        initial_participants=participants,
-        chat_conductor=AIChatConductor(
-            chat_model=chat_model,
-            speaker_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to prank him big time. Rob can and should talk to the user to get them in on the prank, however the majority of the prank should be done by Rob. By prank, I mean the AI should be confused and not know what to do, or laughs at the prank (funny).',
-            termination_condition=f'Terminate the chat when the is successfuly pranked, or is unable to be pranked or does not go along with the pranks within a 2 tries, OR if the user asks you to terminate the chat.',
-            spinner=spinner
-        ),
-    )
-    main_chat.initiate_chat_with_result()
-
-    # ai = AIChatParticipant(name='AI', role='Math Expert',
-    #                        mission='Solve the user\'s math problem and TERMINATE immediately (only if you have the solution). The user has only one problem.',
-    #                        chat_model=chat_model, spinner=spinner)
+    # ai = AIChatParticipant(name='Assistant',
+    #                        role='Boring Serious AI Assistant',
+    #                        chat_model=chat_model,
+    #                        spinner=spinner)
+    # rob = AIChatParticipant(name='Rob', role='Funny Prankster',
+    #                         mission='Collaborate with the user to prank the boring AI. Yawn.',
+    #                         chat_model=chat_model,
+    #                         spinner=spinner)
     # user = UserChatParticipant(name='User')
-    # participants = [user, ai]
+    # participants = [user, ai, rob]
     #
-    #
-    # class MathResult(BaseModel):
-    #     result: float = Field(description='The result of the math problem.')
-    #
-    #
-    # main_chat = ChatRoom(initial_participants=participants)
-    # parsed_output = string_output_to_pydantic(
-    #     output=main_chat.initiate_chat_with_result(
-    #         first_message="Hey",
-    #         from_participant=user,
-    #         to_participant=ai
+    # main_chat = ChatRoom(
+    #     initial_participants=participants,
+    #     chat_conductor=AIChatConductor(
+    #         chat_model=chat_model,
+    #         speaker_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to prank him big time. Rob can and should talk to the user to get them in on the prank, however the majority of the prank should be done by Rob. By prank, I mean the AI should be confused and not know what to do, or laughs at the prank (funny).',
+    #         termination_condition=f'Terminate the chat when the is successfuly pranked, or is unable to be pranked or does not go along with the pranks within a 2 tries, OR if the user asks you to terminate the chat.',
+    #         spinner=spinner
     #     ),
-    #     chat_model=chat_model,
-    #     output_schema=MathResult,
-    #     spinner=spinner
     # )
-    #
-    # print(f'Result: {parsed_output}')
+    # main_chat.initiate_chat_with_result()
+
+    ai = AIChatParticipant(name='AI', role='Math Expert',
+                           mission='Solve the user\'s math problem (only one). Respond with the correct answer and end with the word "TERMINATE"',
+                           chat_model=chat_model, spinner=spinner)
+    user = UserChatParticipant(name='User')
+    participants = [user, ai]
+
+
+    class MathResult(BaseModel):
+        result: float = Field(description='The result of the math problem.')
+
+
+    main_chat = ChatRoom(initial_participants=participants)
+    parsed_output = string_output_to_pydantic(
+        output=main_chat.initiate_chat_with_result(),
+        chat_model=chat_model,
+        output_schema=MathResult,
+        spinner=spinner
+    )
+
+    print(f'Result: {dict(parsed_output)}')
     #
     #
     # criteria_generation_team = TeamBasedChatParticipant(
