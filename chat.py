@@ -609,20 +609,16 @@ class AIChatParticipant(ChatParticipant):
 - You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.
 - You cannot have private conversations with other participants. Everyone can see all messages sent by all other participants.
 
-{other_instructions}# INPUT
-- Messages from the group chat, including your own messages.
+## Messages
+  - Include all participants messages, including your own 
   - They are prefixed by the sender's name (could also be everyone). For context only; it's not actually part of the message they sent. Example: "John: Hello, how are you?"
   - Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not talk to them.
 
-# OUTPUT
-- Your response to a participant in the group chat.
-- Do not prefix your message with your name. The system will do that for you.
-
-# GOOD OUTPUT EXAMPLES
+{other_instructions}# GOOD RESPONSES EXAMPLES
 - "Hello, how are you?"
 - "I am doing well, thanks. How are you?"
 
-# BAD OUTPUT
+# BAD RESPONSES EXAMPLES
 - "John: Hello, how are you?"
 - "Assistant: I am doing well, thanks. How are you?"
 '''
