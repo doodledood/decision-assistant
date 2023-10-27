@@ -872,56 +872,92 @@ if __name__ == '__main__':
     #
     # print(f'Result: {dict(parsed_output)}')
 
-    criteria_generation_team = GroupBasedChatParticipant(
-        chat=ChatRoom(
-            initial_participants=[
-                LangChainBasedAIChatParticipant(
-                    name='Tom',
-                    role='Criteria Generation Team Leader',
-                    mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem.',
-                    other_instructions={
-                        'Last Message': '''- Once the criteria set is finalized you will send the last message.
-- This last message will be sent to the external conversation verbatim. Act as if you are responding directly to the other chat yourself.
-- Ignore the group and their efforts in the last message as this isn't relevant for the other chat.
-'''
-                    },
-                    chat_model=chat_model,
-                    spinner=spinner),
-                LangChainBasedAIChatParticipant(
-                    name='Rob',
-                    role='Criteria Generator',
-                    mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
-                    other_instructions={
-                        'Receiving Feedback': 'John might criticize your criteria and provide counterfactual evidence to support his criticism. You should respond to his criticism and provide counter-counterfactual evidence to support your response, if applicable.'
-                    },
-                    chat_model=chat_model,
-                    spinner=spinner),
-                LangChainBasedAIChatParticipant(
-                    name='John',
-                    role='Criteria Generation Critic',
-                    mission='Think from frist principles and collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Are some criteria overlapping and need to be merged? Is some criterion too general and need to be broken down? Are there criteria missing? Is the naming of each criteria suitable and reflects that a higher value is better? Iterate on it, as needed.',
-                    other_instructions={
-                        'Receiving Feedback': 'Rob might criticize your criticism and provide counter-counterfactual evidence to support his response, if applicable.'
-                    },
-                    chat_model=chat_model,
-                    spinner=spinner),
-            ],
-            chat_conductor=LangChainBasedAIChatConductor(
-                chat_model=chat_model,
-                speaker_interaction_schema='The team leader initiates the conversation about the criteria. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, finally, once they both agree the set is good enough, the team leader responds with a message to the external conversation with the final criteria set.',
-                termination_condition='Terminate the chat when the team leader thinks the criteria set is good enough, or if the team leader asks you to terminate the chat.',
-                spinner=spinner
-            ),
-            description='This chat room is a group chat for the criteria generation team. Everybody can talk to everybody else. The goal is to generate a list of criteria for a decision-making problem.',
-        ),
-        spinner=spinner
+    #     criteria_generation_team = GroupBasedChatParticipant(
+    #         chat=ChatRoom(
+    #             initial_participants=[
+    #                 LangChainBasedAIChatParticipant(
+    #                     name='Tom',
+    #                     role='Criteria Generation Team Leader',
+    #                     mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem.',
+    #                     other_instructions={
+    #                         'Last Message': '''- Once the criteria set is finalized you will send the last message.
+    # - This last message will be sent to the external conversation verbatim. Act as if you are responding directly to the other chat yourself.
+    # - Ignore the group and their efforts in the last message as this isn't relevant for the other chat.
+    # '''
+    #                     },
+    #                     chat_model=chat_model,
+    #                     spinner=spinner),
+    #                 LangChainBasedAIChatParticipant(
+    #                     name='Rob',
+    #                     role='Criteria Generator',
+    #                     mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
+    #                     other_instructions={
+    #                         'Receiving Feedback': 'John might criticize your criteria and provide counterfactual evidence to support his criticism. You should respond to his criticism and provide counter-counterfactual evidence to support your response, if applicable.'
+    #                     },
+    #                     chat_model=chat_model,
+    #                     spinner=spinner),
+    #                 LangChainBasedAIChatParticipant(
+    #                     name='John',
+    #                     role='Criteria Generation Critic',
+    #                     mission='Think from frist principles and collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Are some criteria overlapping and need to be merged? Is some criterion too general and need to be broken down? Are there criteria missing? Is the naming of each criteria suitable and reflects that a higher value is better? Iterate on it, as needed.',
+    #                     other_instructions={
+    #                         'Receiving Feedback': 'Rob might criticize your criticism and provide counter-counterfactual evidence to support his response, if applicable.'
+    #                     },
+    #                     chat_model=chat_model,
+    #                     spinner=spinner),
+    #             ],
+    #             chat_conductor=LangChainBasedAIChatConductor(
+    #                 chat_model=chat_model,
+    #                 speaker_interaction_schema='The team leader initiates the conversation about the criteria. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, finally, once they both agree the set is good enough, the team leader responds with a message to the external conversation with the final criteria set.',
+    #                 termination_condition='Terminate the chat when the team leader thinks the criteria set is good enough, or if the team leader asks you to terminate the chat.',
+    #                 spinner=spinner
+    #             ),
+    #             description='This chat room is a group chat for the criteria generation team. Everybody can talk to everybody else. The goal is to generate a list of criteria for a decision-making problem.',
+    #         ),
+    #         spinner=spinner
+    #     )
+    #     user = UserChatParticipant(name='User')
+    #     participants = [user, criteria_generation_team]
+    #
+    #     main_chat = ChatRoom(initial_participants=participants)
+    #     result = main_chat.initiate_chat_with_result(
+    #         initial_message="Please generate a list of criteria for choosing the breed of my next puppy.",
+    #     ),
+    #
+    #     print(f'Result: {result}')
+
+    from datetime import datetime
+
+
+    def get_time():
+        return datetime.utcnow().isoformat()
+
+
+    now = datetime.utcnow().isoformat()
+    time_tool = Tool.from_function(
+        func=get_time,
+        name='get_time',
+        description='Returns the current time in UTC.'
     )
+    ai = LangChainBasedAIChatParticipant(name='Assistant',
+                                         mission='Be a helpful AI assistant. You stop working after 20 seconds have passed. You started working at {now}',
+                                         chat_model=chat_model,
+                                         functions={
+                                             'get_time': lambda _: get_time()
+                                         },
+                                         chat_model_args={
+                                             'functions': [format_tool_to_openai_function(time_tool)]
+                                         },
+                                         spinner=spinner)
     user = UserChatParticipant(name='User')
-    participants = [user, criteria_generation_team]
+    participants = [user, ai]
 
-    main_chat = ChatRoom(initial_participants=participants)
-    result = main_chat.initiate_chat_with_result(
-        initial_message="Please generate a list of criteria for choosing the breed of my next puppy.",
-    ),
-
-    print(f'Result: {result}')
+    main_chat = ChatRoom(
+        initial_participants=participants,
+        chat_conductor=LangChainBasedAIChatConductor(
+            chat_model=chat_model,
+            termination_condition=f'Terminate the chat when the user tells you to check for the time and the time shows more than 20 seconds have passed OR if the user decides to terminate the chat by ending their sentence with "TERMINATE".',
+            spinner=spinner
+        ),
+    )
+    main_chat.initiate_chat_with_result()
