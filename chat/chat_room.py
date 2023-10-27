@@ -933,10 +933,12 @@ if __name__ == '__main__':
     def get_time():
         return datetime.utcnow().isoformat()
 
+
     class GetTime(BaseModel):
         """Returns the current time in UTC."""
 
         result: str = Field(description='The current time in UTC.')
+
 
     now = get_time()
     ai = LangChainBasedAIChatParticipant(name='Assistant',
