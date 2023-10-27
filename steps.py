@@ -12,7 +12,7 @@ from langchain.tools import Tool
 from pydantic.v1 import BaseModel, Field
 
 import system_prompts
-from chat import chat
+from chat import chat_room
 from presentation import generate_decision_report_as_html, save_html_to_file, open_html_file_in_browser
 from research import WebSearch
 from research.ranking import topsis_score, normalize_label_value
@@ -98,7 +98,7 @@ def identify_goal(chat_model: ChatOpenAI, default_tools_with_web_search: List[To
     if state.data.get('goal') is not None:
         return
 
-    goal = chat(
+    goal = chat_room(
         chat_model=chat_model,
         messages=[
             SystemMessage(content=system_prompts.goal_identification_system_prompt),
@@ -116,7 +116,7 @@ def identify_alternatives(chat_model: ChatOpenAI, default_tools_with_web_search:
     if state.data.get('alternatives') is not None:
         return
 
-    alternatives = chat(
+    alternatives = chat_room(
         chat_model=chat_model,
         messages=[
             SystemMessage(content=system_prompts.alternative_listing_system_prompt),
@@ -136,7 +136,7 @@ def identify_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: Lis
     if state.data.get('criteria') is not None:
         return
 
-    criteria = chat(
+    criteria = chat_room(
         chat_model=chat_model,
         messages=[
             SystemMessage(content=system_prompts.criteria_identification_system_prompt),
@@ -167,7 +167,7 @@ def map_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[Too
             [f'- {criterion_name}' for criterion_name in
              [criterion['name'] for criterion in state.data['criteria'] if
               criterion['name'] not in criteria_mapping]])
-        criterion_mapping = chat(
+        criterion_mapping = chat_room(
             chat_model=chat_model,
             messages=[
                 SystemMessage(content=system_prompts.criterion_mapping_system_prompt),
@@ -219,7 +219,7 @@ def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_s
          enumerate(state.data['criteria_mapping'].items())])
     alternatives_str = '\n\n'.join([f'## {alternative}' for i, alternative in enumerate(state.data['alternatives'])])
 
-    criteria_research_queries = chat(
+    criteria_research_queries = chat_room(
         chat_model=chat_model,
         messages=[
             SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
@@ -309,7 +309,7 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
                 [f'## {query}\n{answer}' for query, answer in alternative_criterion_research_data['raw'].items()]
             )
 
-            criterion_full_research_data = chat(
+            criterion_full_research_data = chat_room(
                 chat_model=chat_model,
                 messages=[
                     SystemMessage(

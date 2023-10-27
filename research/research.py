@@ -7,7 +7,7 @@ from langchain.schema import HumanMessage, SystemMessage
 from langchain.tools import Tool
 from pydantic.v1 import BaseModel, Field
 
-from chat import chat, json_string_to_pydantic
+from chat import chat_room, json_string_to_pydantic
 from research.page_analyzer import PageQueryAnalyzer
 from research.search import SearchResultsProvider
 import research.prompts as system_prompts
@@ -98,7 +98,7 @@ class WebSearch:
             spinner.start(f'Processing results...')
 
         formatted_answers = '\n'.join([f'{i + 1}. {q["answer"]}; Source: {q["source"]}' for i, q in enumerate(qna)])
-        final_answer = chat(
+        final_answer = chat_room(
             chat_model=self.chat_model,
             messages=[
                 SystemMessage(content=system_prompts.aggregate_query_answers_system_prompt),

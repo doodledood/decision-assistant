@@ -11,7 +11,7 @@ from langchain.tools.render import format_tool_to_openai_function
 from pydantic import BaseModel
 from pydantic.v1 import ValidationError
 
-from chat.ai_utils import execute_chat_model_messages
+from chat.ai_utils import execute_chat_model_messages, pydantic_to_openai_function
 from chat.errors import NotEnoughParticipantsInChatError, ChatParticipantNotJoinedToChatError, \
     ChatParticipantAlreadyJoinedToChatError, NoMessagesInChatError, MessageCouldNotBeParsedError
 from utils import fix_invalid_json
@@ -927,17 +927,17 @@ if __name__ == '__main__':
     #     print(f'Result: {result}')
 
     from datetime import datetime
+    from pydantic import Field
 
 
     def get_time():
         return datetime.utcnow().isoformat()
 
+    class GetTime(BaseModel):
+        """Returns the current time in UTC."""
 
-    time_tool = Tool.from_function(
-        func=get_time,
-        name='get_time',
-        description='Returns the current time in UTC.'
-    )
+        result: str = Field(description='The current time in UTC.')
+
     now = get_time()
     ai = LangChainBasedAIChatParticipant(name='Assistant',
                                          mission=f'Be a helpful, time-showing, AI assistant. Always tell them the UTC time (in a user friendly format) when you respond and how much time you have left to work. You stop working after 1 minute has passed from when you started working at {now}.',
@@ -946,7 +946,7 @@ if __name__ == '__main__':
                                              'get_time': lambda _: get_time()
                                          },
                                          chat_model_args={
-                                             'functions': [format_tool_to_openai_function(time_tool)]
+                                             'functions': [pydantic_to_openai_function('get_time', GetTime)]
                                          },
                                          spinner=spinner)
     user = UserChatParticipant(name='User')

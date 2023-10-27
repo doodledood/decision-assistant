@@ -1,8 +1,9 @@
-from typing import List, Optional, Dict, Any, Callable
+from typing import List, Optional, Dict, Any, Callable, TypeVar, Type
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import BaseMessage, FunctionMessage
+from pydantic import BaseModel
 
 from chat.errors import FunctionNotFoundError
 
@@ -45,3 +46,17 @@ def execute_chat_model_messages(chat_model: BaseChatModel,
             raise FunctionNotFoundError(function_name)
 
     return last_message.content
+
+
+PydanticType = TypeVar('PydanticType', bound=Type[BaseModel])
+
+
+def pydantic_to_openai_function(function_name: str, pydantic_type: PydanticType) -> Dict:
+    base_schema = pydantic_type.model_json_schema()
+    description = pydantic_type.__doc__ or ''
+
+    return {
+        'name': function_name,
+        'description': description,
+        'parameters': base_schema
+    }

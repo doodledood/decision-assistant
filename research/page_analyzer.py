@@ -8,7 +8,7 @@ from langchain.text_splitter import TextSplitter
 from pydantic import BaseModel
 
 import research.prompts as system_prompts
-from chat import chat
+from chat import chat_room
 from research.page_retriever import PageRetriever
 from bs4 import BeautifulSoup
 
@@ -61,7 +61,7 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
         answer = 'No answer yet.'
         for i, doc in enumerate(docs):
             text = doc.page_content
-            result = chat(
+            result = chat_room(
                 chat_model=self.chat_model,
                 messages=[
                     SystemMessage(content=system_prompts.answer_query_based_on_partial_page_system_prompt),
