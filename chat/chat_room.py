@@ -940,7 +940,7 @@ if __name__ == '__main__':
 
     now = get_time()
     ai = LangChainBasedAIChatParticipant(name='Assistant',
-                                         mission=f'Be a helpful, time-showing, AI assistant. Always tell them the UTC time (in a user friendly format) when you respond and how much time you have left to work. You stop working after 1 minute has passed from when you started working at {now}.',
+                                         mission=f'Be a helpful, time-showing, AI assistant. Always tell them the UTC time (in a user friendly format) when you respond and how much time you have left to work. You stop working after 1 minute has passed from when you started working at {now}. When the time comes, let the user know you will stop working and say goodbye.',
                                          chat_model=chat_model,
                                          functions={
                                              'get_time': lambda _: get_time()
@@ -956,7 +956,7 @@ if __name__ == '__main__':
         initial_participants=participants,
         chat_conductor=LangChainBasedAIChatConductor(
             chat_model=chat_model,
-            termination_condition=f'Chat started at {now}. Terminate the chat when the assistant stops working which is 1 minute after {now} UTC, OR if the user decides to terminate the chat by ending their sentence with "TERMINATE".',
+            termination_condition=f'Chat started at {now}. Terminate the chat when the assistant stops working (He will let it be known in the chat), OR if the user decides to terminate the chat by ending their sentence with "TERMINATE".',
             spinner=spinner
         ),
     )
