@@ -1,7 +1,7 @@
 import abc
 import json
 from json import JSONDecodeError
-from typing import List, Optional, Callable, Type, TypeVar, Dict
+from typing import List, Optional, Callable, Type, TypeVar, Dict, Any
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
@@ -11,6 +11,9 @@ from langchain.tools.render import format_tool_to_openai_function
 from pydantic import BaseModel
 from pydantic.v1 import ValidationError
 
+from chat.ai_utils import execute_chat_model_messages
+from chat.errors import NotEnoughParticipantsInChatError, ChatParticipantNotJoinedToChatError, \
+    ChatParticipantAlreadyJoinedToChatError, NoMessagesInChatError, MessageCouldNotBeParsedError
 from utils import fix_invalid_json
 
 TOutputSchema = TypeVar("TOutputSchema", bound=BaseModel)
@@ -192,31 +195,6 @@ class ChatMessage(BaseModel):
     content: str
 
 
-class ChatParticipantNotJoinedToChat(Exception):
-    def __init__(self, participant_name: str):
-        super().__init__(f'Participant "{participant_name}" is not joined to this chat.')
-
-
-class ChatParticipantAlreadyJoinedToChat(Exception):
-    def __init__(self, participant_name: str):
-        super().__init__(f'Participant "{participant_name}" is already joined to this chat.')
-
-
-class MessageCouldNotBeParsed(Exception):
-    def __init__(self, message: str):
-        super().__init__(f'Message "{message}" could not be parsed.')
-
-
-class NotEnoughParticipantsInChat(Exception):
-    def __init__(self, n_participants: int = 0):
-        super().__init__(f'There are not enough participants in this chat ({n_participants})')
-
-
-class NoMessagesInChat(Exception):
-    def __init__(self):
-        super().__init__('There are no messages in this chat.')
-
-
 class ChatConductor(abc.ABC):
     @abc.abstractmethod
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
@@ -234,7 +212,7 @@ class ChatConductor(abc.ABC):
     def elect_new_chat_leader(self, chat: 'ChatRoom') -> ChatParticipant:
         participants = chat.chat_backing_store.get_participants()
         if len(participants) == 0:
-            raise NotEnoughParticipantsInChat()
+            raise NotEnoughParticipantsInChatError()
 
         return next(iter(participants))
 
@@ -262,7 +240,7 @@ class RoundRobinChatConductor(ChatConductor):
         next_speaker_name = participant_names[next_speaker_index]
         next_speaker = chat.chat_backing_store.get_participant_by_name(next_speaker_name)
         if next_speaker is None:
-            raise ChatParticipantNotJoinedToChat(next_speaker_name)
+            raise ChatParticipantNotJoinedToChatError(next_speaker_name)
 
         return next_speaker
 
@@ -278,6 +256,8 @@ class RoundRobinChatConductor(ChatConductor):
 
 class LangChainBasedAIChatConductor(ChatConductor):
     chat_model: BaseChatModel
+    chat_model_args: Dict[str, Any]
+    functions: Dict[str, Callable[[Any], str]]
     speaker_interaction_schema: Optional[str]
     termination_condition: str = f'''Terminate the chat on the following conditions:
     - When you think it has concluded
@@ -288,8 +268,12 @@ class LangChainBasedAIChatConductor(ChatConductor):
                  chat_model: BaseChatModel,
                  speaker_interaction_schema: Optional[str] = None,
                  termination_condition: Optional[str] = None,
-                 spinner: Optional[Halo] = None):
+                 spinner: Optional[Halo] = None,
+                 functions: Optional[Dict[str, Callable[[Any], str]]] = None,
+                 chat_model_args: Optional[Dict[str, Any]] = None):
         self.chat_model = chat_model
+        self.chat_model_args = chat_model_args or {}
+        self.functions = functions or {}
         self.speaker_interaction_schema = speaker_interaction_schema
         self.termination_condition = termination_condition
         self.spinner = spinner
@@ -341,17 +325,17 @@ OR
                 content=f'# PREVIOUS MESSAGES\n\n{messages_str if len(messages_str) > 0 else "No messages yet."}')
         ]
 
-        result = self.chat_model.predict_messages(messages)
-        next_speaker_name = result.content.strip()
+        result = self.execute_messages(messages=messages)
+        next_speaker_name = result.strip()
 
         while not chat.chat_backing_store.has_participant_with_name(
                 next_speaker_name) and next_speaker_name != 'TERMINATE':
-            messages.append(result)
+            messages.append(AIMessage(content=next_speaker_name))
             messages.append(HumanMessage(
                 content=f'Speaker "{next_speaker_name}" is not a participant in the chat. Choose another one.'))
 
-            result = self.chat_model.predict_messages(messages)
-            next_speaker_name = result.content.strip()
+            result = self.execute_messages(messages=messages)
+            next_speaker_name = result.strip()
 
         if next_speaker_name == 'TERMINATE':
             if self.spinner is not None:
@@ -361,12 +345,21 @@ OR
 
         next_speaker = chat.chat_backing_store.get_participant_by_name(next_speaker_name)
         if next_speaker is None:
-            raise ChatParticipantNotJoinedToChat(next_speaker_name)
+            raise ChatParticipantNotJoinedToChatError(next_speaker_name)
 
         if self.spinner is not None:
             self.spinner.succeed(text=f'AI Chat Conductor has selected "{next_speaker_name}" as the next speaker.')
 
         return next_speaker
+
+    def execute_messages(self, messages: List[BaseMessage]) -> str:
+        return execute_chat_model_messages(
+            messages=messages,
+            chat_model=self.chat_model,
+            functions=self.functions,
+            spinner=self.spinner,
+            chat_model_args=self.chat_model_args
+        )
 
 
 class ChatRenderer(abc.ABC):
@@ -464,13 +457,13 @@ class InMemoryChatDataBackingStore(ChatDataBackingStore):
 
     def add_participant(self, participant: ChatParticipant):
         if participant.name in self.participants:
-            raise ChatParticipantAlreadyJoinedToChat(participant.name)
+            raise ChatParticipantAlreadyJoinedToChatError(participant.name)
 
         self.participants[participant.name] = participant
 
     def remove_participant(self, participant: ChatParticipant):
         if participant.name not in self.participants:
-            raise ChatParticipantNotJoinedToChat(participant.name)
+            raise ChatParticipantNotJoinedToChatError(participant.name)
 
         self.participants.pop(participant.name)
 
@@ -542,7 +535,7 @@ class ChatRoom:
     def receive_message(self, sender_name: str, content: str):
         sender = self.chat_backing_store.get_participant_by_name(sender_name)
         if sender is None:
-            raise ChatParticipantNotJoinedToChat(sender_name)
+            raise ChatParticipantNotJoinedToChatError(sender_name)
 
         message = self.chat_backing_store.add_message(sender_name=sender_name, content=content)
 
@@ -557,7 +550,7 @@ class ChatRoom:
     ) -> str:
         participants = self.chat_backing_store.get_participants()
         if len(participants) <= 1:
-            raise NotEnoughParticipantsInChat(len(participants))
+            raise NotEnoughParticipantsInChatError(len(participants))
 
         if initial_message is not None:
             self.receive_message(sender_name=self.chat_leader.name, content=initial_message)
@@ -625,6 +618,8 @@ class LangChainBasedAIChatParticipant(ChatParticipant):
 '''
     mission: str
     chat_model: BaseChatModel
+    chat_model_args: Dict[str, Any]
+    functions: Dict[str, Callable[[Any], str]]
     other_instructions: Optional[Dict[str, str]] = None
     spinner: Optional[Halo] = None
 
@@ -638,13 +633,17 @@ class LangChainBasedAIChatParticipant(ChatParticipant):
                  role: str = 'AI Assistant',
                  mission: str = 'Be a helpful AI assistant.',
                  other_instructions: Optional[Dict[str, str]] = None,
+                 functions: Optional[Dict[str, Callable[[Any], str]]] = None,
+                 chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  **kwargs
                  ):
         super().__init__(name=name, symbol=symbol, role=role, **kwargs)
 
         self.chat_model = chat_model
+        self.chat_model_args = chat_model_args or {}
         self.other_instructions = other_instructions
+        self.functions = functions or {}
         self.spinner = spinner
         self.mission = mission
 
@@ -699,18 +698,25 @@ class LangChainBasedAIChatParticipant(ChatParticipant):
             *all_messages
         ]
 
-        last_message = self.chat_model.predict_messages(all_messages)
+        message_content = self.execute_messages(messages=all_messages)
 
         if self.spinner is not None:
             self.spinner.stop()
-
-        message_content = last_message.content
 
         potential_prefix = f'{self.name}:'
         if message_content.startswith(potential_prefix):
             message_content = message_content[len(potential_prefix):].strip()
 
         return message_content
+
+    def execute_messages(self, messages: List[BaseMessage]) -> str:
+        return execute_chat_model_messages(
+            messages=messages,
+            chat_model=self.chat_model,
+            functions=self.functions,
+            spinner=self.spinner,
+            chat_model_args=self.chat_model_args
+        )
 
 
 class GroupBasedChatParticipant(ChatParticipant):
@@ -722,7 +728,7 @@ class GroupBasedChatParticipant(ChatParticipant):
                  spinner: Optional[Halo] = None,
                  **kwargs):
         if chat.chat_leader is None:
-            raise NotEnoughParticipantsInChat()
+            raise NotEnoughParticipantsInChatError()
 
         super().__init__(name=chat.chat_leader.name, role=chat.chat_leader.role, **kwargs)
 
@@ -769,7 +775,7 @@ class JSONOutputParserChatParticipant(ChatParticipant):
     def respond_to_chat(self, chat: 'ChatRoom') -> str:
         messages = chat.chat_backing_store.get_messages()
         if len(messages) == 0:
-            raise NoMessagesInChat()
+            raise NoMessagesInChatError()
 
         last_message = messages[-1]
 
@@ -809,7 +815,7 @@ def string_output_to_pydantic(output: str,
     )
 
     if json_parser.output is None:
-        raise MessageCouldNotBeParsed(output)
+        raise MessageCouldNotBeParsedError(output)
 
     return json_parser.output
 
