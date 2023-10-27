@@ -4,7 +4,7 @@ from json import JSONDecodeError
 from typing import List, Optional, Callable, Type, TypeVar, Dict
 
 from halo import Halo
-from langchain.chat_models import ChatOpenAI
+from langchain.chat_models.base import BaseChatModel
 from langchain.schema import BaseMessage, FunctionMessage, HumanMessage, AIMessage, SystemMessage
 from langchain.tools import Tool
 from langchain.tools.render import format_tool_to_openai_function
@@ -33,7 +33,7 @@ def json_string_to_pydantic(json_string: str, pydantic_model: Type[BaseModel]) -
 terminate_now_message_content = 'Please now "_terminate" immediately with the result of your mission.'
 
 
-def chat(chat_model: ChatOpenAI,
+def chat(chat_model: BaseChatModel,
          messages: List[BaseMessage],
          tools: Optional[List[Tool]] = None,
          get_user_input: Optional[Callable[[List[BaseMessage]], str]] = None,
@@ -277,7 +277,7 @@ class BasicChatConductor(ChatConductor):
 
 
 class AIChatConductor(ChatConductor):
-    chat_model: ChatOpenAI
+    chat_model: BaseChatModel
     speaker_interaction_schema: Optional[str]
     termination_condition: str = f'''Terminate the chat on the following conditions:
     - When you think it has concluded
@@ -285,7 +285,7 @@ class AIChatConductor(ChatConductor):
     spinner: Optional[Halo] = None
 
     def __init__(self,
-                 chat_model: ChatOpenAI,
+                 chat_model: BaseChatModel,
                  speaker_interaction_schema: Optional[str] = None,
                  termination_condition: Optional[str] = None,
                  spinner: Optional[Halo] = None):
@@ -344,7 +344,8 @@ OR
         result = self.chat_model.predict_messages(messages)
         next_speaker_name = result.content.strip()
 
-        while not chat.chat_backing_store.has_participant_with_name(next_speaker_name) and next_speaker_name != 'TERMINATE':
+        while not chat.chat_backing_store.has_participant_with_name(
+                next_speaker_name) and next_speaker_name != 'TERMINATE':
             messages.append(result)
             messages.append(HumanMessage(
                 content=f'Speaker "{next_speaker_name}" is not a participant in the chat. Choose another one.'))
@@ -587,7 +588,7 @@ class UserChatParticipant(ChatParticipant):
         return input(f'👤 ({self.name}): ')
 
 
-class AIChatParticipant(ChatParticipant):
+class LangChainBasedAIChatParticipant(ChatParticipant):
     system_message_template: str = '''
 # MISSION
 - {mission}
@@ -623,7 +624,7 @@ class AIChatParticipant(ChatParticipant):
 - "Assistant: I am doing well, thanks. How are you?"
 '''
     mission: str
-    chat_model: ChatOpenAI
+    chat_model: BaseChatModel
     other_instructions: Optional[Dict[str, str]] = None
     spinner: Optional[Halo] = None
 
@@ -632,7 +633,7 @@ class AIChatParticipant(ChatParticipant):
 
     def __init__(self,
                  name: str,
-                 chat_model: ChatOpenAI,
+                 chat_model: BaseChatModel,
                  symbol: str = '🤖',
                  role: str = 'AI Assistant',
                  mission: str = 'Be a helpful AI assistant.',
@@ -647,7 +648,7 @@ class AIChatParticipant(ChatParticipant):
         self.spinner = spinner
         self.mission = mission
 
-    def _create_system_message(self, chat: ChatRoom):
+    def create_system_message(self, chat: ChatRoom):
         if self.other_instructions is not None:
             other_instructions_str = '# OTHER INSTRUCTIONS\n'
             other_instructions_str += '\n'.join(
@@ -669,7 +670,7 @@ class AIChatParticipant(ChatParticipant):
 
         return system_message
 
-    def _chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
+    def chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
         messages = []
         for message in chat_messages:
             content = \
@@ -688,11 +689,11 @@ class AIChatParticipant(ChatParticipant):
         if self.spinner is not None:
             self.spinner.start(text=f'{self.name} ({self.role}) is thinking...')
 
-        system_message = self._create_system_message(chat=chat)
+        system_message = self.create_system_message(chat=chat)
 
         chat_messages = chat.chat_backing_store.get_messages()
 
-        all_messages = self._chat_messages_to_chat_model_messages(chat_messages)
+        all_messages = self.chat_messages_to_chat_model_messages(chat_messages)
         all_messages = [
             SystemMessage(content=system_message),
             *all_messages
@@ -782,12 +783,12 @@ class JSONOutputParserChatParticipant(ChatParticipant):
 
 
 def string_output_to_pydantic(output: str,
-                              chat_model: ChatOpenAI,
+                              chat_model: BaseChatModel,
                               output_schema: Type[TOutputSchema],
                               spinner: Optional[Halo] = None,
                               n_retries: int = 3,
                               hide_message: bool = True) -> TOutputSchema:
-    text_to_json_ai = AIChatParticipant(
+    text_to_json_ai = LangChainBasedAIChatParticipant(
         chat_model=chat_model,
         name='Text to JSON Converter',
         role='Text to JSON Converter',
@@ -814,6 +815,7 @@ def string_output_to_pydantic(output: str,
 
 
 if __name__ == '__main__':
+    from langchain.chat_models import ChatOpenAI
     from dotenv import load_dotenv
 
     load_dotenv()
@@ -867,34 +869,36 @@ if __name__ == '__main__':
     criteria_generation_team = GroupBasedChatParticipant(
         chat=ChatRoom(
             initial_participants=[
-                AIChatParticipant(name='Tom',
-                                  role='Criteria Generation Team Leader',
-                                  mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem.',
-                                  other_instructions={
-                                      'Last Message': '''
-                                      - Once the criteria set is finalized you will send the last message.
-                                      - This last message will be sent to the external conversation verbatim. Act as if you are responding directly to the other chat yourself.
-                                      - Ignore the group and their efforts in the last message as this isn't relevant for the other chat.
-                                      '''
-                                  },
-                                  chat_model=chat_model,
-                                  spinner=spinner),
-                AIChatParticipant(name='Rob',
-                                  role='Criteria Generator',
-                                  mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
-                                  other_instructions={
-                                      'Receiving Feedback': 'John might criticize your criteria and provide counterfactual evidence to support his criticism. You should respond to his criticism and provide counter-counterfactual evidence to support your response, if applicable.'
-                                  },
-                                  chat_model=chat_model,
-                                  spinner=spinner),
-                AIChatParticipant(name='John',
-                                  role='Criteria Generation Critic',
-                                  mission='Think from frist principles and collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Are some criteria overlapping and need to be merged? Is some criterion too general and need to be broken down? Are there criteria missing? Is the naming of each criteria suitable and reflects that a higher value is better? Iterate on it, as needed.',
-                                  other_instructions={
-                                      'Receiving Feedback': 'Rob might criticize your criticism and provide counter-counterfactual evidence to support his response, if applicable.'
-                                  },
-                                  chat_model=chat_model,
-                                  spinner=spinner),
+                LangChainBasedAIChatParticipant(
+                    name='Tom',
+                    role='Criteria Generation Team Leader',
+                    mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem.',
+                    other_instructions={
+                        'Last Message': '''- Once the criteria set is finalized you will send the last message.
+- This last message will be sent to the external conversation verbatim. Act as if you are responding directly to the other chat yourself.
+- Ignore the group and their efforts in the last message as this isn't relevant for the other chat.
+'''
+                    },
+                    chat_model=chat_model,
+                    spinner=spinner),
+                LangChainBasedAIChatParticipant(
+                    name='Rob',
+                    role='Criteria Generator',
+                    mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
+                    other_instructions={
+                        'Receiving Feedback': 'John might criticize your criteria and provide counterfactual evidence to support his criticism. You should respond to his criticism and provide counter-counterfactual evidence to support your response, if applicable.'
+                    },
+                    chat_model=chat_model,
+                    spinner=spinner),
+                LangChainBasedAIChatParticipant(
+                    name='John',
+                    role='Criteria Generation Critic',
+                    mission='Think from frist principles and collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Are some criteria overlapping and need to be merged? Is some criterion too general and need to be broken down? Are there criteria missing? Is the naming of each criteria suitable and reflects that a higher value is better? Iterate on it, as needed.',
+                    other_instructions={
+                        'Receiving Feedback': 'Rob might criticize your criticism and provide counter-counterfactual evidence to support his response, if applicable.'
+                    },
+                    chat_model=chat_model,
+                    spinner=spinner),
             ],
             chat_conductor=AIChatConductor(
                 chat_model=chat_model,
