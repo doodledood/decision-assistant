@@ -239,7 +239,7 @@ class ChatConductor(abc.ABC):
         return next(iter(participants))
 
 
-class BasicChatConductor(ChatConductor):
+class RoundRobinChatConductor(ChatConductor):
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
         participants = chat.chat_backing_store.get_participants()
         if len(participants) <= 1:
@@ -276,7 +276,7 @@ class BasicChatConductor(ChatConductor):
         return message.content.strip().endswith('TERMINATE')
 
 
-class AIChatConductor(ChatConductor):
+class LangChainBasedAIChatConductor(ChatConductor):
     chat_model: BaseChatModel
     speaker_interaction_schema: Optional[str]
     termination_condition: str = f'''Terminate the chat on the following conditions:
@@ -500,7 +500,7 @@ class ChatRoom:
         assert max_total_messages is None or max_total_messages > 0, 'Max total messages must be None or greater than 0.'
 
         self.chat_backing_store = chat_backing_data_store or InMemoryChatDataBackingStore()
-        self.chat_conductor = chat_conductor or BasicChatConductor()
+        self.chat_conductor = chat_conductor or RoundRobinChatConductor()
         self.chat_renderer = chat_renderer or TerminalChatRenderer()
         self.hide_messages = hide_messages
         self.max_total_messages = max_total_messages
@@ -900,7 +900,7 @@ if __name__ == '__main__':
                     chat_model=chat_model,
                     spinner=spinner),
             ],
-            chat_conductor=AIChatConductor(
+            chat_conductor=LangChainBasedAIChatConductor(
                 chat_model=chat_model,
                 speaker_interaction_schema='The team leader initiates the conversation about the criteria. Rob and John will go back and forth, refining and improving the criteria set until they both think the set cannot be improved anymore. Then, finally, once they both agree the set is good enough, the team leader responds with a message to the external conversation with the final criteria set.',
                 termination_condition='Terminate the chat when the team leader thinks the criteria set is good enough, or if the team leader asks you to terminate the chat.',
