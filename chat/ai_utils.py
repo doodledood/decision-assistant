@@ -51,12 +51,13 @@ def execute_chat_model_messages(chat_model: BaseChatModel,
 PydanticType = TypeVar('PydanticType', bound=Type[BaseModel])
 
 
-def pydantic_to_openai_function(function_name: str, pydantic_type: PydanticType) -> Dict:
+def pydantic_to_openai_function(pydantic_type: PydanticType, function_name: Optional[str] = None,
+                                function_description: Optional[str] = None) -> Dict:
     base_schema = pydantic_type.model_json_schema()
-    description = pydantic_type.__doc__ or ''
+    description = function_description if function_description is not None else (pydantic_type.__doc__ or '')
 
     return {
-        'name': function_name,
+        'name': function_name or pydantic_type.__name__,
         'description': description,
         'parameters': base_schema
     }

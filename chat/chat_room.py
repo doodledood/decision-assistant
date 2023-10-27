@@ -943,10 +943,10 @@ if __name__ == '__main__':
                                          mission=f'Be a helpful, time-showing, AI assistant. Always tell them the UTC time (in a user friendly format) when you respond and how much time you have left to work. You stop working after 1 minute has passed from when you started working at {now}. When the time comes, let the user know you will stop working and say goodbye.',
                                          chat_model=chat_model,
                                          functions={
-                                             'get_time': lambda _: get_time()
+                                             GetTime.__name__: lambda _: get_time()
                                          },
                                          chat_model_args={
-                                             'functions': [pydantic_to_openai_function('get_time', GetTime)]
+                                             'functions': [pydantic_to_openai_function(GetTime)]
                                          },
                                          spinner=spinner)
     user = UserChatParticipant(name='User')
