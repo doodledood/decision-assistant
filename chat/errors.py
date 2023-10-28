@@ -13,7 +13,7 @@ class MessageCouldNotBeParsedError(Exception):
         super().__init__(f'Message "{message}" could not be parsed.')
 
 
-class NotEnoughParticipantsInChatError(Exception):
+class NotEnoughActiveParticipantsInChatError(Exception):
     def __init__(self, n_participants: int = 0):
         super().__init__(f'There are not enough participants in this chat ({n_participants})')
 

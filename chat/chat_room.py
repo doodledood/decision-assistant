@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from pydantic.v1 import ValidationError
 
 from chat.ai_utils import execute_chat_model_messages, pydantic_to_openai_function
-from chat.errors import NotEnoughParticipantsInChatError, ChatParticipantNotJoinedToChatError, \
+from chat.errors import NotEnoughActiveParticipantsInChatError, ChatParticipantNotJoinedToChatError, \
     ChatParticipantAlreadyJoinedToChatError, NoMessagesInChatError, MessageCouldNotBeParsedError
 from chat.structured_prompt import StructuredPrompt, Section
 from utils import fix_invalid_json
@@ -160,19 +160,9 @@ def chat(chat_model: BaseChatModel,
 
 class ChatParticipant(abc.ABC):
     name: str
-    symbol: str
-    role: str
-    messages_hidden: bool
 
-    def __init__(self, name: str, symbol: str = '👤', role: str = 'Chat Participant', messages_hidden: bool = False):
+    def __init__(self, name: str):
         self.name = name
-        self.symbol = symbol
-        self.role = role
-        self.messages_hidden = messages_hidden
-
-    @abc.abstractmethod
-    def respond_to_chat(self, chat: 'ChatRoom') -> str:
-        raise NotImplementedError()
 
     def on_new_chat_message(self, chat: 'ChatRoom', message: 'ChatMessage'):
         pass
@@ -186,8 +176,26 @@ class ChatParticipant(abc.ABC):
     def on_participant_left_chat(self, chat: 'ChatRoom', participant: 'ChatParticipant'):
         pass
 
-    def on_new_chat_leader_elected(self, chat: 'ChatRoom', new_leader: Optional['ChatParticipant']):
+    def on_new_chat_leader_elected(self, chat: 'ChatRoom', new_leader: Optional['ActiveChatParticipant']):
         pass
+
+
+class ActiveChatParticipant(ChatParticipant):
+    name: str
+    symbol: str
+    role: str
+    messages_hidden: bool
+
+    def __init__(self, name: str, symbol: str = '👤', role: str = 'Chat Participant', messages_hidden: bool = False):
+        super().__init__(name=name)
+
+        self.symbol = symbol
+        self.role = role
+        self.messages_hidden = messages_hidden
+
+    @abc.abstractmethod
+    def respond_to_chat(self, chat: 'ChatRoom') -> str:
+        raise NotImplementedError()
 
 
 class ChatMessage(BaseModel):
@@ -198,7 +206,7 @@ class ChatMessage(BaseModel):
 
 class ChatConductor(abc.ABC):
     @abc.abstractmethod
-    def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
+    def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ActiveChatParticipant]:
         raise NotImplementedError()
 
     def get_chat_result(self, chat: 'ChatRoom') -> str:
@@ -210,18 +218,18 @@ class ChatConductor(abc.ABC):
 
         return last_message.content
 
-    def elect_new_chat_leader(self, chat: 'ChatRoom') -> ChatParticipant:
-        participants = chat.chat_backing_store.get_participants()
+    def elect_new_chat_leader(self, chat: 'ChatRoom') -> ActiveChatParticipant:
+        participants = chat.chat_backing_store.get_active_participants()
         if len(participants) == 0:
-            raise NotEnoughParticipantsInChatError()
+            raise NotEnoughActiveParticipantsInChatError()
 
         return next(iter(participants))
 
 
 class RoundRobinChatConductor(ChatConductor):
-    def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
-        participants = chat.chat_backing_store.get_participants()
-        if len(participants) <= 1:
+    def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ActiveChatParticipant]:
+        active_participants = chat.chat_backing_store.get_active_participants()
+        if len(active_participants) <= 1:
             return None
 
         messages = chat.chat_backing_store.get_messages()
@@ -232,15 +240,15 @@ class RoundRobinChatConductor(ChatConductor):
 
         last_speaker = last_message.sender_name if last_message is not None else None
         if last_speaker is None:
-            return next(iter(participants))
+            return next(iter(active_participants))
 
         # Rotate to the next participant in the list.
-        participant_names = [participant.name for participant in participants]
+        participant_names = [participant.name for participant in active_participants]
         last_speaker_index = participant_names.index(last_speaker)
         next_speaker_index = (last_speaker_index + 1) % len(participant_names)
         next_speaker_name = participant_names[next_speaker_index]
-        next_speaker = chat.chat_backing_store.get_participant_by_name(next_speaker_name)
-        if next_speaker is None:
+        next_speaker = chat.chat_backing_store.get_active_participant_by_name(next_speaker_name)
+        if next_speaker is None or not isinstance(next_speaker, ActiveChatParticipant):
             raise ChatParticipantNotJoinedToChatError(next_speaker_name)
 
         return next_speaker
@@ -280,6 +288,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
         self.spinner = spinner
 
     def create_system_prompt(self, chat: 'ChatRoom') -> str:
+        participants = chat.chat_backing_store.get_active_participants()
         system_message = StructuredPrompt(sections=[
             Section(name='Mission',
                     text='Select the next speaker in the conversation based on the previous messages in the conversation and an optional SPEAKER INTERACTION SCHEMA. If it seems to you that the chat should end instead of selecting a next speaker, terminate it.'),
@@ -319,8 +328,8 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
         return str(prompt)
 
-    def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
-        participants = chat.chat_backing_store.get_participants()
+    def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ActiveChatParticipant]:
+        participants = chat.chat_backing_store.get_active_participants()
         if len(participants) <= 1:
             return None
 
@@ -336,7 +345,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
         result = self.execute_messages(messages=messages)
         next_speaker_name = result.strip()
 
-        while not chat.chat_backing_store.has_participant_with_name(
+        while not chat.chat_backing_store.has_active_participant_with_name(
                 next_speaker_name) and next_speaker_name != 'TERMINATE':
             messages.append(AIMessage(content=next_speaker_name))
             messages.append(HumanMessage(
@@ -351,7 +360,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
             return None
 
-        next_speaker = chat.chat_backing_store.get_participant_by_name(next_speaker_name)
+        next_speaker = chat.chat_backing_store.get_active_participant_by_name(next_speaker_name)
         if next_speaker is None:
             raise ChatParticipantNotJoinedToChatError(next_speaker_name)
 
@@ -385,7 +394,7 @@ class TerminalChatRenderer(ChatRenderer):
         if chat.hide_messages:
             return
 
-        sender = chat.chat_backing_store.get_participant_by_name(message.sender_name)
+        sender = chat.chat_backing_store.get_active_participant_by_name(message.sender_name)
         if sender is None:
             symbol = '❓'
         else:
@@ -407,11 +416,19 @@ class ChatDataBackingStore(abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def get_participants(self) -> List[ChatParticipant]:
+    def get_active_participants(self) -> List[ActiveChatParticipant]:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def get_participant_by_name(self, name: str) -> Optional[ChatParticipant]:
+    def get_non_active_participants(self) -> List[ChatParticipant]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def get_active_participant_by_name(self, name: str) -> Optional[ActiveChatParticipant]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def get_non_active_participant_by_name(self, name: str) -> Optional[ChatParticipant]:
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -423,7 +440,7 @@ class ChatDataBackingStore(abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def has_participant_with_name(self, participant_name: str) -> bool:
+    def has_active_participant_with_name(self, participant_name: str) -> bool:
         raise NotImplementedError()
 
 
@@ -454,14 +471,38 @@ class InMemoryChatDataBackingStore(ChatDataBackingStore):
 
         return message
 
-    def get_participants(self) -> List[ChatParticipant]:
-        return list(self.participants.values())
+    def get_active_participants(self) -> List[ActiveChatParticipant]:
+        participants = list(self.participants.values())
+        participants = [participant for participant in participants if isinstance(participant, ActiveChatParticipant)]
 
-    def get_participant_by_name(self, name: str) -> Optional[ChatParticipant]:
+        return participants
+
+    def get_non_active_participants(self) -> List[ChatParticipant]:
+        participants = list(self.participants.values())
+        participants = [participant for participant in participants if
+                        not isinstance(participant, ActiveChatParticipant)]
+
+        return participants
+
+    def get_active_participant_by_name(self, name: str) -> Optional[ActiveChatParticipant]:
         if name not in self.participants:
             return None
 
-        return self.participants[name]
+        participant = self.participants[name]
+        if not isinstance(participant, ActiveChatParticipant):
+            return None
+
+        return participant
+
+    def get_non_active_participant_by_name(self, name: str) -> Optional[ChatParticipant]:
+        if name not in self.participants:
+            return None
+
+        participant = self.participants[name]
+        if isinstance(participant, ActiveChatParticipant):
+            return None
+
+        return participant
 
     def add_participant(self, participant: ChatParticipant):
         if participant.name in self.participants:
@@ -475,7 +516,7 @@ class InMemoryChatDataBackingStore(ChatDataBackingStore):
 
         self.participants.pop(participant.name)
 
-    def has_participant_with_name(self, participant_name: str) -> bool:
+    def has_active_participant_with_name(self, participant_name: str) -> bool:
         return participant_name in self.participants
 
 
@@ -484,7 +525,7 @@ class ChatRoom:
     chat_conductor: ChatConductor
     chat_renderer: ChatRenderer
     description: str
-    chat_leader: Optional[ChatParticipant] = None
+    chat_leader: Optional[ActiveChatParticipant] = None
     max_total_messages: Optional[int] = None
     hide_messages: bool = False
 
@@ -508,40 +549,47 @@ class ChatRoom:
         self.description = description
 
         for i, participant in enumerate(initial_participants):
-            self.add_participant(participant, should_elect_new_leader=i == 0)
+            self.add_participant(participant,
+                                 should_elect_new_leader=self.chat_leader is None and isinstance(participant,
+                                                                                                 ActiveChatParticipant))
 
     def add_participant(self, participant: ChatParticipant, should_elect_new_leader: bool = False):
         self.chat_backing_store.add_participant(participant)
 
-        if self.chat_leader is None:
+        all_participants = self.chat_backing_store.get_active_participants() + self.chat_backing_store.get_non_active_participants()
+
+        if self.chat_leader is None and isinstance(participant, ActiveChatParticipant):
             self.chat_leader = participant
         elif should_elect_new_leader:
             self.chat_leader = self.chat_conductor.elect_new_chat_leader(chat=self)
 
-            for participant in self.chat_backing_store.get_participants():
+            for participant in all_participants:
                 participant.on_new_chat_leader_elected(chat=self, new_leader=self.chat_leader)
 
-        for participant in self.chat_backing_store.get_participants():
+        for participant in all_participants:
             participant.on_participant_joined_chat(chat=self, participant=participant)
 
     def remove_participant(self, participant: ChatParticipant):
         self.chat_backing_store.remove_participant(participant)
 
-        participants = self.chat_backing_store.get_participants()
-        for participant in participants:
+        active_participants = self.chat_backing_store.get_active_participants()
+        non_active_participants = self.chat_backing_store.get_non_active_participants()
+        all_participants = active_participants + non_active_participants
+
+        for participant in all_participants:
             participant.on_participant_left_chat(chat=self, participant=participant)
 
         if self.chat_leader == participant:
-            if len(participants) == 0:
+            if len(active_participants) == 0:
                 self.chat_leader = None
             else:
                 self.chat_leader = self.chat_conductor.elect_new_chat_leader(chat=self)
 
-            for participant in participants:
+            for participant in all_participants:
                 participant.on_new_chat_leader_elected(chat=self, new_leader=self.chat_leader)
 
     def receive_message(self, sender_name: str, content: str):
-        sender = self.chat_backing_store.get_participant_by_name(sender_name)
+        sender = self.chat_backing_store.get_active_participant_by_name(sender_name)
         if sender is None:
             raise ChatParticipantNotJoinedToChatError(sender_name)
 
@@ -549,16 +597,20 @@ class ChatRoom:
 
         self.chat_renderer.render_new_chat_message(chat=self, message=message)
 
-        for participant in self.chat_backing_store.get_participants():
+        active_participants = self.chat_backing_store.get_active_participants()
+        non_active_participants = self.chat_backing_store.get_non_active_participants()
+        all_participants = active_participants + non_active_participants
+
+        for participant in all_participants:
             participant.on_new_chat_message(chat=self, message=message)
 
     def initiate_chat_with_result(
             self,
             initial_message: Optional[str] = None
     ) -> str:
-        participants = self.chat_backing_store.get_participants()
-        if len(participants) <= 1:
-            raise NotEnoughParticipantsInChatError(len(participants))
+        active_participants = self.chat_backing_store.get_active_participants()
+        if len(active_participants) <= 1:
+            raise NotEnoughActiveParticipantsInChatError(len(participants))
 
         if initial_message is not None:
             self.receive_message(sender_name=self.chat_leader.name, content=initial_message)
@@ -575,13 +627,17 @@ class ChatRoom:
 
             next_speaker = self.chat_conductor.select_next_speaker(chat=self)
 
-        for participant in self.chat_backing_store.get_participants():
+        active_participants = self.chat_backing_store.get_active_participants()
+        non_active_participants = self.chat_backing_store.get_non_active_participants()
+        all_participants = active_participants + non_active_participants
+
+        for participant in all_participants:
             participant.on_chat_ended(chat=self)
 
         return self.chat_conductor.get_chat_result(chat=self)
 
 
-class UserChatParticipant(ChatParticipant):
+class UserChatParticipant(ActiveChatParticipant):
     def __init__(self, name: str = 'User', **kwargs):
         super().__init__(name, role='User', messages_hidden=True, **kwargs)
 
@@ -589,7 +645,7 @@ class UserChatParticipant(ChatParticipant):
         return input(f'👤 ({self.name}): ')
 
 
-class LangChainBasedAIChatParticipant(ChatParticipant):
+class LangChainBasedAIChatParticipant(ActiveChatParticipant):
     mission: str
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
@@ -621,8 +677,8 @@ class LangChainBasedAIChatParticipant(ChatParticipant):
         self.spinner = spinner
         self.mission = mission
 
-    def create_system_message(self, chat: ChatRoom):
-        participants = chat.chat_backing_store.get_participants()
+    def create_system_message(self, chat: 'ChatRoom'):
+        active_participants = chat.chat_backing_store.get_active_participants()
         system_message = StructuredPrompt(
             sections=[
                 Section(name='Mission', text=self.mission),
@@ -632,7 +688,7 @@ class LangChainBasedAIChatParticipant(ChatParticipant):
                     Section(name='Description', text=chat.description),
                     Section(name='Participants', text='\n'.join(
                         [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
-                         for p in participants])),
+                         for p in active_participants])),
                     Section(name='Rules', list=[
                         'You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.',
                         'You cannot have private conversations with other participants. Everyone can see all messages sent by all other participants.',
@@ -706,7 +762,7 @@ class LangChainBasedAIChatParticipant(ChatParticipant):
         )
 
 
-class GroupBasedChatParticipant(ChatParticipant):
+class GroupBasedChatParticipant(ActiveChatParticipant):
     inner_chat: ChatRoom
     spinner: Optional[Halo] = None
 
@@ -715,14 +771,14 @@ class GroupBasedChatParticipant(ChatParticipant):
                  spinner: Optional[Halo] = None,
                  **kwargs):
         if chat.chat_leader is None:
-            raise NotEnoughParticipantsInChatError()
+            raise NotEnoughActiveParticipantsInChatError()
 
         super().__init__(name=chat.chat_leader.name, role=chat.chat_leader.role, **kwargs)
 
         self.inner_chat = chat
         self.spinner = spinner
 
-    def on_new_chat_leader_elected(self, chat: 'ChatRoom', new_leader: Optional['ChatParticipant']):
+    def on_new_chat_leader_elected(self, chat: 'ChatRoom', new_leader: Optional['ActiveChatParticipant']):
         if new_leader is None:
             return
 
@@ -746,7 +802,7 @@ class GroupBasedChatParticipant(ChatParticipant):
         return response
 
 
-class JSONOutputParserChatParticipant(ChatParticipant):
+class JSONOutputParserChatParticipant(ActiveChatParticipant):
     output_schema: Type[TOutputSchema]
     output: Optional[TOutputSchema] = None
 
@@ -939,7 +995,7 @@ if __name__ == '__main__':
                                          },
                                          spinner=spinner)
     user = UserChatParticipant(name='User')
-    participants = [user, ai]
+    participants = [user, ai, logger]
 
     main_chat = ChatRoom(
         initial_participants=participants,
