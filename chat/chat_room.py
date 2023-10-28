@@ -14,6 +14,7 @@ from pydantic.v1 import ValidationError
 from chat.ai_utils import execute_chat_model_messages, pydantic_to_openai_function
 from chat.errors import NotEnoughParticipantsInChatError, ChatParticipantNotJoinedToChatError, \
     ChatParticipantAlreadyJoinedToChatError, NoMessagesInChatError, MessageCouldNotBeParsedError
+from chat.structured_prompt import StructuredPrompt, Section
 from utils import fix_invalid_json
 
 TOutputSchema = TypeVar("TOutputSchema", bound=BaseModel)
@@ -278,6 +279,46 @@ class LangChainBasedAIChatConductor(ChatConductor):
         self.termination_condition = termination_condition
         self.spinner = spinner
 
+    def create_system_prompt(self, chat: 'ChatRoom') -> str:
+        system_message = StructuredPrompt(sections=[
+            Section(name='Mission',
+                    text='Select the next speaker in the conversation based on the previous messages in the conversation and an optional SPEAKER INTERACTION SCHEMA. If it seems to you that the chat should end instead of selecting a next speaker, terminate it.'),
+            Section(name='Participants',
+                    list=[f'{participant.name} ({participant.role})' for participant in participants]),
+            Section(name='Rules', list=[
+                'You can only select one of the participants in the group chat.'
+            ]),
+            Section(name='Speaker Interaction Schema',
+                    text=self.speaker_interaction_schema or 'Not provided. Use your best judgement.'),
+            Section(name='Termination Condition', text=self.termination_condition),
+            Section(name='Process', list=[
+                'Look at the last message in the conversation and determine who should speak next based on the SPEAKER INTERACTION SCHEMA, if provided.',
+                'If based on TERMINATION CONDITION you determine that the chat should end, you should return the string TERMINATE instead of a participant name.'
+            ]),
+            Section(name='Input', text='The previous messages in the conversation.'),
+            Section(name='Output',
+                    text='The name of the next speaker in the conversation. Or, TERMINATE if the chat should end, instead.'),
+            Section(name='Example Outputs', list=[
+                '"John"',
+                '"TERMINATE"'
+            ])
+        ])
+
+        return str(system_message)
+
+    def create_first_human_prompt(self, chat: 'ChatRoom') -> str:
+        messages = chat.chat_backing_store.get_messages()
+        messages_list = [f'- {message.sender_name}: {message.content}' for message in messages]
+
+        prompt = StructuredPrompt(sections=[
+            Section(name='Previous Messages',
+                    text='No messages yet.' if len(messages_list) == 0 else None,
+                    list=messages_list if len(messages_list) > 0 else []
+                    ),
+        ])
+
+        return str(prompt)
+
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ChatParticipant]:
         participants = chat.chat_backing_store.get_participants()
         if len(participants) <= 1:
@@ -287,42 +328,9 @@ class LangChainBasedAIChatConductor(ChatConductor):
             self.spinner.start(text='AI Chat Conductor is selecting the next speaker...')
 
         # Ask the AI to select the next speaker.
-        messages = chat.chat_backing_store.get_messages()
-        messages_str = '\n'.join(
-            [f'- {message.sender_name}: {message.content}' for message in messages])
         messages = [
-            SystemMessage(content=f'''# MISSION
-- Select the next speaker in the conversation based on the previous messages in the conversation and an optional SPEAKER INTERACTION SCHEMA.
-- If it seems to you that the chat should end instead of selecting a next speaker, terminate it.
-
-# PARTICIPANTS
-{', '.join([participant.name for participant in participants])}
-
-# RULES
-- You can only select one of the participants in the group chat.
-
-# SPEAKER INTERACTION SCHEMA
-{self.speaker_interaction_schema or 'Not provided. Use your best judgement.'}
-
-# TERMINATION CONDITION
-{self.termination_condition}
-
-# PROCESS
-- Look at the last message in the conversation and determine who should speak next based on the SPEAKER INTERACTION SCHEMA, if provided.
-- If based on TERMINATION CONDITION you determine that the chat should end, you should return the string TERMINATE instead of a participant name.
-
-# INPUT
-- The previous messages in the conversation.
-
-# OUTPUT
-- The name of the next speaker in the conversation. Or, TERMINATE if the chat should end, instead.
-
-# EXAMPLE OUTPUTS
-- "John"
-OR
-- "TERMINATE"'''),
-            HumanMessage(
-                content=f'# PREVIOUS MESSAGES\n\n{messages_str if len(messages_str) > 0 else "No messages yet."}')
+            SystemMessage(content=self.create_system_prompt(chat=chat)),
+            HumanMessage(content=self.create_first_human_prompt(chat=chat))
         ]
 
         result = self.execute_messages(messages=messages)
@@ -339,7 +347,7 @@ OR
 
         if next_speaker_name == 'TERMINATE':
             if self.spinner is not None:
-                self.spinner.stop_and_persist(symbol='👥', text='AI Chat Conductor has decided to terminate the chat.')
+                self.spinner.stop_and_persist(symbol='👥', text='The Chat Conductor has decided to terminate the chat.')
 
             return None
 
@@ -348,7 +356,7 @@ OR
             raise ChatParticipantNotJoinedToChatError(next_speaker_name)
 
         if self.spinner is not None:
-            self.spinner.succeed(text=f'AI Chat Conductor has selected "{next_speaker_name}" as the next speaker.')
+            self.spinner.succeed(text=f'The Chat Conductor has selected "{next_speaker_name}" as the next speaker.')
 
         return next_speaker
 
@@ -582,45 +590,11 @@ class UserChatParticipant(ChatParticipant):
 
 
 class LangChainBasedAIChatParticipant(ChatParticipant):
-    system_message_template: str = '''
-# MISSION
-- {mission}
-
-# NAME
-- {name}
-
-# ROLE
-- {role}
-
-# CHAT ROOM
-## Description
-{chat_room_description}
-
-## Participants
-{participants}
-
-## Rules
-- You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.
-- You cannot have private conversations with other participants. Everyone can see all messages sent by all other participants.
-
-## Messages
-  - Include all participants messages, including your own 
-  - They are prefixed by the sender's name (could also be everyone). For context only; it's not actually part of the message they sent. Example: "John: Hello, how are you?"
-  - Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not talk to them.
-
-{other_instructions}# GOOD RESPONSES EXAMPLES
-- "Hello, how are you?"
-- "I am doing well, thanks. How are you?"
-
-# BAD RESPONSES EXAMPLES
-- "John: Hello, how are you?"
-- "Assistant: I am doing well, thanks. How are you?"
-'''
     mission: str
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
+    other_prompt_sections: List[Section]
     functions: Dict[str, Callable[[Any], str]]
-    other_instructions: Optional[Dict[str, str]] = None
     spinner: Optional[Halo] = None
 
     class Config:
@@ -632,7 +606,7 @@ class LangChainBasedAIChatParticipant(ChatParticipant):
                  symbol: str = '🤖',
                  role: str = 'AI Assistant',
                  mission: str = 'Be a helpful AI assistant.',
-                 other_instructions: Optional[Dict[str, str]] = None,
+                 other_prompt_sections: Optional[List[Section]] = None,
                  functions: Optional[Dict[str, Callable[[Any], str]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
@@ -642,32 +616,45 @@ class LangChainBasedAIChatParticipant(ChatParticipant):
 
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
-        self.other_instructions = other_instructions
+        self.other_prompt_sections = other_prompt_sections or []
         self.functions = functions or {}
         self.spinner = spinner
         self.mission = mission
 
     def create_system_message(self, chat: ChatRoom):
-        if self.other_instructions is not None:
-            other_instructions_str = '# OTHER INSTRUCTIONS\n'
-            other_instructions_str += '\n'.join(
-                [f'## {k.capitalize()}\n{v}\n\n' for k, v in self.other_instructions.items()])
-        else:
-            other_instructions_str = ''
-
         participants = chat.chat_backing_store.get_participants()
-        system_message = self.system_message_template.format(
-            mission=self.mission,
-            name=self.name,
-            role=self.role,
-            chat_room_description=chat.description,
-            participants='\n'.join(
-                [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
-                 for p in participants]),
-            other_instructions=other_instructions_str
+        system_message = StructuredPrompt(
+            sections=[
+                Section(name='Mission', text=self.mission),
+                Section(name='Name', text=self.name),
+                Section(name='Role', text=self.role),
+                Section(name='Chat Room', text=chat.description, sub_sections=[
+                    Section(name='Description', text=chat.description),
+                    Section(name='Participants', text='\n'.join(
+                        [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
+                         for p in participants])),
+                    Section(name='Rules', list=[
+                        'You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.',
+                        'You cannot have private conversations with other participants. Everyone can see all messages sent by all other participants.',
+                    ]),
+                    Section(name='Messages', list=[
+                        'Include all participants messages, including your own',
+                        'They are prefixed by the sender\'s name (could also be everyone). For context only; it\'s not actually part of the message they sent. Example: "John: Hello, how are you?"',
+                        'Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not talk to them.',
+                    ]),
+                    *self.other_prompt_sections,
+                    Section(name='Good Responses Examples', list=[
+                        '"Hello, how are you?"',
+                        '"I am doing well, thanks. How are you?"',
+                    ]),
+                    Section(name='Bad Responses Examples', list=[
+                        '"John: Hello, how are you?"',
+                        '"Assistant: I am doing well, thanks. How are you?"',
+                    ]),
+                ])
+            ]
         )
-
-        return system_message
+        return str(system_message)
 
     def chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
         messages = []
@@ -879,7 +866,7 @@ if __name__ == '__main__':
     #                     name='Tom',
     #                     role='Criteria Generation Team Leader',
     #                     mission=f'Delegate to your team and respond back with comprehensive, orthogonal, well-researched criteria for a decision-making problem.',
-    #                     other_instructions={
+    #                     other_prompt_sections={
     #                         'Last Message': '''- Once the criteria set is finalized you will send the last message.
     # - This last message will be sent to the external conversation verbatim. Act as if you are responding directly to the other chat yourself.
     # - Ignore the group and their efforts in the last message as this isn't relevant for the other chat.
@@ -891,7 +878,7 @@ if __name__ == '__main__':
     #                     name='Rob',
     #                     role='Criteria Generator',
     #                     mission='Think from first principles about the decision-making problem, and come up with orthogonal, compresive list of criteria. Iterate on it, as needed.',
-    #                     other_instructions={
+    #                     other_prompt_sections={
     #                         'Receiving Feedback': 'John might criticize your criteria and provide counterfactual evidence to support his criticism. You should respond to his criticism and provide counter-counterfactual evidence to support your response, if applicable.'
     #                     },
     #                     chat_model=chat_model,
@@ -900,7 +887,7 @@ if __name__ == '__main__':
     #                     name='John',
     #                     role='Criteria Generation Critic',
     #                     mission='Think from frist principles and collaborate with Rob to come up with a comprehensive, orthogonal list of criteria. Criticize Rob\'s criteria and provide counterfactual evidence to support your criticism. Are some criteria overlapping and need to be merged? Is some criterion too general and need to be broken down? Are there criteria missing? Is the naming of each criteria suitable and reflects that a higher value is better? Iterate on it, as needed.',
-    #                     other_instructions={
+    #                     other_prompt_sections={
     #                         'Receiving Feedback': 'Rob might criticize your criticism and provide counter-counterfactual evidence to support his response, if applicable.'
     #                     },
     #                     chat_model=chat_model,
