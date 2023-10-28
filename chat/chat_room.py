@@ -290,6 +290,41 @@ class LangChainBasedAIChatConductor(ChatConductor):
         self.termination_condition = termination_condition
         self.spinner = spinner
 
+    # TODO: ADD THIS PROPERLY
+    template_for_managing_participants ='''
+    # MISSION
+Evaluate the current chat conversation against the set goal. Determine if the existing chat members are adequate to achieve the goal. If not, summon additional participants or remove unnecessary ones. 
+
+# PROCESS
+1. Analyze the goal of the chat conversation.
+2. Review the current messages and participants.
+3. Evaluate if the current participants can achieve the goal.
+4. If insufficient, summon additional participants.
+5. If some participants are unnecessary, remove them.
+
+# ADDING PARTICIPANTS
+- Each participant should be focused on ONE thing only. Avoid adding in generalist participants.
+- Role should be descriptive and reflective of the actual role the participant is going to be doing
+- Names can be arbitrary
+- Mission statement for a participant should be succinct, straight to the point, but should not lack detail.
+
+# REMOVING PARTICIPANTS
+- Only remove participants when you think they really cannot contribute to achieving the goal of the chat anymore.
+
+# INPUT
+- Goal for the conversation.
+- Active participants in the conversation, including their names and roles.
+- Previous messages from the conversation.
+
+# OUTPUT
+- **Participants to Remove**: List of participants to be removed (if any).
+- **Participants to Add**: List of participants to be added, including their name, role, and personal mission (if any).
+
+# NOTE
+- You can generate new participants with a name, role, and personal mission.
+- If no changes are needed, leave the output sections empty.
+    '''
+
     def create_next_speaker_system_prompt(self, chat: 'ChatRoom') -> str:
         participants = chat.chat_backing_store.get_active_participants()
         system_message = StructuredPrompt(sections=[
