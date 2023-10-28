@@ -209,6 +209,9 @@ class ChatConductor(abc.ABC):
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ActiveChatParticipant]:
         raise NotImplementedError()
 
+    def manage_participants(self, chat: 'ChatRoom'):
+        pass
+
     def get_chat_result(self, chat: 'ChatRoom') -> str:
         messages = chat.chat_backing_store.get_messages()
         if len(messages) == 0:
@@ -223,7 +226,7 @@ class ChatConductor(abc.ABC):
         if len(participants) == 0:
             raise NotEnoughActiveParticipantsInChatError()
 
-        return next(iter(participants))
+        return participants[0]
 
 
 class RoundRobinChatConductor(ChatConductor):
@@ -287,7 +290,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
         self.termination_condition = termination_condition
         self.spinner = spinner
 
-    def create_system_prompt(self, chat: 'ChatRoom') -> str:
+    def create_next_speaker_system_prompt(self, chat: 'ChatRoom') -> str:
         participants = chat.chat_backing_store.get_active_participants()
         system_message = StructuredPrompt(sections=[
             Section(name='Mission',
@@ -315,7 +318,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
         return str(system_message)
 
-    def create_first_human_prompt(self, chat: 'ChatRoom') -> str:
+    def create_next_speaker_first_human_prompt(self, chat: 'ChatRoom') -> str:
         messages = chat.chat_backing_store.get_messages()
         messages_list = [f'- {message.sender_name}: {message.content}' for message in messages]
 
@@ -338,8 +341,8 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
         # Ask the AI to select the next speaker.
         messages = [
-            SystemMessage(content=self.create_system_prompt(chat=chat)),
-            HumanMessage(content=self.create_first_human_prompt(chat=chat))
+            SystemMessage(content=self.create_next_speaker_system_prompt(chat=chat)),
+            HumanMessage(content=self.create_next_speaker_first_human_prompt(chat=chat))
         ]
 
         result = self.execute_messages(messages=messages)
@@ -368,6 +371,9 @@ class LangChainBasedAIChatConductor(ChatConductor):
             self.spinner.succeed(text=f'The Chat Conductor has selected "{next_speaker_name}" as the next speaker.')
 
         return next_speaker
+
+    def manage_participants(self, chat: 'ChatRoom'):
+        pass
 
     def execute_messages(self, messages: List[BaseMessage]) -> str:
         return execute_chat_model_messages(
@@ -608,6 +614,8 @@ class ChatRoom:
             self,
             initial_message: Optional[str] = None
     ) -> str:
+        self.chat_conductor.manage_participants(chat=self)
+
         active_participants = self.chat_backing_store.get_active_participants()
         if len(active_participants) <= 1:
             raise NotEnoughActiveParticipantsInChatError(len(participants))
@@ -625,6 +633,7 @@ class ChatRoom:
 
             self.receive_message(sender_name=next_speaker.name, content=message_content)
 
+            self.chat_conductor.manage_participants(chat=self)
             next_speaker = self.chat_conductor.select_next_speaker(chat=self)
 
         active_participants = self.chat_backing_store.get_active_participants()
