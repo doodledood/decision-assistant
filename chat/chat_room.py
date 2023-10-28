@@ -274,8 +274,7 @@ class LangChainBasedParticipantsManager(ParticipantsManager):
         pass
 
     # TODO: ADD THIS PROPERLY
-    template_for_managing_participants = '''
-    # MISSION
+    template_for_managing_participants = '''# MISSION
 Evaluate the current chat conversation against the set goal. Determine if the existing chat members are adequate to achieve the goal. If not, summon additional participants or remove unnecessary ones. 
 
 # PROCESS
@@ -297,16 +296,12 @@ Evaluate the current chat conversation against the set goal. Determine if the ex
 # INPUT
 - Goal for the conversation.
 - Active participants in the conversation, including their names and roles.
-- Previous messages from the conversation.
+- Previous messages from the conversation. They may include messages from participants that are no longer a part of the current chat. Pay attention to the active PARTICIPANTS in the chat.
 
 # OUTPUT
 - **Participants to Remove**: List of participants to be removed (if any).
 - **Participants to Add**: List of participants to be added, including their name, role, and personal mission (if any).
-
-# NOTE
-- You can generate new participants with a name, role, and personal mission.
-- If no changes are needed, leave the output sections empty.
-    '''
+- Each participant to add or remove must include a name, role, mission, and a reason why a participant was chosen to be added or removed.'''
 
 
 class NoParticipantsManager(ParticipantsManager):
