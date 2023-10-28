@@ -995,7 +995,7 @@ if __name__ == '__main__':
                                          },
                                          spinner=spinner)
     user = UserChatParticipant(name='User')
-    participants = [user, ai, logger]
+    participants = [user, ai]
 
     main_chat = ChatRoom(
         initial_participants=participants,
