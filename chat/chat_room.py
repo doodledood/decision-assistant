@@ -209,9 +209,6 @@ class ChatConductor(abc.ABC):
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ActiveChatParticipant]:
         raise NotImplementedError()
 
-    def manage_participants(self, chat: 'ChatRoom'):
-        pass
-
     def get_chat_result(self, chat: 'ChatRoom') -> str:
         messages = chat.chat_backing_store.get_messages()
         if len(messages) == 0:
@@ -266,32 +263,18 @@ class RoundRobinChatConductor(ChatConductor):
         return message.content.strip().endswith('TERMINATE')
 
 
-class LangChainBasedAIChatConductor(ChatConductor):
-    chat_model: BaseChatModel
-    chat_model_args: Dict[str, Any]
-    functions: Dict[str, Callable[[Any], str]]
-    speaker_interaction_schema: Optional[str]
-    termination_condition: str = f'''Terminate the chat on the following conditions:
-    - When you think it has concluded
-    - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
-    spinner: Optional[Halo] = None
+class ParticipantsManager(abc.ABC):
+    @abc.abstractmethod
+    def manage_participants(self, chat: 'ChatRoom'):
+        raise NotImplementedError()
 
-    def __init__(self,
-                 chat_model: BaseChatModel,
-                 speaker_interaction_schema: Optional[str] = None,
-                 termination_condition: Optional[str] = None,
-                 spinner: Optional[Halo] = None,
-                 functions: Optional[Dict[str, Callable[[Any], str]]] = None,
-                 chat_model_args: Optional[Dict[str, Any]] = None):
-        self.chat_model = chat_model
-        self.chat_model_args = chat_model_args or {}
-        self.functions = functions or {}
-        self.speaker_interaction_schema = speaker_interaction_schema
-        self.termination_condition = termination_condition
-        self.spinner = spinner
+
+class LangChainBasedParticipantsManager(ParticipantsManager):
+    def manage_participants(self, chat: 'ChatRoom'):
+        pass
 
     # TODO: ADD THIS PROPERLY
-    template_for_managing_participants ='''
+    template_for_managing_participants = '''
     # MISSION
 Evaluate the current chat conversation against the set goal. Determine if the existing chat members are adequate to achieve the goal. If not, summon additional participants or remove unnecessary ones. 
 
@@ -324,6 +307,36 @@ Evaluate the current chat conversation against the set goal. Determine if the ex
 - You can generate new participants with a name, role, and personal mission.
 - If no changes are needed, leave the output sections empty.
     '''
+
+
+class NoParticipantsManager(ParticipantsManager):
+    def manage_participants(self, chat: 'ChatRoom'):
+        pass
+
+
+class LangChainBasedAIChatConductor(ChatConductor):
+    chat_model: BaseChatModel
+    chat_model_args: Dict[str, Any]
+    functions: Dict[str, Callable[[Any], str]]
+    speaker_interaction_schema: Optional[str]
+    termination_condition: str = f'''Terminate the chat on the following conditions:
+    - When you think it has concluded
+    - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
+    spinner: Optional[Halo] = None
+
+    def __init__(self,
+                 chat_model: BaseChatModel,
+                 speaker_interaction_schema: Optional[str] = None,
+                 termination_condition: Optional[str] = None,
+                 spinner: Optional[Halo] = None,
+                 functions: Optional[Dict[str, Callable[[Any], str]]] = None,
+                 chat_model_args: Optional[Dict[str, Any]] = None):
+        self.chat_model = chat_model
+        self.chat_model_args = chat_model_args or {}
+        self.functions = functions or {}
+        self.speaker_interaction_schema = speaker_interaction_schema
+        self.termination_condition = termination_condition
+        self.spinner = spinner
 
     def create_next_speaker_system_prompt(self, chat: 'ChatRoom') -> str:
         participants = chat.chat_backing_store.get_active_participants()
@@ -565,6 +578,7 @@ class ChatRoom:
     chat_backing_store: ChatDataBackingStore
     chat_conductor: ChatConductor
     chat_renderer: ChatRenderer
+    chat_participant_manager: ParticipantsManager
     description: str
     chat_leader: Optional[ActiveChatParticipant] = None
     max_total_messages: Optional[int] = None
@@ -576,6 +590,7 @@ class ChatRoom:
             chat_backing_data_store: Optional[ChatDataBackingStore] = None,
             chat_conductor: Optional[ChatConductor] = None,
             chat_renderer: Optional[ChatRenderer] = None,
+            chat_participant_manager: Optional[ParticipantsManager] = None,
             max_total_messages: Optional[int] = None,
             hide_messages: bool = False,
             description: str = 'This chat room is a regular group chat. Everybody can talk to everybody else.'
@@ -585,6 +600,7 @@ class ChatRoom:
         self.chat_backing_store = chat_backing_data_store or InMemoryChatDataBackingStore()
         self.chat_conductor = chat_conductor or RoundRobinChatConductor()
         self.chat_renderer = chat_renderer or TerminalChatRenderer()
+        self.chat_participant_manager = chat_participant_manager or NoParticipantsManager()
         self.hide_messages = hide_messages
         self.max_total_messages = max_total_messages
         self.description = description
@@ -649,7 +665,7 @@ class ChatRoom:
             self,
             initial_message: Optional[str] = None
     ) -> str:
-        self.chat_conductor.manage_participants(chat=self)
+        self.chat_participant_manager.manage_participants(chat=self)
 
         active_participants = self.chat_backing_store.get_active_participants()
         if len(active_participants) <= 1:
@@ -668,7 +684,7 @@ class ChatRoom:
 
             self.receive_message(sender_name=next_speaker.name, content=message_content)
 
-            self.chat_conductor.manage_participants(chat=self)
+            self.chat_participant_manager.manage_participants(chat=self)
             next_speaker = self.chat_conductor.select_next_speaker(chat=self)
 
         active_participants = self.chat_backing_store.get_active_participants()
