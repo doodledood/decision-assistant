@@ -560,7 +560,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
             chat.add_participant(LangChainBasedAIChatParticipant(
                 name=participant.name,
                 role=participant.role,
-                mission=participant.personal_mission,
+                personal_mission=participant.personal_mission,
                 symbol=participant.symbol,
                 chat_model=self.chat_model,
                 functions=self.functions,
@@ -817,7 +817,7 @@ class UserChatParticipant(ActiveChatParticipant):
 
 
 class LangChainBasedAIChatParticipant(ActiveChatParticipant):
-    mission: str
+    personal_mission: str
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
     other_prompt_sections: List[Section]
@@ -832,7 +832,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                  chat_model: BaseChatModel,
                  symbol: str = '🤖',
                  role: str = 'AI Assistant',
-                 mission: str = 'Be a helpful AI assistant.',
+                 personal_mission: str = 'Be a helpful AI assistant.',
                  other_prompt_sections: Optional[List[Section]] = None,
                  functions: Optional[Dict[str, Callable[[Any], str]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
@@ -846,13 +846,13 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         self.other_prompt_sections = other_prompt_sections or []
         self.functions = functions or {}
         self.spinner = spinner
-        self.mission = mission
+        self.personal_mission = personal_mission
 
     def create_system_message(self, chat: 'ChatRoom', chat_goal: Optional[str] = None):
         active_participants = chat.get_active_participants()
         system_message = StructuredPrompt(
             sections=[
-                Section(name='Personal Mission', text=self.mission),
+                Section(name='Personal Mission', text=self.personal_mission),
                 Section(name='Name', text=self.name),
                 Section(name='Role', text=self.role),
                 Section(name='Chat Goal', text=chat_goal or 'No explicit chat goal provided.'),
@@ -1005,7 +1005,7 @@ def string_output_to_pydantic(output: str,
         chat_model=chat_model,
         name='Text to JSON Converter',
         role='Text to JSON Converter',
-        mission='You will be provided some TEXT and a JSON SCHEMA. Your only mission is to convert the TEXT '
+        personal_mission='You will be provided some TEXT and a JSON SCHEMA. Your only mission is to convert the TEXT '
                 'to a JSON that follows the JSON SCHEMA provided. Your message should include only correct JSON.',
         spinner=spinner
     )
