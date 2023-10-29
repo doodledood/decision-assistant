@@ -462,11 +462,11 @@ class LangChainBasedAIChatConductor(ChatConductor):
                 'Update the interaction schema to accommodate changes in participants.'
             ], list_item_prefix=None),
             Section(name='Adding Participants', list=[
-                'Add participants based on their potential contribution to the goal and their fit into the interaction schema.',
-                'Generate a name, role, and personal mission for each new participant.',
-                'Always try to add or complete comprehensive teams of competent participants that have orthogonal and complementary skills rather than individual more general participants. Teamwork is great for achieving goals more efficiently and achieving better outcomes.',
+                'Add participants based on their potential contribution to the goal.',
+                'Generate a name, role, and personal mission for each new participant such that they can contribute to the goal the best they can, each in their complementary own way.',
+                'Always try to add or complete comprehensive teams of competent participants that have orthogonal and complementary skills/roles rather than individual more general participants. Teamwork is essential for achieving goals more efficiently and achieving better outcomes.',
                 'Since most participants you summon will not be the best experts in the world, even though they think they are, they will be to be overseen. For that, most tasks will require at least 2 experts, one doing a task and the other that will act as a critic to that expert; they can loop back and forth and iterate on a better answer. For example, instead of having a Planner only, have a Planner and a Plan Critic participants to have this synergy. You can skip critics for the most trivial tasks.',
-                'You will not necessarily have the option to change this composition later, so make sure you summon the right participants.',
+                'You may not necessarily have the option to change this composition later, so make sure you summon the right participants.',
             ]),
             Section(name='Removing Participants', list=[
                 'Remove participants only if they cannot contribute to the goal or fit into the interaction schema.',
@@ -1177,19 +1177,19 @@ if __name__ == '__main__':
     #                                      role='Boring Serious AI Assistant',
     #                                      chat_model=chat_model,
     #                                      spinner=spinner)
-    # user = UserChatParticipant(name='User')
+    user = UserChatParticipant(name='User')
     # participants = [user, ai]
 
     chat_conductor = LangChainBasedAIChatConductor(
         chat_model=chat_model,
-        chat_goal='Come up with the best most comprehensive, orthogonal criteria for relocating from Israel to some country abroad for a 32 year old married Israeli (with pets, no children - but wanting soon). This is for decision-making purpose.',
-        termination_condition=f'A comprensive, orthogonal list of criteria for relocating abroad has been generated. Terminate the chat when the criteria set is good enough.',
+        chat_goal='The user is a bit confused and needs help to figure out out their IKIGAI.',
+        termination_condition=f'When the user feels like they have found their IKIGAI, or if the user asks to terminate the chat.',
         spinner=spinner,
         chat_composition_evaluation_type=ChatCompositionEvaluationType.AT_START_ONLY
     )
 
     result = chat_conductor.initiate_chat_with_result(chat=ChatRoom(
-        # initial_participants=[user],
+        initial_participants=[user],
     ))
 
     print(f'Result: {result}')
