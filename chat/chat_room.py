@@ -12,7 +12,7 @@ from langchain.tools.render import format_tool_to_openai_function
 from pydantic import BaseModel, Field
 from pydantic.v1 import ValidationError
 
-from chat.ai_utils import execute_chat_model_messages, pydantic_to_openai_function
+from chat.ai_utils import execute_chat_model_messages
 from chat.errors import NotEnoughActiveParticipantsInChatError, ChatParticipantNotJoinedToChatError, \
     ChatParticipantAlreadyJoinedToChatError, NoMessagesInChatError, MessageCouldNotBeParsedError
 from chat.structured_prompt import StructuredPrompt, Section
@@ -454,10 +454,9 @@ class LangChainBasedAIChatConductor(ChatConductor):
             Section(name='Mission',
                     text='Evaluate the chat conversation based on the set goal and the speaker interaction schema. Make decisions about adding or removing participants based on their potential contribution towards achieving the goal. Update the interaction schema to reflect changes in participants.'),
             Section(name='Process', list=[
-                'Understand the goal of the chat conversation.',
-                'Review the current messages, participants, and speaker interaction schema.',
-                'Assess if the current participants can contribute to the goal following the interaction schema.',
-                'If insufficient, summon additional participants.',
+                'Think about the ideal composition of participants that can contribute to the goal in a step-by-step manner by looking at all the inputs.',
+                'Assess if the current participants are sufficient for ideally contributing to the goal.',
+                'If insufficient, summon additional participants as needed.',
                 'If some participants are unnecessary, remove them.',
                 'Update the interaction schema to accommodate changes in participants.'
             ], list_item_prefix=None),
@@ -988,6 +987,7 @@ class JSONOutputParserChatParticipant(ActiveChatParticipant):
 
         try:
             json_string = last_message.content[last_message.content.index('{'):last_message.content.rindex('}') + 1]
+            json_string = fix_invalid_json(json_string)
             self.output = model = json_string_to_pydantic(json_string, self.output_schema)
 
             return f'{model.model_dump_json()} TERMINATE'
@@ -1006,7 +1006,7 @@ def string_output_to_pydantic(output: str,
         name='Text to JSON Converter',
         role='Text to JSON Converter',
         personal_mission='You will be provided some TEXT and a JSON SCHEMA. Your only mission is to convert the TEXT '
-                'to a JSON that follows the JSON SCHEMA provided. Your message should include only correct JSON.',
+                         'to a JSON that follows the JSON SCHEMA provided. Your message should include only correct JSON.',
         spinner=spinner
     )
     json_parser = JSONOutputParserChatParticipant(output_schema=output_schema)
@@ -1034,7 +1034,10 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
 
     load_dotenv()
-    chat_model = ChatOpenAI(temperature=0.0, model='gpt-4-0613')
+    chat_model = ChatOpenAI(
+        temperature=0.0,
+        model='gpt-4-0613'
+    )
 
     spinner = Halo(spinner='dots')
 
