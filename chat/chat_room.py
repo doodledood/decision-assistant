@@ -467,7 +467,6 @@ class LangChainBasedAIChatConductor(ChatConductor):
                 'Always try to add or complete comprehensive teams of competent participants that have orthogonal and complementary skills rather than individual more general participants. Teamwork is great for achieving goals more efficiently and achieving better outcomes.',
                 'Since most participants you summon will not be the best experts in the world, even though they think they are, they will be to be overseen. For that, most tasks will require at least 2 experts, one doing a task and the other that will act as a critic to that expert; they can loop back and forth and iterate on a better answer. For example, instead of having a Planner only, have a Planner and a Plan Critic participants to have this synergy. You can skip critics for the most trivial tasks.',
                 'You will not necessarily have the option to change this composition later, so make sure you summon the right participants.',
-                'If the process as some output (like an answer), you should add a Output Presenter participant to present the final output to the group as the final step and message.'
             ]),
             Section(name='Removing Participants', list=[
                 'Remove participants only if they cannot contribute to the goal or fit into the interaction schema.',
@@ -480,6 +479,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
                         'The goal of the chat (if provided) must be included in the interaction schema. The whole purpose of the interaction schema is to help achieve the goal.',
                         'It should be very clear how the process goes and when it should end.',
                         'The interaction schema should be simple, concise, and very focused on the goal. Formalities should be avoided, unless they are necessary for achieving the goal.',
+                        'If the chat goal has some output (like an answer), make sure to have the last step be the presentation of the final answer by one of the participants as a final message to the chat.'
                     ]),
             Section(name='Input', list=[
                 'Goal for the conversation.',
