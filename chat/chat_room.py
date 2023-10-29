@@ -467,16 +467,26 @@ class LangChainBasedAIChatConductor(ChatConductor):
                 'Remove participants only if they cannot contribute to the goal or fit into the interaction schema.',
                 'Ignore past performance. Focus on the participant\'s potential contribution to the goal and their fit into the interaction schema.'
             ]),
+            Section(name='Updating The Speaker Interaction Schema',
+                    list=[
+                        'Update the interaction schema to accommodate changes in participants.',
+                        'The interaction schema should provide guidelines for a chat manager on how to coordinate the participants to achieve the goal. Like an algorithm for choosing the next speaker in the conversation.',
+                        'The goal of the chat (if provided) must be included in the interaction schema. The whole purpose of the interaction schema is to help achieve the goal.',
+                        'It should be very clear how the process goes and when it should end.',
+                        'The interaction schema should be simple, concise, and very focused on the goal. Formalities should be avoided, unless they are necessary for achieving the goal.',
+                    ]),
             Section(name='Input', list=[
                 'Goal for the conversation.',
                 'Previous messages from the conversation.',
                 'Speaker interaction schema.'
             ]),
-            Section(name='Output', list=[
-                'Participants to Remove: List of participants to be removed (if any).',
-                'Participants to Add: List of participants to be added, with their name, role, and personal mission.',
-                'Updated Interaction Schema: An updated version of the original interaction schema, modified to accommodate the newly added or removed participants. The interaction schema should provide guidelines for a chat manager on how to coordinate the participants to achieve the goal. Like an algorithm for choosing the next speaker in the conversation.'
-            ])
+            Section(name='Output',
+                    text='The output can be compressed, as it will not be used by a human, but by an AI. It should include:',
+                    list=[
+                        'Participants to Remove: List of participants to be removed (if any).',
+                        'Participants to Add: List of participants to be added, with their name, role, and personal mission.',
+                        'Updated Interaction Schema: An updated version of the original interaction schema.'
+                    ])
         ])
 
         return str(system_message)
@@ -496,8 +506,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
             Section(name='Chat Messages',
                     text='No messages yet.' if len(messages_list) == 0 else None,
                     list=messages_list if len(messages_list) > 0 else []
-                    ),
-
+                    )
         ])
 
         return str(prompt)
@@ -730,7 +739,7 @@ class ChatRoom(ChatDataBackingStore):
         self.max_total_messages = max_total_messages
         self.description = description
 
-        for i, participant in enumerate(initial_participants):
+        for i, participant in enumerate(initial_participants or []):
             self.add_participant(participant)
 
     def add_participant(self, participant: ChatParticipant):
@@ -1157,23 +1166,23 @@ if __name__ == '__main__':
     # )
     # main_chat.initiate_chat_with_result()
 
-    ai = LangChainBasedAIChatParticipant(name='Assistant',
-                                         role='Boring Serious AI Assistant',
-                                         chat_model=chat_model,
-                                         spinner=spinner)
-    user = UserChatParticipant(name='User')
-    participants = [user, ai]
+    # ai = LangChainBasedAIChatParticipant(name='Assistant',
+    #                                      role='Boring Serious AI Assistant',
+    #                                      chat_model=chat_model,
+    #                                      spinner=spinner)
+    # user = UserChatParticipant(name='User')
+    # participants = [user, ai]
 
     chat_conductor = LangChainBasedAIChatConductor(
         chat_model=chat_model,
-        chat_goal='Successfully prank the boring Assistant AI.',
-        termination_condition=f'Terminate the chat when the is successfully pranked, or is unable to be pranked or does not go along with the pranks within a 2 tries, OR if the user asks you to terminate the chat.',
+        chat_goal='Come up with the best most comprehensive, orthogonal criteria for relocating from Israel to some country abroad for a 32 year old married Israeli (with pets, no children - but wanting soon). This is for decision-making purpose.',
+        termination_condition=f'A comprensive, orthogonal list of criteria for relocating abroad has been generated. Terminate the chat when the criteria set is good enough.',
         spinner=spinner,
         chat_composition_evaluation_type=ChatCompositionEvaluationType.AT_START_ONLY
     )
 
     result = chat_conductor.initiate_chat_with_result(chat=ChatRoom(
-        initial_participants=participants,
+        # initial_participants=[user],
     ))
 
     print(f'Result: {result}')
