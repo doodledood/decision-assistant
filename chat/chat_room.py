@@ -209,13 +209,13 @@ class ChatCompositionEvaluationType(str, Enum):
 
 class ChatConductor(abc.ABC):
     chat_goal: Optional[str] = None
-    chat_composition_evaluation_type: Optional[ChatCompositionEvaluationType] = None
+    chat_composition_evaluation: Optional[ChatCompositionEvaluationType] = None
 
     def __init__(self,
                  chat_goal: Optional[str] = None,
-                 chat_composition_evaluation_type: Optional[ChatCompositionEvaluationType] = None):
+                 chat_composition_evaluation: Optional[ChatCompositionEvaluationType] = None):
         self.chat_goal = chat_goal
-        self.chat_composition_evaluation_type = chat_composition_evaluation_type
+        self.chat_composition_evaluation = chat_composition_evaluation
 
     @abc.abstractmethod
     def select_next_speaker(self, chat: 'ChatRoom') -> Optional[ActiveChatParticipant]:
@@ -239,7 +239,7 @@ class ChatConductor(abc.ABC):
             initial_message: Optional[str] = None,
             from_participant: Optional[ChatParticipant] = None
     ) -> str:
-        if self.chat_composition_evaluation_type is not None:
+        if self.chat_composition_evaluation is not None:
             self.manage_participants(chat=chat)
 
         active_participants = chat.get_active_participants()
@@ -252,7 +252,7 @@ class ChatConductor(abc.ABC):
 
             chat.add_message(sender_name=from_participant.name, content=initial_message)
 
-            if self.chat_composition_evaluation_type == ChatCompositionEvaluationType.EVERY_ROUND:
+            if self.chat_composition_evaluation == ChatCompositionEvaluationType.EVERY_ROUND:
                 self.manage_participants(chat=chat)
 
         next_speaker = self.select_next_speaker(chat=chat)
@@ -265,7 +265,7 @@ class ChatConductor(abc.ABC):
 
             chat.add_message(sender_name=next_speaker.name, content=message_content)
 
-            if self.chat_composition_evaluation_type == ChatCompositionEvaluationType.EVERY_ROUND:
+            if self.chat_composition_evaluation == ChatCompositionEvaluationType.EVERY_ROUND:
                 self.manage_participants(chat=chat)
 
             next_speaker = self.select_next_speaker(chat=chat)
@@ -331,7 +331,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
     chat_model_args: Dict[str, Any]
     functions: Dict[str, Callable[[Any], str]]
     speaker_interaction_schema: Optional[str]
-    chat_composition_evaluation_type: Optional[ChatCompositionEvaluationType] = None
+    chat_composition_evaluation: Optional[ChatCompositionEvaluationType] = None
     termination_condition: str = f'''Terminate the chat on the following conditions:
     - When you think it has concluded
     - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
@@ -342,13 +342,13 @@ class LangChainBasedAIChatConductor(ChatConductor):
                  speaker_interaction_schema: Optional[str] = None,
                  termination_condition: Optional[str] = None,
                  chat_goal: Optional[str] = None,
-                 chat_composition_evaluation_type: Optional[ChatCompositionEvaluationType] = None,
+                 chat_composition_evaluation: Optional[ChatCompositionEvaluationType] = None,
                  spinner: Optional[Halo] = None,
                  functions: Optional[Dict[str, Callable[[Any], str]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None):
         super().__init__(
             chat_goal=chat_goal,
-            chat_composition_evaluation_type=chat_composition_evaluation_type
+            chat_composition_evaluation=chat_composition_evaluation
         )
 
         self.chat_model = chat_model
@@ -1188,7 +1188,7 @@ if __name__ == '__main__':
         chat_goal='The user is a bit confused and needs help to figure out out their IKIGAI.',
         termination_condition=f'When the user feels like they have found their IKIGAI, or if the user asks to terminate the chat.',
         spinner=spinner,
-        chat_composition_evaluation_type=ChatCompositionEvaluationType.AT_START_ONLY
+        chat_composition_evaluation=ChatCompositionEvaluationType.AT_START_ONLY
     )
 
     result = chat_conductor.initiate_chat_with_result(chat=ChatRoom(
