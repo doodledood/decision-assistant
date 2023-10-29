@@ -192,7 +192,7 @@ class ActiveChatParticipant(ChatParticipant):
         self.messages_hidden = messages_hidden
 
     @abc.abstractmethod
-    def respond_to_chat(self, chat: 'ChatRoom') -> str:
+    def respond_to_chat(self, chat: 'ChatRoom', goal: Optional[str] = None) -> str:
         raise NotImplementedError()
 
 
@@ -208,9 +208,13 @@ class ChatCompositionEvaluationType(str, Enum):
 
 
 class ChatConductor(abc.ABC):
+    chat_goal: Optional[str] = None
     chat_composition_evaluation_type: Optional[ChatCompositionEvaluationType] = None
 
-    def __init__(self, chat_composition_evaluation_type: Optional[ChatCompositionEvaluationType] = None):
+    def __init__(self,
+                 chat_goal: Optional[str] = None,
+                 chat_composition_evaluation_type: Optional[ChatCompositionEvaluationType] = None):
+        self.chat_goal = chat_goal
         self.chat_composition_evaluation_type = chat_composition_evaluation_type
 
     @abc.abstractmethod
@@ -240,7 +244,7 @@ class ChatConductor(abc.ABC):
 
         active_participants = chat.get_active_participants()
         if len(active_participants) <= 1:
-            raise NotEnoughActiveParticipantsInChatError(len(participants))
+            raise NotEnoughActiveParticipantsInChatError(len(active_participants))
 
         if initial_message is not None:
             if from_participant is None:
@@ -257,7 +261,7 @@ class ChatConductor(abc.ABC):
             if chat.max_total_messages is not None and len(messages) >= chat.max_total_messages:
                 break
 
-            message_content = next_speaker.respond_to_chat(chat=chat)
+            message_content = next_speaker.respond_to_chat(chat=chat, goal=self.chat_goal)
 
             chat.add_message(sender_name=next_speaker.name, content=message_content)
 
@@ -326,7 +330,6 @@ class LangChainBasedAIChatConductor(ChatConductor):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
     functions: Dict[str, Callable[[Any], str]]
-    chat_goal: Optional[str] = None
     speaker_interaction_schema: Optional[str]
     chat_composition_evaluation_type: Optional[ChatCompositionEvaluationType] = None
     termination_condition: str = f'''Terminate the chat on the following conditions:
@@ -343,14 +346,16 @@ class LangChainBasedAIChatConductor(ChatConductor):
                  spinner: Optional[Halo] = None,
                  functions: Optional[Dict[str, Callable[[Any], str]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None):
-        super().__init__(chat_composition_evaluation_type=chat_composition_evaluation_type)
+        super().__init__(
+            chat_goal=chat_goal,
+            chat_composition_evaluation_type=chat_composition_evaluation_type
+        )
 
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.functions = functions or {}
         self.speaker_interaction_schema = speaker_interaction_schema
         self.termination_condition = termination_condition
-        self.chat_goal = chat_goal
         self.spinner = spinner
 
     def create_next_speaker_system_prompt(self, chat: 'ChatRoom') -> str:
@@ -806,7 +811,7 @@ class UserChatParticipant(ActiveChatParticipant):
     def __init__(self, name: str = 'User', **kwargs):
         super().__init__(name, role='User', messages_hidden=True, **kwargs)
 
-    def respond_to_chat(self, chat: 'ChatRoom') -> str:
+    def respond_to_chat(self, chat: 'ChatRoom', goal: Optional[str] = None) -> str:
         return input(f'👤 ({self.name}): ')
 
 
@@ -842,13 +847,14 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         self.spinner = spinner
         self.mission = mission
 
-    def create_system_message(self, chat: 'ChatRoom'):
+    def create_system_message(self, chat: 'ChatRoom', chat_goal: Optional[str] = None):
         active_participants = chat.get_active_participants()
         system_message = StructuredPrompt(
             sections=[
-                Section(name='Mission', text=self.mission),
+                Section(name='Personal Mission', text=self.mission),
                 Section(name='Name', text=self.name),
                 Section(name='Role', text=self.role),
+                Section(name='Chat Goal', text=chat_goal or 'No explicit chat goal provided.'),
                 Section(name='Chat Room', text=chat.description, sub_sections=[
                     Section(name='Description', text=chat.description),
                     Section(name='Participants', text='\n'.join(
@@ -892,11 +898,11 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
 
         return messages
 
-    def respond_to_chat(self, chat: 'ChatRoom') -> str:
+    def respond_to_chat(self, chat: 'ChatRoom', goal: Optional[str] = None) -> str:
         if self.spinner is not None:
             self.spinner.start(text=f'{self.name} ({self.role}) is thinking...')
 
-        system_message = self.create_system_message(chat=chat)
+        system_message = self.create_system_message(chat=chat, chat_goal=goal)
 
         chat_messages = chat.get_messages()
 
@@ -972,7 +978,7 @@ class JSONOutputParserChatParticipant(ActiveChatParticipant):
 
         self.output_schema = output_schema
 
-    def respond_to_chat(self, chat: 'ChatRoom') -> str:
+    def respond_to_chat(self, chat: 'ChatRoom', goal: Optional[str] = None) -> str:
         messages = chat.get_messages()
         if len(messages) == 0:
             raise NoMessagesInChatError()
