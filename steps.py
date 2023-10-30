@@ -12,10 +12,15 @@ from langchain.tools import Tool
 from pydantic.v1 import BaseModel, Field
 
 import system_prompts
-from chat import chat
+from chat.backing_stores import InMemoryChatDataBackingStore
+from chat.base import Chat
+from chat.conductors import RoundRobinChatConductor
+from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
+from chat.renderers import TerminalChatRenderer
+from chat.structured_prompt import Section
 from presentation import generate_decision_report_as_html, save_html_to_file, open_html_file_in_browser
-from research import WebSearch
-from research.ranking import topsis_score, normalize_label_value
+from chat.web_research import WebSearch
+from ranking.ranking import topsis_score, normalize_label_value
 from state import DecisionAssistantState
 
 
@@ -93,20 +98,40 @@ def gather_unique_pairwise_comparisons(criteria_names: List[str],
         yield labels, value
 
 
-def identify_goal(chat_model: ChatOpenAI, default_tools_with_web_search: List[Tool],
-                  state: DecisionAssistantState, spinner: Optional[Halo] = None):
+def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState, spinner: Optional[Halo] = None):
     if state.data.get('goal') is not None:
         return
 
-    goal = chat_room(
-        chat_model=chat_model,
-        messages=[
-            SystemMessage(content=system_prompts.goal_identification_system_prompt),
-            HumanMessage(content="Hey")
+    ai = LangChainBasedAIChatParticipant(
+        name='Decision-Making Goal Identifier',
+        role='Decision-Making Goal Identifier',
+        mission='Identify a clear and specific decision-making goal from the user\'s initial vague statement.',
+        other_prompt_sections=[
+            Section(name='Process', list=[
+                'Start by greeting the user and asking for their decision-making goal.',
+                'If the goal is not clear, ask for clarification and refine the goal.',
+                'If the goal is clear, confirm it with the user.',
+            ]),
+            Section(name='User Decision Goal', list=[
+                'One and only one decision goal can be identified.',
+                'The goal should be clear and specific.',
+                'The goal should be a decision that can be made by the user.',
+                'No need to go beyond the goal. The next step will be to identify alternatives and criteria for the decision.'
+            ])
         ],
-        tools=default_tools_with_web_search,
-        spinner=spinner
+        chat_model=chat_model,
+        spinner=spinner)
+    user = UserChatParticipant(name='User')
+    participants = [ai, user]
+
+    chat = Chat(
+        backing_store=InMemoryChatDataBackingStore(),
+        renderer=TerminalChatRenderer(),
+        initial_participants=participants
     )
+
+    chat_conductor = RoundRobinChatConductor()
+    goal = chat_conductor.initiate_chat_with_result(chat=chat)
 
     state.data = {**state.data, **dict(goal=goal)}
 
@@ -116,6 +141,21 @@ def identify_alternatives(chat_model: ChatOpenAI, default_tools_with_web_search:
     if state.data.get('alternatives') is not None:
         return
 
+    ai = LangChainBasedAIChatParticipant(
+        name='Assistant',
+        chat_model=chat_model,
+        spinner=spinner)
+    user = UserChatParticipant(name='User')
+    participants = [ai, user]
+
+    chat = Chat(
+        backing_store=InMemoryChatDataBackingStore(),
+        renderer=TerminalChatRenderer(),
+        initial_participants=participants
+    )
+
+    chat_conductor = RoundRobinChatConductor()
+    goal = chat_conductor.initiate_chat_with_result(chat=chat)
     alternatives = chat_room(
         chat_model=chat_model,
         messages=[

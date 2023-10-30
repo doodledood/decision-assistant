@@ -8,10 +8,10 @@ from halo import Halo
 from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import TokenTextSplitter
 
-from research import create_web_search_tool, WebSearch
-from research.page_analyzer import OpenAIChatPageQueryAnalyzer
-from research.page_retriever import ScraperAPIPageRetriever
-from research.search import GoogleSerperSearchResultsProvider
+from chat.web_research import create_web_search_tool, WebSearch
+from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
+from chat.web_research.page_retriever import ScraperAPIPageRetriever
+from chat.web_research.search import GoogleSerperSearchResultsProvider
 from sequential_process import Step, SequentialProcess
 from state import DecisionAssistantState, load_state, save_state
 from steps import identify_goal, identify_alternatives, identify_criteria, map_criteria, prioritize_criteria, \
@@ -63,7 +63,7 @@ def run_decision_assistant(
         steps=[
             Step(
                 name='Goal Identification',
-                func=partial(identify_goal, chat_model, default_tools_with_web_search, spinner=spinner),
+                func=partial(identify_goal, chat_model, spinner=spinner),
                 on_step_start=lambda _: spinner.start('Identifying goal...'),
                 on_step_completed=lambda _: spinner.succeed('Identified goal.')
             ),
