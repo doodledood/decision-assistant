@@ -5,7 +5,7 @@ from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, AIMessage, BaseMessage
 
 from chat.ai_utils import execute_chat_model_messages
-from chat.base import ChatConductor, Chat, ActiveChatParticipant
+from chat.base import ChatConductor, Chat, ActiveChatParticipant, ChatParticipant
 from chat.errors import ChatParticipantNotJoinedToChatError
 from chat.structured_prompt import StructuredPrompt, Section
 
@@ -25,6 +25,8 @@ class LangChainBasedAIChatConductor(ChatConductor):
                  spinner: Optional[Halo] = None,
                  functions: Optional[Dict[str, Callable[[Any], str]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None):
+        super().__init__()
+
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.functions = functions or {}
