@@ -7,9 +7,15 @@ from langchain.schema import HumanMessage, SystemMessage
 from langchain.tools import Tool
 from pydantic.v1 import BaseModel, Field
 
+from chat.backing_stores import InMemoryChatDataBackingStore
+from chat.base import Chat
+from chat.conductors import RoundRobinChatConductor
+from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
+from chat.renderers import NoChatRenderer
+from chat.structured_prompt import Section, StructuredPrompt
+from chat.utils import json_string_to_pydantic
 from research.page_analyzer import PageQueryAnalyzer
 from research.search import SearchResultsProvider
-import research.prompts as system_prompts
 
 video_watch_urls_patterns = [
     r'youtube.com/watch\?v=([a-zA-Z0-9_-]+)',
@@ -97,14 +103,47 @@ class WebSearch:
             spinner.start(f'Processing results...')
 
         formatted_answers = '\n'.join([f'{i + 1}. {q["answer"]}; Source: {q["source"]}' for i, q in enumerate(qna)])
-        final_answer = chat_room(
-            chat_model=self.chat_model,
-            messages=[
-                SystemMessage(content=system_prompts.aggregate_query_answers_system_prompt),
-                HumanMessage(content=f'# QUERY\n{query}\n\n# ANSWERS\n{formatted_answers}')
-            ],
-            get_immediate_answer=True
-        )
+
+        chat = Chat(
+            backing_store=InMemoryChatDataBackingStore(),
+            renderer=NoChatRenderer(),
+            initial_participants=[
+                UserChatParticipant(),
+                LangChainBasedAIChatParticipant(
+                    name='Query Answer Aggregator',
+                    personal_mission='Analyze query answers, discard unlikely ones, and provide an aggregated final response.',
+                    chat_model=self.chat_model,
+                    other_prompt_sections=[
+                        Section(name='Aggregating Query Answers', sub_sections=[
+                            Section(name='Process', list=[
+                                'Receive query and answers with sources.',
+                                'Analyze answers, discard unlikely or minority ones.',
+                                'Formulate final answer based on most likely answers.',
+                                'If no data found, respond "The answer could not be found."',
+                            ], list_item_prefix=None),
+                            Section(name='Aggregation', list=[
+                                'Base final answer on sources.',
+                                'Incorporate sources as inline citations in Markdown format.',
+                                'Example: "Person 1 was [elected president in 2012](https://...)."',
+                                'Only include sources from provided answers.',
+                                'If part of an answer is used, use the same links inline.',
+                            ]),
+                            Section(name='Final Answer Notes', list=[
+                                'Do not fabricate information. Stick to provided data.',
+                                'If the answer is not found in the page data, state it clearly.',
+                                'Should be formatted in Markdown with inline citations.'
+                            ])
+                        ])
+                    ]
+                )
+            ], max_total_messages=2)
+        chat_conductor = RoundRobinChatConductor()
+        final_answer = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(
+            StructuredPrompt(sections=[
+                Section(name='Query', text=query),
+                Section(name='Answers', text=formatted_answers)
+            ])
+        ))
 
         if spinner is not None:
             spinner.succeed(f'Done searching the web.')

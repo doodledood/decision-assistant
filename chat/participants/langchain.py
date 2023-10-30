@@ -62,16 +62,16 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                         'They are prefixed by the sender\'s name (could also be everyone). For context only; it\'s not actually part of the message they sent. Example: "John: Hello, how are you?"',
                         'Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not talk to them.',
                     ]),
-                    *self.other_prompt_sections,
-                    Section(name='Good Responses Examples', list=[
+                    Section(name='Well-Formatted Response Examples', list=[
                         '"Hello, how are you?"',
                         '"I am doing well, thanks. How are you?"',
                     ]),
-                    Section(name='Bad Responses Examples', list=[
+                    Section(name='Badly-Formatted Response Examples', list=[
                         '"John: Hello, how are you?"',
                         '"Assistant: I am doing well, thanks. How are you?"',
                     ]),
-                ])
+                ]),
+                *self.other_prompt_sections,
             ]
         )
         return str(system_message)

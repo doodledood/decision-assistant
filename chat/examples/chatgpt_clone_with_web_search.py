@@ -1,3 +1,5 @@
+import json
+
 from halo import Halo
 from langchain.text_splitter import TokenTextSplitter
 from pydantic import BaseModel, Field
@@ -11,6 +13,7 @@ from langchain.chat_models import ChatOpenAI
 from dotenv import load_dotenv
 
 from chat.renderers import TerminalChatRenderer
+from chat.utils import json_string_to_pydantic
 from research import WebSearch
 from research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from research.page_retriever import ScraperAPIPageRetriever
@@ -52,7 +55,9 @@ if __name__ == '__main__':
             'functions': [pydantic_to_openai_function(SearchTheWeb)]
         },
         functions={
-            SearchTheWeb.__name__: lambda query: web_search.get_answer(query=query, n_results=3)[1]
+            SearchTheWeb.__name__: lambda args:
+            web_search.get_answer(query=json_string_to_pydantic(args, SearchTheWeb).query, n_results=3,
+                                  spinner=spinner)[1]
         },
         spinner=spinner)
 
