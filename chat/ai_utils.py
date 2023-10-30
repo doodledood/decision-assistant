@@ -1,4 +1,5 @@
-from typing import List, Optional, Dict, Any, Callable, TypeVar, Type, Union
+import dataclasses
+from typing import List, Optional, Dict, Any, Callable, TypeVar, Type, Union, Tuple
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
@@ -8,25 +9,31 @@ from pydantic import BaseModel
 from chat.errors import FunctionNotFoundError
 from chat.utils import json_string_to_pydantic
 
-TFunctionArgsSchema = TypeVar('TFunctionArgsSchema', bound=Union[BaseModel, str])
+TFunctionArgsSchema = TypeVar('TFunctionArgsSchema', bound=Union[Type[BaseModel], Type[str]])
 
 
-def execute_chat_model_messages(chat_model: BaseChatModel,
-                                messages: List[BaseMessage],
-                                chat_model_args: Optional[Dict[str, Any]] = None,
-                                functions: Optional[
-                                    List[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]] = None,
-                                spinner: Optional[Halo] = None) -> str:
+@dataclasses.dataclass
+class FunctionTool:
+    args_schema: TFunctionArgsSchema
+    func: Callable[[TFunctionArgsSchema], str]
+    name: Optional[str] = None
+
+
+def execute_chat_model_messages(
+        chat_model: BaseChatModel,
+        messages: List[BaseMessage],
+        chat_model_args: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[FunctionTool]] = None,
+        spinner: Optional[Halo] = None) -> str:
     chat_model_args = chat_model_args or {}
 
     assert 'functions' not in chat_model_args, 'The `functions` argument is reserved for the `execute_chat_model_messages` function. If you want to add more functions use the `functions` argument to this method.'
 
-    chat_model_args['functions'] = {
-        arg_type.__name__: pydantic_to_openai_function(arg_type) for arg_type, _ in functions
-    }
+    if tools is not None and len(tools) > 0:
+        chat_model_args['functions'] = [
+            pydantic_to_openai_function(function_name=tool.name, pydantic_type=tool.args_schema) for tool in tools]
 
-    functions = functions or []
-    function_map = {arg_type.__name__: (arg_type, f) for arg_type, f in functions}
+    function_map = {(tool.name or tool.args_schema.__name__): tool for tool in tools or []}
 
     all_messages = messages.copy()
 
@@ -43,12 +50,12 @@ def execute_chat_model_messages(chat_model: BaseChatModel,
 
                 spinner.start(progress_text)
 
-            arg_type, function = function_map[function_name]
+            tool = function_map[function_name]
 
-            if arg_type == str:
-                result = function(args)
-            else:
-                result = function(json_string_to_pydantic(args, arg_type))
+            if tool.args_schema != str:
+                args = json_string_to_pydantic(args, tool.args_schema)
+
+            result = tool.func(args)
 
             all_messages.append(FunctionMessage(
                 name=function_name,
@@ -66,9 +73,13 @@ def execute_chat_model_messages(chat_model: BaseChatModel,
 PydanticType = TypeVar('PydanticType', bound=Type[BaseModel])
 
 
-def pydantic_to_openai_function(pydantic_type: PydanticType, function_name: Optional[str] = None,
+def pydantic_to_openai_function(pydantic_type: PydanticType,
+                                function_name: Optional[str] = None,
                                 function_description: Optional[str] = None) -> Dict:
     base_schema = pydantic_type.model_json_schema()
+    del base_schema['title']
+    del base_schema['description']
+
     description = function_description if function_description is not None else (pydantic_type.__doc__ or '')
 
     return {

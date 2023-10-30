@@ -4,8 +4,8 @@ from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, AIMessage, BaseMessage
 
-from chat.ai_utils import execute_chat_model_messages, TFunctionArgsSchema
-from chat.base import ChatConductor, Chat, ActiveChatParticipant, ChatParticipant
+from chat.ai_utils import execute_chat_model_messages, FunctionTool
+from chat.base import ChatConductor, Chat, ActiveChatParticipant
 from chat.errors import ChatParticipantNotJoinedToChatError
 from chat.structured_prompt import StructuredPrompt, Section
 
@@ -13,7 +13,7 @@ from chat.structured_prompt import StructuredPrompt, Section
 class LangChainBasedAIChatConductor(ChatConductor):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
-    functions: Optional[List[Tuple[TFunctionArgsSchema]]] = None
+    tools: Optional[List[FunctionTool]] = None
     termination_condition: str = f'''Terminate the chat on the following conditions:
     - When the goal of the chat has been achieved
     - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
@@ -23,13 +23,13 @@ class LangChainBasedAIChatConductor(ChatConductor):
                  chat_model: BaseChatModel,
                  termination_condition: Optional[str] = None,
                  spinner: Optional[Halo] = None,
-                 functions: Optional[List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]]] = None,
+                 tools: Optional[List[FunctionTool]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None):
         super().__init__()
 
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
-        self.functions = functions or []
+        self.tools = tools
         self.termination_condition = termination_condition
         self.spinner = spinner
 
@@ -127,7 +127,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
         return execute_chat_model_messages(
             messages=messages,
             chat_model=self.chat_model,
-            functions=self.functions,
+            tools=self.tools,
             spinner=self.spinner,
             chat_model_args=self.chat_model_args
         )

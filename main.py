@@ -8,6 +8,7 @@ from halo import Halo
 from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import TokenTextSplitter
 
+from chat.ai_utils import FunctionTool
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from chat.web_research.page_retriever import ScraperAPIPageRetriever
@@ -49,7 +50,10 @@ def run_decision_assistant(
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000)
         )
     )
-    default_participant_functions = [(SearchTheWeb, answer_query)]
+    default_participant_tools = [
+        FunctionTool(args_schema=SearchTheWeb,
+                     func=partial(answer_query, web_search))
+    ]
 
     spinner.start('Loading previous state...')
     state = load_state(state_file)
@@ -63,7 +67,7 @@ def run_decision_assistant(
         steps=[
             Step(
                 name='Goal Identification',
-                func=partial(identify_goal, chat_model, functions=default_participant_functions, spinner=spinner),
+                func=partial(identify_goal, chat_model, tools=default_participant_tools, spinner=spinner),
                 on_step_start=lambda _: spinner.start('Identifying goal...'),
                 on_step_completed=lambda _: spinner.succeed('Identified goal.')
             ),

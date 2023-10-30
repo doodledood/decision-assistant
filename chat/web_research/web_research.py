@@ -3,8 +3,7 @@ from typing import Optional, Tuple
 
 from halo import Halo
 from langchain.chat_models.openai import ChatOpenAI
-from langchain.tools import Tool
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
@@ -14,7 +13,6 @@ from chat.renderers import NoChatRenderer
 from chat.web_research.page_analyzer import PageQueryAnalyzer
 from chat.web_research.search import SearchResultsProvider
 from chat.structured_prompt import Section, StructuredPrompt
-from chat.utils import json_string_to_pydantic
 
 video_watch_urls_patterns = [
     r'youtube.com/watch\?v=([a-zA-Z0-9_-]+)',
@@ -151,6 +149,7 @@ class WebSearch:
 
 
 class SearchTheWeb(BaseModel):
+    """Search the web. Use that to get an answer for a query you don't know the answer to, for recent events, or if the user asks you to."""
     query: str = Field(description='The query to search the web for.')
 
 

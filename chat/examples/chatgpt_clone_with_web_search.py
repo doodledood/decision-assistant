@@ -1,10 +1,11 @@
 import json
+from functools import partial
 
 from halo import Halo
 from langchain.text_splitter import TokenTextSplitter
 from pydantic import BaseModel, Field
 
-from chat.ai_utils import pydantic_to_openai_function
+from chat.ai_utils import pydantic_to_openai_function, FunctionTool
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
@@ -44,7 +45,10 @@ if __name__ == '__main__':
     ai = LangChainBasedAIChatParticipant(
         name='Assistant',
         chat_model=chat_model,
-        functions=[(SearchTheWeb, answer_query)],
+        tools=[
+            FunctionTool(args_schema=SearchTheWeb,
+                         func=partial(answer_query, web_search))
+        ],
         spinner=spinner)
 
     user = UserChatParticipant(name='User')

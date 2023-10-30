@@ -9,7 +9,7 @@ from halo import Halo
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage
 from langchain.tools import Tool
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 import system_prompts
 from chat.backing_stores import InMemoryChatDataBackingStore
@@ -22,7 +22,7 @@ from presentation import generate_decision_report_as_html, save_html_to_file, op
 from chat.web_research import WebSearch
 from ranking.ranking import topsis_score, normalize_label_value
 from state import DecisionAssistantState
-from chat.ai_utils import TFunctionArgsSchema
+from chat.ai_utils import FunctionTool
 
 
 class Criterion(BaseModel):
@@ -100,8 +100,7 @@ def gather_unique_pairwise_comparisons(criteria_names: List[str],
 
 
 def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
-                  functions: List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]],
-                  spinner: Optional[Halo] = None):
+                  tools: Optional[List[FunctionTool]] = None, spinner: Optional[Halo] = None):
     if state.data.get('goal') is not None:
         return
 
@@ -122,7 +121,7 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
                 'No need to go beyond the goal. The next step will be to identify alternatives and criteria for the decision.'
             ])
         ],
-        functions=functions,
+        tools=tools,
         chat_model=chat_model,
         spinner=spinner)
     user = UserChatParticipant(name='User')

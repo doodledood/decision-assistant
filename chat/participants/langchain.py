@@ -1,12 +1,14 @@
+import dataclasses
 from typing import Dict, Any, List, Callable, Optional, Tuple
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import BaseMessage, AIMessage, HumanMessage, SystemMessage
 
-from chat.ai_utils import execute_chat_model_messages, TFunctionArgsSchema
+from chat.ai_utils import execute_chat_model_messages, FunctionTool
 from chat.base import ChatMessage, Chat, ActiveChatParticipant
 from chat.structured_prompt import Section, StructuredPrompt
+
 
 
 class LangChainBasedAIChatParticipant(ActiveChatParticipant):
@@ -14,7 +16,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
     other_prompt_sections: List[Section]
-    functions: Optional[List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]]] = None,
+    tools: Optional[List[FunctionTool]] = None,
     spinner: Optional[Halo] = None
 
     class Config:
@@ -27,7 +29,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                  role: str = 'AI Assistant',
                  personal_mission: str = 'Be a helpful AI assistant.',
                  other_prompt_sections: Optional[List[Section]] = None,
-                 functions: Optional[List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]]] = None,
+                 tools: Optional[List[FunctionTool]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  **kwargs
@@ -37,7 +39,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.other_prompt_sections = other_prompt_sections or []
-        self.functions = functions or []
+        self.tools = tools
         self.spinner = spinner
         self.personal_mission = personal_mission
 
@@ -120,7 +122,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         return execute_chat_model_messages(
             messages=messages,
             chat_model=self.chat_model,
-            functions=self.functions,
+            tools=self.tools,
             spinner=self.spinner,
             chat_model_args=self.chat_model_args
         )
