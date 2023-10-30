@@ -8,10 +8,11 @@ from halo import Halo
 from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import TokenTextSplitter
 
-from chat.web_research import create_web_search_tool, WebSearch
+from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from chat.web_research.page_retriever import ScraperAPIPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
+from chat.web_research.web_research import SearchTheWeb, answer_query
 from sequential_process import Step, SequentialProcess
 from state import DecisionAssistantState, load_state, save_state
 from steps import identify_goal, identify_alternatives, identify_criteria, map_criteria, prioritize_criteria, \
@@ -48,8 +49,7 @@ def run_decision_assistant(
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000)
         )
     )
-    default_tools_with_web_search = [
-        create_web_search_tool(search=web_search, n_results=n_search_results, spinner=spinner)]
+    default_participant_functions = [(SearchTheWeb, answer_query)]
 
     spinner.start('Loading previous state...')
     state = load_state(state_file)

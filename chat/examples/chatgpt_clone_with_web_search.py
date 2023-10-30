@@ -13,18 +13,11 @@ from langchain.chat_models import ChatOpenAI
 from dotenv import load_dotenv
 
 from chat.renderers import TerminalChatRenderer
-from chat.utils import json_string_to_pydantic
-from research import WebSearch
-from research.page_analyzer import OpenAIChatPageQueryAnalyzer
-from research.page_retriever import ScraperAPIPageRetriever
-from research.search import GoogleSerperSearchResultsProvider
-
-
-class SearchTheWeb(BaseModel):
-    """Search the web for information. Use this when the user requests information you don\'t know or if you are actively researching and need the most up to date data."""
-
-    query: str = Field(description='The query to search for on the web.')
-
+from chat.web_research import WebSearch
+from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
+from chat.web_research.page_retriever import ScraperAPIPageRetriever
+from chat.web_research.search import GoogleSerperSearchResultsProvider
+from chat.web_research.web_research import answer_query, SearchTheWeb
 
 if __name__ == '__main__':
     load_dotenv()
@@ -51,14 +44,7 @@ if __name__ == '__main__':
     ai = LangChainBasedAIChatParticipant(
         name='Assistant',
         chat_model=chat_model,
-        chat_model_args={
-            'functions': [pydantic_to_openai_function(SearchTheWeb)]
-        },
-        functions={
-            SearchTheWeb.__name__: lambda args:
-            web_search.get_answer(query=json_string_to_pydantic(args, SearchTheWeb).query, n_results=3,
-                                  spinner=spinner)[1]
-        },
+        functions=[(SearchTheWeb, answer_query)],
         spinner=spinner)
 
     user = UserChatParticipant(name='User')

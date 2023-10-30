@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any, Callable, TypeVar, Type
+from typing import List, Optional, Dict, Any, Callable, TypeVar, Type, Union
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
@@ -6,15 +6,27 @@ from langchain.schema import BaseMessage, FunctionMessage
 from pydantic import BaseModel
 
 from chat.errors import FunctionNotFoundError
+from chat.utils import json_string_to_pydantic
+
+TFunctionArgsSchema = TypeVar('TFunctionArgsSchema', bound=Union[BaseModel, str])
 
 
 def execute_chat_model_messages(chat_model: BaseChatModel,
                                 messages: List[BaseMessage],
                                 chat_model_args: Optional[Dict[str, Any]] = None,
-                                functions: Optional[Dict[str, Callable[[Any], str]]] = None,
+                                functions: Optional[
+                                    List[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]] = None,
                                 spinner: Optional[Halo] = None) -> str:
     chat_model_args = chat_model_args or {}
-    functions = functions or {}
+
+    assert 'functions' not in chat_model_args, 'The `functions` argument is reserved for the `execute_chat_model_messages` function. If you want to add more functions use the `functions` argument to this method.'
+
+    chat_model_args['functions'] = {
+        arg_type.__name__: pydantic_to_openai_function(arg_type) for arg_type, _ in functions
+    }
+
+    functions = functions or []
+    function_map = {arg_type.__name__: (arg_type, f) for arg_type, f in functions}
 
     all_messages = messages.copy()
 
@@ -23,7 +35,7 @@ def execute_chat_model_messages(chat_model: BaseChatModel,
 
     while function_call is not None:
         function_name = function_call['name']
-        if function_name in functions:
+        if function_name in function_map:
             args = function_call['arguments']
 
             if spinner is not None:
@@ -31,9 +43,12 @@ def execute_chat_model_messages(chat_model: BaseChatModel,
 
                 spinner.start(progress_text)
 
-            function = functions[function_name]
+            arg_type, function = function_map[function_name]
 
-            result = function(args)
+            if arg_type == str:
+                result = function(args)
+            else:
+                result = function(json_string_to_pydantic(args, arg_type))
 
             all_messages.append(FunctionMessage(
                 name=function_name,
@@ -61,4 +76,3 @@ def pydantic_to_openai_function(pydantic_type: PydanticType, function_name: Opti
         'description': description,
         'parameters': base_schema
     }
-

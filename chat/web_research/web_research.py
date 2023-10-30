@@ -150,23 +150,9 @@ class WebSearch:
         return True, final_answer
 
 
-class WebSearchToolArgs(BaseModel):
+class SearchTheWeb(BaseModel):
     query: str = Field(description='The query to search the web for.')
 
 
-def create_web_search_tool(search: WebSearch, description: Optional[str] = None, n_results: int = 3,
-                           spinner: Optional[Halo] = None):
-    def get_answer(args: str):
-        q: WebSearchToolArgs = json_string_to_pydantic(args, WebSearchToolArgs)
-
-        return search.get_answer(query=q.query, n_results=n_results, spinner=spinner)[1]
-
-    web_search_tool = Tool.from_function(
-        name='web_search',
-        description=description if description else 'Search the web for information. Use this when the user requests information you don\'t know or if you are actively researching and need the most up to date data.',
-        func=get_answer,
-        args_schema=WebSearchToolArgs
-    )
-    type(web_search_tool).progress_text = property(lambda _: 'Searching the web...')
-
-    return web_search_tool
+def answer_query(web_search: WebSearch, args: SearchTheWeb, n_search_results: int = 3, spinner: Optional[Halo] = None):
+    return web_search.get_answer(query=args.query, n_results=n_search_results, spinner=spinner)[1]

@@ -1,10 +1,10 @@
-from typing import Any, Dict, Callable, Optional, List
+from typing import Any, Dict, Callable, Optional, List, Tuple
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, AIMessage, BaseMessage
 
-from chat.ai_utils import execute_chat_model_messages
+from chat.ai_utils import execute_chat_model_messages, TFunctionArgsSchema
 from chat.base import ChatConductor, Chat, ActiveChatParticipant, ChatParticipant
 from chat.errors import ChatParticipantNotJoinedToChatError
 from chat.structured_prompt import StructuredPrompt, Section
@@ -13,7 +13,7 @@ from chat.structured_prompt import StructuredPrompt, Section
 class LangChainBasedAIChatConductor(ChatConductor):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
-    functions: Dict[str, Callable[[Any], str]]
+    functions: Optional[List[Tuple[TFunctionArgsSchema]]] = None
     termination_condition: str = f'''Terminate the chat on the following conditions:
     - When the goal of the chat has been achieved
     - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
@@ -23,13 +23,13 @@ class LangChainBasedAIChatConductor(ChatConductor):
                  chat_model: BaseChatModel,
                  termination_condition: Optional[str] = None,
                  spinner: Optional[Halo] = None,
-                 functions: Optional[Dict[str, Callable[[Any], str]]] = None,
+                 functions: Optional[List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None):
         super().__init__()
 
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
-        self.functions = functions or {}
+        self.functions = functions or []
         self.termination_condition = termination_condition
         self.spinner = spinner
 

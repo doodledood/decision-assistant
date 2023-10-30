@@ -1,10 +1,10 @@
-from typing import Dict, Any, List, Callable, Optional
+from typing import Dict, Any, List, Callable, Optional, Tuple
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import BaseMessage, AIMessage, HumanMessage, SystemMessage
 
-from chat.ai_utils import execute_chat_model_messages
+from chat.ai_utils import execute_chat_model_messages, TFunctionArgsSchema
 from chat.base import ChatMessage, Chat, ActiveChatParticipant
 from chat.structured_prompt import Section, StructuredPrompt
 
@@ -14,7 +14,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
     other_prompt_sections: List[Section]
-    functions: Dict[str, Callable[[Any], str]]
+    functions: Optional[List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]]] = None,
     spinner: Optional[Halo] = None
 
     class Config:
@@ -27,7 +27,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                  role: str = 'AI Assistant',
                  personal_mission: str = 'Be a helpful AI assistant.',
                  other_prompt_sections: Optional[List[Section]] = None,
-                 functions: Optional[Dict[str, Callable[[Any], str]]] = None,
+                 functions: Optional[List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  **kwargs
@@ -37,7 +37,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.other_prompt_sections = other_prompt_sections or []
-        self.functions = functions or {}
+        self.functions = functions or []
         self.spinner = spinner
         self.personal_mission = personal_mission
 

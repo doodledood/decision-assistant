@@ -3,7 +3,6 @@ from typing import Optional
 
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage
 from langchain.text_splitter import TextSplitter
 from pydantic import BaseModel
 
@@ -14,7 +13,7 @@ from chat.parsing_utils import string_output_to_pydantic
 from chat.participants import UserChatParticipant, LangChainBasedAIChatParticipant
 from chat.renderers import NoChatRenderer
 from chat.structured_prompt import Section, StructuredPrompt
-from web_research.page_retriever import PageRetriever
+from chat.web_research.page_retriever import PageRetriever
 from bs4 import BeautifulSoup
 
 

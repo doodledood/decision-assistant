@@ -1,10 +1,10 @@
-from typing import Dict, Any, Callable, Optional, List
+from typing import Dict, Any, Callable, Optional, List, Tuple
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, BaseMessage
 
-from chat.ai_utils import execute_chat_model_messages
+from chat.ai_utils import execute_chat_model_messages, TFunctionArgsSchema
 from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition
 from chat.composition_generators import ManageParticipantsOutputSchema
 from chat.parsing_utils import string_output_to_pydantic
@@ -15,19 +15,19 @@ from chat.structured_prompt import StructuredPrompt, Section
 class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
-    functions: Dict[str, Callable[[Any], str]]
+    functions: Optional[List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]]] = None,
     spinner: Optional[Halo] = None
     n_output_parsing_tries: int = 3
 
     def __init__(self,
                  chat_model: BaseChatModel,
-                 functions: Optional[Dict[str, Callable[[Any], str]]] = None,
+                 functions: Optional[List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  n_output_parsing_tries: int = 3):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
-        self.functions = functions or {}
+        self.functions = functions or []
         self.spinner = spinner
         self.n_output_parsing_tries = n_output_parsing_tries
 

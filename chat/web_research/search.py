@@ -7,7 +7,7 @@ import requests
 from pydantic import BaseModel
 from tenacity import retry, wait_fixed, wait_random, stop_after_attempt, retry_if_exception_type
 
-from web_research.errors import TransientHTTPError, NonTransientHTTPError
+from chat.web_research.errors import TransientHTTPError, NonTransientHTTPError
 
 
 class OrganicSearchResult(BaseModel):
