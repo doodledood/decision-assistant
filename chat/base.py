@@ -88,7 +88,17 @@ class ChatConductor(abc.ABC):
             if chat.max_total_messages is not None and len(messages) >= chat.max_total_messages:
                 break
 
-            message_content = next_speaker.respond_to_chat(chat=chat)
+            try:
+                message_content = next_speaker.respond_to_chat(chat=chat)
+            except KeyboardInterrupt:
+                if next_speaker.name == 'User':
+                    raise
+
+                user_participant = chat.get_active_participant_by_name('User')
+                if user_participant is None:
+                    raise
+
+                message_content = user_participant.respond_to_chat(chat=chat)
 
             chat.add_message(sender_name=next_speaker.name, content=message_content)
 

@@ -30,7 +30,7 @@ if __name__ == '__main__':
         initial_participants=[user],
         composition_generator=LangChainBasedAIChatCompositionGenerator(
             chat_model=chat_model,
-            spinner=spinner
+            spinner=spinner,
         )
     )
 

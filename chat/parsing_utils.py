@@ -17,7 +17,7 @@ def string_output_to_pydantic(output: str,
                               chat_model: BaseChatModel,
                               output_schema: Type[TOutputSchema],
                               spinner: Optional[Halo] = None,
-                              n_retries: int = 3,
+                              n_tries: int = 3,
                               hide_message: bool = True) -> TOutputSchema:
     text_to_json_ai = LangChainBasedAIChatParticipant(
         chat_model=chat_model,
@@ -34,7 +34,7 @@ def string_output_to_pydantic(output: str,
         renderer=NoChatRenderer(),
         initial_participants=[json_parser, text_to_json_ai],
         hide_messages=hide_message,
-        max_total_messages=n_retries * 2
+        max_total_messages=n_tries * 2
     )
     conductor = RoundRobinChatConductor()
 

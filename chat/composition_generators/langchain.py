@@ -17,19 +17,19 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
     chat_model_args: Dict[str, Any]
     functions: Dict[str, Callable[[Any], str]]
     spinner: Optional[Halo] = None
-    n_output_parsing_retries: int = 3
+    n_output_parsing_tries: int = 3
 
     def __init__(self,
                  chat_model: BaseChatModel,
                  functions: Optional[Dict[str, Callable[[Any], str]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
-                 n_output_parsing_retries: int = 1):
+                 n_output_parsing_tries: int = 3):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.functions = functions or {}
         self.spinner = spinner
-        self.n_output_parsing_retries = n_output_parsing_retries
+        self.n_output_parsing_tries = n_output_parsing_tries
 
     def generate_composition_for_chat(self, chat: Chat) -> GeneratedChatComposition:
         if self.spinner is not None:
@@ -47,7 +47,9 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             output=result,
             chat_model=self.chat_model,
             output_schema=ManageParticipantsOutputSchema,
-            n_retries=self.n_output_parsing_retries
+            n_tries=self.n_output_parsing_tries,
+            spinner=self.spinner,
+            hide_message=False
         )
 
         if self.spinner is not None:
@@ -102,7 +104,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             Section(name='Adding Participants', list=[
                 'Add participants based on their potential contribution to the goal.',
                 'Generate a name, role, and personal mission for each new participant such that they can contribute to the goal the best they can, each in their complementary own way.',
-                'Always try to add or complete comprehensive teams of competent participants that have orthogonal and complementary skills/roles rather than individual more general participants. Teamwork is essential for achieving goals more efficiently and achieving better outcomes.',
+                'Always try to add or complete comprehensive teams of competent specialist participants that have orthogonal and complementary skills/roles.',
                 'Since most participants you summon will not be the best experts in the world, even though they think they are, they will be to be overseen. For that, most tasks will require at least 2 experts, one doing a task and the other that will act as a critic to that expert; they can loop back and forth and iterate on a better answer. For example, instead of having a Planner only, have a Planner and a Plan Critic participants to have this synergy. You can skip critics for the most trivial tasks.',
                 'You may not necessarily have the option to change this composition later, so make sure you summon the right participants.',
             ]),
