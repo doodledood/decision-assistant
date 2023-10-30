@@ -5,7 +5,7 @@ from typing import Optional
 import requests
 from tenacity import retry, wait_random, wait_fixed, stop_after_attempt, retry_if_exception_type
 
-from research.errors import TransientHTTPError, NonTransientHTTPError
+from web_research.errors import TransientHTTPError, NonTransientHTTPError
 
 
 class PageRetriever(abc.ABC):

@@ -21,7 +21,7 @@ from research.search import GoogleSerperSearchResultsProvider
 
 
 class SearchTheWeb(BaseModel):
-    """Searches the web for a given query that is inferred by the AI based on the conversation."""
+    """Search the web for information. Use this when the user requests information you don\'t know or if you are actively researching and need the most up to date data."""
 
     query: str = Field(description='The query to search for on the web.')
 

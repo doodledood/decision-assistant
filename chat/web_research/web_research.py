@@ -3,7 +3,6 @@ from typing import Optional, Tuple
 
 from halo import Halo
 from langchain.chat_models.openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
 from langchain.tools import Tool
 from pydantic.v1 import BaseModel, Field
 
@@ -12,10 +11,10 @@ from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import NoChatRenderer
+from chat.web_research.page_analyzer import PageQueryAnalyzer
+from chat.web_research.search import SearchResultsProvider
 from chat.structured_prompt import Section, StructuredPrompt
 from chat.utils import json_string_to_pydantic
-from research.page_analyzer import PageQueryAnalyzer
-from research.search import SearchResultsProvider
 
 video_watch_urls_patterns = [
     r'youtube.com/watch\?v=([a-zA-Z0-9_-]+)',
