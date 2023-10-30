@@ -1,4 +1,7 @@
 import re
+from typing import Type
+
+from pydantic import BaseModel
 
 
 def fix_invalid_json(json_string):
@@ -17,3 +20,17 @@ def fix_invalid_json(json_string):
     fixed_json += json_string[last_end:]  # Add the remaining portion of the original string
 
     return fixed_json
+
+
+def pydantic_to_json_schema(pydantic_model: Type[BaseModel]) -> dict:
+    try:
+        return pydantic_model.model_json_schema()
+    except AttributeError:
+        return pydantic_model.schema()
+
+
+def json_string_to_pydantic(json_string: str, pydantic_model: Type[BaseModel]) -> BaseModel:
+    try:
+        return pydantic_model.model_validate_json(json_string)
+    except AttributeError:
+        return pydantic_model.parse_raw(json_string)

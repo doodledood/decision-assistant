@@ -12,7 +12,7 @@ from langchain.tools import Tool
 from pydantic.v1 import BaseModel, Field
 
 import system_prompts
-from chat import chat_room
+from chat import chat
 from presentation import generate_decision_report_as_html, save_html_to_file, open_html_file_in_browser
 from research import WebSearch
 from research.ranking import topsis_score, normalize_label_value

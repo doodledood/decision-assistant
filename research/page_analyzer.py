@@ -8,7 +8,7 @@ from langchain.text_splitter import TextSplitter
 from pydantic import BaseModel
 
 import research.prompts as system_prompts
-from chat import chat_room
+from chat import chat
 from research.page_retriever import PageRetriever
 from bs4 import BeautifulSoup
 
