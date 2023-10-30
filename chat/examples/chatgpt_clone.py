@@ -2,7 +2,7 @@ from halo import Halo
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
-from chat.conductors import LangChainBasedAIChatConductor, RoundRobinChatConductor
+from chat.conductors import RoundRobinChatConductor
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from langchain.chat_models import ChatOpenAI
 from dotenv import load_dotenv

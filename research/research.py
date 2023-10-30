@@ -7,7 +7,6 @@ from langchain.schema import HumanMessage, SystemMessage
 from langchain.tools import Tool
 from pydantic.v1 import BaseModel, Field
 
-from chat import chat, json_string_to_pydantic
 from research.page_analyzer import PageQueryAnalyzer
 from research.search import SearchResultsProvider
 import research.prompts as system_prompts
