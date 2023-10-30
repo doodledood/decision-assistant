@@ -22,6 +22,7 @@ from presentation import generate_decision_report_as_html, save_html_to_file, op
 from chat.web_research import WebSearch
 from ranking.ranking import topsis_score, normalize_label_value
 from state import DecisionAssistantState
+from chat.ai_utils import TFunctionArgsSchema
 
 
 class Criterion(BaseModel):
@@ -98,7 +99,9 @@ def gather_unique_pairwise_comparisons(criteria_names: List[str],
         yield labels, value
 
 
-def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState, spinner: Optional[Halo] = None):
+def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
+                  functions: List[Tuple[TFunctionArgsSchema, Callable[[TFunctionArgsSchema], str]]],
+                  spinner: Optional[Halo] = None):
     if state.data.get('goal') is not None:
         return
 
@@ -119,6 +122,7 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState, spinner
                 'No need to go beyond the goal. The next step will be to identify alternatives and criteria for the decision.'
             ])
         ],
+        functions=functions,
         chat_model=chat_model,
         spinner=spinner)
     user = UserChatParticipant(name='User')

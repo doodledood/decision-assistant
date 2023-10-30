@@ -63,7 +63,7 @@ def run_decision_assistant(
         steps=[
             Step(
                 name='Goal Identification',
-                func=partial(identify_goal, chat_model, spinner=spinner),
+                func=partial(identify_goal, chat_model, functions=default_participant_functions, spinner=spinner),
                 on_step_start=lambda _: spinner.start('Identifying goal...'),
                 on_step_completed=lambda _: spinner.succeed('Identified goal.')
             ),
