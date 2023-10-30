@@ -4,9 +4,10 @@ from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, BaseMessage
 
-from chat.ai_utils import execute_chat_model_messages, string_output_to_pydantic
+from chat.ai_utils import execute_chat_model_messages
 from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition
 from chat.composition_generators import ManageParticipantsOutputSchema
+from chat.parsing_utils import string_output_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant
 from chat.structured_prompt import StructuredPrompt, Section
 
@@ -16,20 +17,23 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
     chat_model_args: Dict[str, Any]
     functions: Dict[str, Callable[[Any], str]]
     spinner: Optional[Halo] = None
+    n_output_parsing_retries: int = 3
 
     def __init__(self,
                  chat_model: BaseChatModel,
                  functions: Optional[Dict[str, Callable[[Any], str]]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
-                 spinner: Optional[Halo] = None):
+                 spinner: Optional[Halo] = None,
+                 n_output_parsing_retries: int = 1):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.functions = functions or {}
         self.spinner = spinner
+        self.n_output_parsing_retries = n_output_parsing_retries
 
     def generate_composition_for_chat(self, chat: Chat) -> GeneratedChatComposition:
         if self.spinner is not None:
-            self.spinner.start(text='AI Chat Conductor is generating a new chat composition...')
+            self.spinner.start(text='The Chat Composition Generator is creating a new chat composition...')
 
         # Ask the AI to select the next speaker.
         messages = [
@@ -42,7 +46,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         output = string_output_to_pydantic(
             output=result,
             chat_model=self.chat_model,
-            output_schema=ManageParticipantsOutputSchema
+            output_schema=ManageParticipantsOutputSchema,
+            n_retries=self.n_output_parsing_retries
         )
 
         if self.spinner is not None:
@@ -158,7 +163,3 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             spinner=self.spinner,
             chat_model_args=self.chat_model_args
         )
-
-
-
-

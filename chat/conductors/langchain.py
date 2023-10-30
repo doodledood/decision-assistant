@@ -88,7 +88,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
             return None
 
         if self.spinner is not None:
-            self.spinner.start(text='AI Chat Conductor is selecting the next speaker...')
+            self.spinner.start(text='The Chat Conductor is selecting the next speaker...')
 
         # Ask the AI to select the next speaker.
         messages = [
