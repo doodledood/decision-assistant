@@ -252,22 +252,9 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
             Section(
                 name='Criteria Identification Process',
                 list=[
-                    'Start by suggesting an initial set of criteria that is as orthogonal, non-overlapping, and comprehensive as possible and ask the user for feedback.',
-                    'Iterate on the criteria until the user is satisfied with the list.'
-                ]
-            ),
-            Section(
-                name='Criteria Scale Definition Process',
-                list=[
-                    'After the criteria have been and the user is satisfied with them, come up with a 2 to 7 point scale for each criterion based on common sense.',
-                    'Iterate on the scales until the user is satisfied with them.'
-                ],
-                sub_sections=[
-                    Section(name='Scale Definition', list=[
-                        'The scale should be a list of labels only. No numerical values, no explainations. Example: "Very Expensive".',
-                        'The scale should be ordered from worst to best. Example: "Very Expensive" should come before "Expensive".',
-                        'Make should the values for the scale are roughly evenly spaced out. Example: "Very Expensive" should be roughly as far from "Expensive" as "Expensive" is from "Fair".'
-                    ])
+                    'Start by suggesting an initial set of criteria that is as orthogonal, non-overlapping, and comprehensive as possible.',
+                    'Iterate on the criteria with the critic until you both are satisfied with them.',
+                    'Confirm the criteria with the user and ask for feedback.'
                 ]
             ),
             Section(

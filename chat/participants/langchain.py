@@ -94,7 +94,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
 
     def respond_to_chat(self, chat: Chat) -> str:
         if self.spinner is not None:
-            self.spinner.start(text=f'{self.name} ({self.role}) is thinking...')
+            self.spinner.start(text=f'{self.name} is thinking...')
 
         system_message = self.create_system_message(chat=chat)
 
