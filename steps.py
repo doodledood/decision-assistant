@@ -360,7 +360,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
 
     chat = Chat(
         goal='Identify clear well-defined criteria and their respective scales for the decision.',
-        speaker_interaction_schema='''1. The Criteria Brainstormer suggests an initial set of criteria.
+        speaker_interaction_schema='''1. The Criteria Brainstormer suggests an initial set of criteria based on the user input.
 2. The Criteria Critic critiques the criteria and suggests improvements.
 3. The Criteria Brainstormer iterates on the criteria until they think they are good enough and ask the user for feedback.
 4. If the user is not satisfied with the criteria, go back to step 1, refining the criteria based on the user feedback.
