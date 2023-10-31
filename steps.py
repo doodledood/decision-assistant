@@ -43,7 +43,7 @@ class AlternativeListingResult(BaseModel):
 
 class CriterionMappingResult(BaseModel):
     criterion_mapping: str = Field(
-        description='An explaination for the criterion on how to assign a value from the scale to a piece of data.')
+        description='An explaination for the criterion on how to assign a value from the scale to a piece of data. Direct, no fluff.')
 
 
 class CriteriaResearchQueriesResult(BaseModel):
@@ -496,6 +496,7 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
             output_schema=CriterionMappingResult
         )
         criterion_mapping = output.model_dump()['criterion_mapping']
+        criteria_mapping[criterion['name']] = criterion_mapping
 
         state.data = {**state.data,
                       **dict(criteria_mapping=criteria_mapping)}
