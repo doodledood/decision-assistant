@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
-from chat.conductors import RoundRobinChatConductor
+from chat.conductors import RoundRobinChatConductor, LangChainBasedAIChatConductor
 from chat.parsing_utils import string_output_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import TerminalChatRenderer
@@ -27,6 +27,10 @@ class Criterion(BaseModel):
     name: str = Field(description='The name of the criterion. Example: "Affordability".')
     scale: List[str] = Field(
         description='The scale of the criterion, from worst to best. Labels only. No numerical value, no explainations. Example: "Very Expensive".')
+
+
+class GoalIdentificationResult(BaseModel):
+    goal: str = Field(description='The identified decision-making goal.')
 
 
 class CriteriaIdentificationResult(BaseModel):
@@ -105,12 +109,12 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
     ai = LangChainBasedAIChatParticipant(
         name='Decision-Making Goal Identifier',
         role='Decision-Making Goal Identifier',
-        mission='Identify a clear and specific decision-making goal from the user\'s initial vague statement.',
+        personal_mission='Identify a clear and specific decision-making goal from the user\'s initial vague statement.',
         other_prompt_sections=[
             Section(
                 name='Process',
                 list=[
-                    'Start by greeting the user and asking for their decision-making goal.',
+                    'Start by greeting the user and asking for their decision-making goal. Example: "Hello, what is your decision-making goal?"',
                     'If the goal is not clear, ask for clarification and refine the goal.',
                     'If the goal is clear, confirm it with the user.',
                 ]
@@ -122,6 +126,13 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
                     'The goal should be clear and specific.',
                     'The goal should be a decision that can be made by the user.',
                     'No need to go beyond the goal. The next step will be to identify alternatives and criteria for the decision.'
+                ]
+            ),
+            Section(
+                name='Last Message',
+                list=[
+                    'After the goal has been identified, the last message should include the goal.'
+                    'It should end with the word TERMINATE at the end of the message to signal the end of the chat.'
                 ]
             )
         ],
@@ -139,7 +150,13 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
     )
 
     chat_conductor = RoundRobinChatConductor()
-    goal = chat_conductor.initiate_chat_with_result(chat=chat)
+    output = chat_conductor.initiate_chat_with_result(chat=chat)
+    goal = string_output_to_pydantic(
+        output=output,
+        chat_model=chat_model,
+        output_schema=GoalIdentificationResult
+    )
+    goal = goal.goal
 
     state.data = {**state.data, **dict(goal=goal)}
 
@@ -152,7 +169,7 @@ def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
     ai = LangChainBasedAIChatParticipant(
         name='Decision-Making Alternative Consultant',
         role='Decision-Making Alternative Consultant',
-        mission='Assist the user in identifying alternatives for the decision-making process.',
+        personal_mission='Assist the user in identifying alternatives for the decision-making process.',
         other_prompt_sections=[
             Section(
                 name='Interaction Schema',
@@ -181,7 +198,8 @@ def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
             Section(
                 name='The Last Message',
                 list=[
-                    'The last response should include the list of confirmed alternatives.'
+                    'The last response should include the list of confirmed alternatives.',
+                    'It should end with the word TERMINATE at the end of the message to signal the end of the chat.'
                 ]
             )
         ],
@@ -189,7 +207,7 @@ def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
         chat_model=chat_model,
         spinner=spinner)
     user = UserChatParticipant(name='User')
-    participants = [ai, user]
+    participants = [user, ai]
 
     chat = Chat(
         goal='Identify clear alternatives for the decision.',
@@ -219,15 +237,21 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     if state.data.get('criteria') is not None:
         return
 
-    ai = LangChainBasedAIChatParticipant(
-        name='Decision-Making Criteria Consultant',
-        role='Decision-Making Criteria Consultant',
-        mission='Assist users in identifying key criteria and their respective scales for their decision-making process.',
-        other_prompt_sections=[
+    shared_prompt_sections = [
+        Section(
+            name='Process Stage',
+            text='This is the third part of the decision-making process, after the goal and alternatives have been identified. No need for a greeting.'
+        ),
+    ]
+
+    criteria_brainstormer = LangChainBasedAIChatParticipant(
+        name='Decision-Making Criteria Brainstormer',
+        role='Decision-Making Criteria Brainstormer',
+        personal_mission='Brainstorm and iterate on criteria for the decision-making process for the user.',
+        other_prompt_sections=shared_prompt_sections + [
             Section(
                 name='Criteria Identification Process',
                 list=[
-                    'This is the third part of the decision-making process, after the goal and alternatives have been identified. No need for a greeting.',
                     'Start by suggesting an initial set of criteria that is as orthogonal, non-overlapping, and comprehensive as possible and ask the user for feedback.',
                     'Iterate on the criteria until the user is satisfied with the list.'
                 ]
@@ -250,7 +274,6 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                 name='Requirements',
                 list=[
                     'At the end of the process there MUST be at least 1 criterion and no more than 15 criteria.',
-                    'Scales MUST be on at least 2-point scale and no more than 7-point scale.'
                 ]
             ),
             Section(
@@ -263,17 +286,113 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         tools=tools,
         chat_model=chat_model,
         spinner=spinner)
+    criteria_scales_brain_stormer = LangChainBasedAIChatParticipant(
+        name='Decision-Making Criteria Scale Brainstormer',
+        role='Decision-Making Criteria Scale Brainstormer',
+        personal_mission='Brainstorm and iterate on scales for the criteria for the decision-making process for the user.',
+        other_prompt_sections=shared_prompt_sections + [
+            Section(
+                name='Criteria Scale Definition Process',
+                list=[
+                    'After the criteria have been and the user is satisfied with them, come up with a 2 to 7 point scale for each criterion based on common sense.',
+                    'Iterate on the scales until the user is satisfied with them.'
+                ],
+                sub_sections=[
+                    Section(name='Scale Definition', list=[
+                        'The scale should be a list of labels only. No numerical values, no explainations. Example: "Very Expensive".',
+                        'The scale should be ordered from worst to best. Example: "Very Expensive" should come before "Expensive".',
+                        'Make should the values for the scale are roughly evenly spaced out. Example: "Very Expensive" should be roughly as far from "Expensive" as "Expensive" is from "Fair".'
+                    ])
+                ]
+            ),
+            Section(
+                name='Requirements',
+                list=[
+                    'Scales MUST be on at least 2-point scale and no more than 7-point scale.'
+                ]
+            )
+        ],
+        tools=tools,
+        chat_model=chat_model,
+        spinner=spinner)
+    criteria_critic = LangChainBasedAIChatParticipant(
+        name='Decision-Making Criteria Critic',
+        role='Decision-Making Criteria Critic',
+        personal_mission='Critique the criteria and provide feedback on what to improve.',
+        other_prompt_sections=shared_prompt_sections + [
+            Section(
+                name='Criteria Critiquing',
+                list=[
+                    'When critiquing the criteria, make sure they are orthogonal, non-overlapping, and comprehensive.',
+                ],
+                sub_sections=[
+                    Section(
+                        name='Questions to ask yourself',
+                        list=[
+                            'Are there any criteria that are redundant or duplicated?',
+                            'Are there any criteria that are missing to create a comprehensive set of criteria?',
+                            'Is the criteria set maximally orthogonal and non-overlapping?',
+                            'Are there any criteria that are too subjective or vague?',
+                            'Is there at least 1 criterion identified?',
+                            'Are there no more than 15 criteria identified?'
+                        ]
+                    )
+                ]
+            )
+        ],
+        tools=tools,
+        chat_model=chat_model,
+        spinner=spinner)
+    criteria_scale_critic = LangChainBasedAIChatParticipant(
+        name='Decision-Making Criteria Scale Critic',
+        role='Decision-Making Criteria Scale Critic',
+        personal_mission='Critique the scales for the criteria and provide feedback on what to improve.',
+        other_prompt_sections=shared_prompt_sections + [
+            Section(
+                name='Criteria Scale Critiquing',
+                list=[
+                    'When critiquing the scales, make sure they are ordered from worst to best, evenly spaced out, and have labels that make sense.',
+                ],
+                sub_sections=[
+                    Section(
+                        name='Questions to ask yourself',
+                        list=[
+                            'Can a scale be simplified such that it is easier to assign a value to a piece of data based on it?',
+                            'Is a scale too simple such that it is not useful for the decision-making process?',
+                            'Are all the scales on a 2-point to 7-point scale?'
+                        ]
+                    )
+                ]
+            )
+        ],
+        tools=tools,
+        chat_model=chat_model,
+        spinner=spinner)
     user = UserChatParticipant(name='User')
-    participants = [ai, user]
+    participants = [user, criteria_brainstormer, criteria_scales_brain_stormer, criteria_critic, criteria_scale_critic]
 
     chat = Chat(
-        goal='Identify clear criteria and their respective scales for the decision.',
+        goal='Identify clear well-defined criteria and their respective scales for the decision.',
+        speaker_interaction_schema='''1. The Criteria Brainstormer suggests an initial set of criteria.
+2. The Criteria Critic critiques the criteria and suggests improvements.
+3. The Criteria Brainstormer iterates on the criteria until they think they are good enough and ask the user for feedback.
+4. If the user is not satisfied with the criteria, go back to step 1, refining the criteria based on the user feedback.
+5. If the user is satisfied with the criteria, it\'s time to define the scales for the criteria. Move to step 6.
+6. The Criteria Scale Brainstormer suggests an initial set of scales for the criteria.
+7. The Criteria Scale Critic critiques the scales and suggests improvements.
+8. The Criteria Scale Brainstormer iterates on the scales until they think they are good enough and ask the user for feedback.
+9. If the user is not satisfied with the scales, go back to step 6, refining the scales based on the user feedback.
+10. If the user is satisfied with the scales, the criteria identification process is complete. The Criteria Brainstormer should present the final list of criteria and their respective scales to the user.
+''',
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
         initial_participants=participants
     )
 
-    chat_conductor = RoundRobinChatConductor()
+    chat_conductor = LangChainBasedAIChatConductor(
+        chat_model=chat_model,
+        termination_condition='The criteria and their respective scales have been identified and confirmed by the user.'
+    )
     output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
         sections=[
             Section(name='Goal', text=state.data['goal']),
@@ -301,7 +420,7 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         ai = LangChainBasedAIChatParticipant(
             name='Decision-Making Criteria Mapping Consultant',
             role='Decision-Making Criteria Mapping Consultant',
-            mission='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given scale for each criterion in a decision-making process.',
+            personal_mission='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given scale for each criterion in a decision-making process.',
             other_prompt_sections=[
                 Section(
                     name='Interaction Schema',
@@ -334,7 +453,8 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                     name='The Last Message',
                     list=[
                         'The last response should include the list of confirmed criteria mapping.',
-                        'The list should be formatted like: "1. LABEL_1: EXPLANATION_1\n2. ..." where 1. is the worst option and N. is the best option.'
+                        'The list should be formatted like: "1. LABEL_1: EXPLANATION_1\n2. ..." where 1. is the worst option and N. is the best option.',
+                        'It should end with the word TERMINATE at the end of the message to signal the end of the chat.'
                     ]
                 )
             ],
@@ -342,7 +462,7 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
             chat_model=chat_model,
             spinner=spinner)
         user = UserChatParticipant(name='User')
-        participants = [ai, user]
+        participants = [user, ai]
 
         chat = Chat(
             goal='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given scale for each criterion in a decision-making process.',
@@ -423,7 +543,7 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
     ai = LangChainBasedAIChatParticipant(
         name='Decision-Making Process Researcher',
         role='Decision-Making Process Researcher',
-        mission='Generate a template for automated research queries for each criterion, whose answers can be used as context when evaluating alternatives.',
+        personal_mission='Generate a template for automated research queries for each criterion, whose answers can be used as context when evaluating alternatives.',
         other_prompt_sections=[
             Section(
                 name='Process',
@@ -446,7 +566,8 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
             Section(
                 name='The Last Message',
                 list=[
-                    'The last response should include the list of research query templates for each criterion.'
+                    'The last response should include the list of research query templates for each criterion.',
+                    'It should end with the word TERMINATE at the end of the message to signal the end of the chat.'
                 ]
             )
         ],
@@ -454,13 +575,14 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
         chat_model=chat_model,
         spinner=spinner)
     user = UserChatParticipant(name='User')
-    participants = [ai, user]
+    participants = [user, ai]
 
     chat = Chat(
         goal='Generate a template for automated research queries for each criterion, whose answers can be used as context when evaluating alternatives.',
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
-        initial_participants=participants
+        initial_participants=participants,
+        max_total_messages=2
     )
 
     chat_conductor = RoundRobinChatConductor()
@@ -557,7 +679,7 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
             ai = LangChainBasedAIChatParticipant(
                 name='Decision-Making Process Researcher',
                 role='Decision-Making Process Researcher',
-                mission='Refine research findings through user interaction and assign an accurate label based on data, user input, and criteria mapping.',
+                personal_mission='Refine research findings through user interaction and assign an accurate label based on data, user input, and criteria mapping.',
                 other_prompt_sections=[
                     Section(
                         name='Process',
@@ -592,6 +714,7 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
                         list=[
                             'The last response should include the refined research findings for a criterion\'s alternative in rich markdown format with all the citations and links inline.',
                             'Does not include conversational fluff. Think about it like a research report.',
+                            'It should end with the word TERMINATE at the end of the message to signal the end of the chat.'
                         ]
                     )
                 ],
@@ -599,7 +722,7 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
                 chat_model=chat_model,
                 spinner=spinner)
             user = UserChatParticipant(name='User')
-            participants = [ai, user]
+            participants = [user, ai]
 
             chat = Chat(
                 goal='Generate a template for automated research queries for each criterion, whose answers can be used as context when evaluating alternatives.',

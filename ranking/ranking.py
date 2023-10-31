@@ -1,7 +1,7 @@
 from typing import Callable, List, TypeVar, Tuple, Dict, Optional
 
 import numpy as np
-from research.topsis import topsis
+from ranking.topsis import topsis
 
 T = TypeVar('T')
 
