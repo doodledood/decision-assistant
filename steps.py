@@ -109,17 +109,23 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
         role='Decision-Making Goal Identifier',
         mission='Identify a clear and specific decision-making goal from the user\'s initial vague statement.',
         other_prompt_sections=[
-            Section(name='Process', list=[
-                'Start by greeting the user and asking for their decision-making goal.',
-                'If the goal is not clear, ask for clarification and refine the goal.',
-                'If the goal is clear, confirm it with the user.',
-            ]),
-            Section(name='User Decision Goal', list=[
-                'One and only one decision goal can be identified.',
-                'The goal should be clear and specific.',
-                'The goal should be a decision that can be made by the user.',
-                'No need to go beyond the goal. The next step will be to identify alternatives and criteria for the decision.'
-            ])
+            Section(
+                name='Process',
+                list=[
+                    'Start by greeting the user and asking for their decision-making goal.',
+                    'If the goal is not clear, ask for clarification and refine the goal.',
+                    'If the goal is clear, confirm it with the user.',
+                ]
+            ),
+            Section(
+                name='User Decision Goal',
+                list=[
+                    'One and only one decision goal can be identified.',
+                    'The goal should be clear and specific.',
+                    'The goal should be a decision that can be made by the user.',
+                    'No need to go beyond the goal. The next step will be to identify alternatives and criteria for the decision.'
+                ]
+            )
         ],
         tools=tools,
         chat_model=chat_model,
@@ -149,24 +155,36 @@ def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
         role='Decision-Making Alternative Consultant',
         mission='Assist the user in identifying alternatives for the decision-making process.',
         other_prompt_sections=[
-            Section(name='Interaction Schema', list=[
-                'This is the second part of the decision-making process, after the goal has been identified. No need for a greeting.',
-                'Start by asking the user for alternatives they had in mind for the decision.',
-                'Assist the user in generating alternatives if they are unsure or struggle to come up with options or need help researching more ideas. You can use the web search tool and your own knowledge for this.',
-                'List the final list of alternatives and confirm with the user before moving on to the next step.'
-            ]),
-            Section(name='Requirements', list=[
-                'At the end of the process there should be at least 2 alternatives and no more than 20.'
-            ]),
-            Section(name='Alternatives', list=[
-                'The alternatives should be clear and specific.',
-                'The alternatives should be options that the user can choose from.',
-                'Naming the alternatives should be done in a way that makes it easy to refer to them later on.',
-                'For example, for a goal such as "Decide which school to go to": The alternative "Go to school X" is bad, while "School X" is good.'
-            ]),
-            Section('The Last Message', list=[
-                'The last response should include the list of confirmed alternatives.'
-            ])
+            Section(
+                name='Interaction Schema',
+                list=[
+                    'This is the second part of the decision-making process, after the goal has been identified. No need for a greeting.',
+                    'Start by asking the user for alternatives they had in mind for the decision.',
+                    'Assist the user in generating alternatives if they are unsure or struggle to come up with options or need help researching more ideas. You can use the web search tool and your own knowledge for this.',
+                    'List the final list of alternatives and confirm with the user before moving on to the next step.'
+                ]
+            ),
+            Section(
+                name='Requirements',
+                list=[
+                    'At the end of the process there should be at least 2 alternatives and no more than 20.'
+                ]
+            ),
+            Section(
+                name='Alternatives',
+                list=[
+                    'The alternatives should be clear and specific.',
+                    'The alternatives should be options that the user can choose from.',
+                    'Naming the alternatives should be done in a way that makes it easy to refer to them later on.',
+                    'For example, for a goal such as "Decide which school to go to": The alternative "Go to school X" is bad, while "School X" is good.'
+                ]
+            ),
+            Section(
+                name='The Last Message',
+                list=[
+                    'The last response should include the list of confirmed alternatives.'
+                ]
+            )
         ],
         tools=tools,
         chat_model=chat_model,
@@ -206,28 +224,41 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         role='Decision-Making Criteria Consultant',
         mission='Assist users in identifying key criteria and their respective scales for their decision-making process.',
         other_prompt_sections=[
-            Section(name='Criteria Identification Process', list=[
-                'This is the third part of the decision-making process, after the goal and alternatives have been identified. No need for a greeting.',
-                'Start by suggesting an initial set of criteria that is as orthogonal, non-overlapping, and comprehensive as possible and ask the user for feedback.',
-                'Iterate on the criteria until the user is satisfied with the list.'
-            ]),
-            Section('Criteria Scale Definition Process', list=[
-                'After the criteria have been and the user is satisfied with them, come up with a 2 to 7 point scale for each criterion based on common sense.',
-                'Iterate on the scales until the user is satisfied with them.'
-            ], sub_sections=[
-                Section(name='Scale Definition', list=[
-                    'The scale should be a list of labels only. No numerical values, no explainations. Example: "Very Expensive".',
-                    'The scale should be ordered from worst to best. Example: "Very Expensive" should come before "Expensive".',
-                    'Make should the values for the scale are roughly evenly spaced out. Example: "Very Expensive" should be roughly as far from "Expensive" as "Expensive" is from "Fair".'
-                ])
-            ]),
-            Section(name='Requirements', list=[
-                'At the end of the process there MUST be at least 1 criterion and no more than 15 criteria.',
-                'Scales MUST be on at least 2-point scale and no more than 7-point scale.'
-            ]),
-            Section('The Last Message', list=[
-                'The last response should include the list of confirmed criteria and their respective scales, numbered from 1 to N, where N is the best outcome for the criteria.'
-            ])
+            Section(
+                name='Criteria Identification Process',
+                list=[
+                    'This is the third part of the decision-making process, after the goal and alternatives have been identified. No need for a greeting.',
+                    'Start by suggesting an initial set of criteria that is as orthogonal, non-overlapping, and comprehensive as possible and ask the user for feedback.',
+                    'Iterate on the criteria until the user is satisfied with the list.'
+                ]
+            ),
+            Section(
+                name='Criteria Scale Definition Process',
+                list=[
+                    'After the criteria have been and the user is satisfied with them, come up with a 2 to 7 point scale for each criterion based on common sense.',
+                    'Iterate on the scales until the user is satisfied with them.'
+                ],
+                sub_sections=[
+                    Section(name='Scale Definition', list=[
+                        'The scale should be a list of labels only. No numerical values, no explainations. Example: "Very Expensive".',
+                        'The scale should be ordered from worst to best. Example: "Very Expensive" should come before "Expensive".',
+                        'Make should the values for the scale are roughly evenly spaced out. Example: "Very Expensive" should be roughly as far from "Expensive" as "Expensive" is from "Fair".'
+                    ])
+                ]
+            ),
+            Section(
+                name='Requirements',
+                list=[
+                    'At the end of the process there MUST be at least 1 criterion and no more than 15 criteria.',
+                    'Scales MUST be on at least 2-point scale and no more than 7-point scale.'
+                ]
+            ),
+            Section(
+                name='The Last Message',
+                list=[
+                    'The last response should include the list of confirmed criteria and their respective scales, numbered from 1 to N, where N is the best outcome for the criteria.'
+                ]
+            )
         ],
         tools=tools,
         chat_model=chat_model,
@@ -258,7 +289,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     state.data = {**state.data, **dict(criteria=criteria)}
 
 
-def map_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[BaseTool],
+def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                  state: DecisionAssistantState, spinner: Optional[Halo] = None):
     criteria_mapping = state.data.get('criteria_mapping', {})
 
@@ -266,27 +297,93 @@ def map_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[Bas
         if criterion['name'] in criteria_mapping:
             continue
 
-        scale_str = '\n'.join([f'{i + 1}. {scale_value}' for i, scale_value in enumerate(criterion['scale'])])
-        previously_mapped_criteria_str = '\n'.join(
-            [f'- {criterion_name}: {criterion_mapping}' for criterion_name, criterion_mapping in
-             criteria_mapping.items()])
-        criteria_left_to_map_str = '\n'.join(
-            [f'- {criterion_name}' for criterion_name in
-             [criterion['name'] for criterion in state.data['criteria'] if
-              criterion['name'] not in criteria_mapping]])
-        criterion_mapping = chat_room(
-            chat_model=chat_model,
-            messages=[
-                SystemMessage(content=system_prompts.criterion_mapping_system_prompt),
-                HumanMessage(
-                    content=f'# GOAL\n{state.data["goal"]}\n\n# PREVIOUSLY MAPPED CRITERIA\n{previously_mapped_criteria_str}\n\n#CRITERIA LEFT TO MAP\n{criteria_left_to_map_str}\n\n# CURRENT CRITERION TO MAP\n{criterion["name"]}\n\n## Criterion Scale\n{scale_str}'),
+        ai = LangChainBasedAIChatParticipant(
+            name='Decision-Making Criteria Mapping Consultant',
+            role='Decision-Making Criteria Mapping Consultant',
+            mission='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given scale for each criterion in a decision-making process.',
+            other_prompt_sections=[
+                Section(
+                    name='Interaction Schema',
+                    list=[
+                        'This is the fourth part of the decision-making process, after the goal, alternatives, and criteria have been identified. No need for a greeting.',
+                        'Start by suggesting a mapping for the criterion at hand and ask the user for feedback.',
+                        'Iterate on the mapping until the user is satisfied with it.'
+                    ]
+                ),
+                Section(
+                    name='Criterion Mapping',
+                    list=[
+                        'A mapping is like a decision tree for mapping research data onto a given scale for a criterion.',
+                        'Based on the mapping, an autonomous bot should be able to assign a value from the scale to a piece of data.',
+                        'Make sure the current mapping does not contradict or interfere with previous mappings or future ones to follow.',
+                        'Each mapping should be unique within all the criteria, unless specified by the user.',
+                        'A mapping could also be looked at like sub-criteria of the criterion - we don\'t want these duplicated as that makes the results less accurate.'
+                    ],
+                    sub_sections=[
+                        Section(
+                            name='Subjective Criterion',
+                            list=[
+                                'For subjective criteria like "Affordability", engage in a deeper dialogue with the user to understand their preferences and thinking.',
+                                'If the criterion is entirely user feeling based, just explain a value mapping by saying something like "User feels very good about this".'
+                            ]
+                        )
+                    ]
+                ),
+                Section(
+                    name='The Last Message',
+                    list=[
+                        'The last response should include the list of confirmed criteria mapping.',
+                        'The list should be formatted like: "1. LABEL_1: EXPLANATION_1\n2. ..." where 1. is the worst option and N. is the best option.'
+                    ]
+                )
             ],
-            tools=default_tools_with_web_search,
-            result_schema=CriterionMappingResult,
-            spinner=spinner
+            tools=tools,
+            chat_model=chat_model,
+            spinner=spinner)
+        user = UserChatParticipant(name='User')
+        participants = [ai, user]
+
+        chat = Chat(
+            backing_store=InMemoryChatDataBackingStore(),
+            renderer=TerminalChatRenderer(),
+            initial_participants=participants
         )
-        criterion_mapping = criterion_mapping.dict()['criterion_mapping']
-        criteria_mapping[criterion['name']] = criterion_mapping
+
+        chat_conductor = RoundRobinChatConductor()
+        output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+            sections=[
+                Section(
+                    name='Goal',
+                    text=state.data['goal']
+                ),
+                Section(
+                    name='Previously Mapping Criteria',
+                    list=[f'{criterion_name}: {criterion_mapping}' for criterion_name, criterion_mapping in
+                          criteria_mapping.items()]
+                ),
+                Section(
+                    name='Criteria Left to Map',
+                    list=[criterion_name for criterion_name in
+                          [criterion['name'] for criterion in state.data['criteria'] if
+                           criterion['name'] not in criteria_mapping]]
+                ),
+                Section(
+                    name='Current Criterion',
+                    text=criterion['name']
+                ),
+                Section(
+                    name='Current Criterion Scale',
+                    list=criterion['scale'],
+                    list_item_prefix=None
+                )
+            ]
+        )))
+        output = string_output_to_pydantic(
+            output=output,
+            chat_model=chat_model,
+            output_schema=CriterionMappingResult
+        )
+        criterion_mapping = output.model_dump()['criterion_mapping']
 
         state.data = {**state.data,
                       **dict(criteria_mapping=criteria_mapping)}
