@@ -134,6 +134,7 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
     participants = [ai, user]
 
     chat = Chat(
+        goal='Identify a clear and specific decision-making goal.',
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
         initial_participants=participants
@@ -193,6 +194,7 @@ def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
     participants = [ai, user]
 
     chat = Chat(
+        goal='Identify clear alternatives for the decision.',
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
         initial_participants=participants
@@ -267,6 +269,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     participants = [ai, user]
 
     chat = Chat(
+        goal='Identify clear criteria and their respective scales for the decision.',
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
         initial_participants=participants
@@ -344,6 +347,7 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         participants = [ai, user]
 
         chat = Chat(
+            goal='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given scale for each criterion in a decision-making process.',
             backing_store=InMemoryChatDataBackingStore(),
             renderer=TerminalChatRenderer(),
             initial_participants=participants
@@ -413,29 +417,72 @@ def prioritize_criteria(state: DecisionAssistantState):
     state.data['criteria_weights'] = ahpy.Compare('Criteria', dict(criteria_comparisons)).target_weights
 
 
-def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_search: List[BaseTool],
+def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
                                 state: DecisionAssistantState, spinner: Optional[Halo] = None):
     if state.data.get('criteria_research_queries') is not None:
         return
 
-    criteria_mapping_str = '\n\n'.join(
-        [f'## {criterion_name}\n{criterion_mapping}' for i, (criterion_name, criterion_mapping) in
-         enumerate(state.data['criteria_mapping'].items())])
-    alternatives_str = '\n\n'.join([f'## {alternative}' for i, alternative in enumerate(state.data['alternatives'])])
-
-    criteria_research_queries = chat_room(
-        chat_model=chat_model,
-        messages=[
-            SystemMessage(content=system_prompts.criteria_research_questions_system_prompt),
-            HumanMessage(
-                content=f'# GOAL\n{state.data["goal"]}\n\n# CRITERIA MAPPING\n{criteria_mapping_str}# ALTERNATIVES\n{alternatives_str}'),
+    ai = LangChainBasedAIChatParticipant(
+        name='Decision-Making Process Researcher',
+        role='Decision-Making Process Researcher',
+        mission='Generate a template for automated research queries for each criterion, whose answers can be used as context when evaluating alternatives.',
+        other_prompt_sections=[
+            Section(
+                name='Process',
+                list=[
+                    'This is the fifth part of the decision-making process, after the goal, alternatives, criteria, and criteria mapping have been identified. No need for a greeting.',
+                    'For each criterion, generate relevant, orthogonal, and comprehensive set query templates.',
+                ],
+                list_item_prefix=None
+            ),
+            Section(
+                name='Query Templates',
+                list=[
+                    'The query templates should capture the essence of the criterion based on the scale and how to assign values.',
+                    'The queries should be strategic and aim to minimize the number of questions while maximizing the information gathered.',
+                    'The list of queries should include counterfactual queries and make use of all knowledge of information foraging and information literacy.',
+                    'Each query template MUST include "{alternative}" in the template to allow for replacement with various alternatives later.',
+                    'If a criterion is purely subjective and nothing an be researched on it, it\'s ok to have 0 queries about it.'
+                ]
+            ),
+            Section(
+                name='The Last Message',
+                list=[
+                    'The last response should include the list of research query templates for each criterion.'
+                ]
+            )
         ],
-        tools=default_tools_with_web_search,
-        result_schema=CriteriaResearchQueriesResult,
-        get_immediate_answer=True,
-        spinner=spinner
+        tools=tools,
+        chat_model=chat_model,
+        spinner=spinner)
+    user = UserChatParticipant(name='User')
+    participants = [ai, user]
+
+    chat = Chat(
+        goal='Generate a template for automated research queries for each criterion, whose answers can be used as context when evaluating alternatives.',
+        backing_store=InMemoryChatDataBackingStore(),
+        renderer=TerminalChatRenderer(),
+        initial_participants=participants
     )
-    criteria_research_queries = criteria_research_queries.dict()['criteria_research_queries']
+
+    chat_conductor = RoundRobinChatConductor()
+    output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+        sections=[
+            Section(name='Goal', text=state.data['goal']),
+            Section(name='Alternatives', list=state.data['alternatives']),
+            Section(name='Criteria Mappings',
+                    sub_sections=[
+                        Section(name=criterion_name, text=criterion_mapping) for criterion_name, criterion_mapping in
+                        state.data['criteria_mapping'].items()
+                    ]),
+        ]
+    )))
+    output = string_output_to_pydantic(
+        output=output,
+        chat_model=chat_model,
+        output_schema=CriteriaResearchQueriesResult
+    )
+    criteria_research_queries = output.model_dump()['criteria_research_queries']
 
     state.data = {**state.data, **dict(criteria_research_queries=criteria_research_queries)}
 
