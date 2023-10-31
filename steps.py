@@ -247,14 +247,14 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     criteria_brainstormer = LangChainBasedAIChatParticipant(
         name='Criteria Brainstormer',
         role='Criteria Brainstormer',
-        personal_mission='Brainstorm and iterate on the best set of criteria for the decision-making process for the user.',
+        personal_mission='Brainstorm and iterate on the best set of criteria for the decision-making process.',
         other_prompt_sections=shared_prompt_sections + [
             Section(
                 name='Criteria Identification Process',
                 list=[
                     'Start by suggesting an initial set of criteria that is as orthogonal, non-overlapping, and comprehensive as possible.',
                     'Iterate on the criteria with the critic until you both are satisfied with them.',
-                    'Confirm the criteria with the user and ask for feedback.'
+                    'Once you both are satisfied, confirm the criteria with the user and ask for feedback.'
                 ]
             ),
             Section(
@@ -276,13 +276,14 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     criteria_scales_brain_stormer = LangChainBasedAIChatParticipant(
         name='Criteria Scale Brainstormer',
         role='Criteria Scale Brainstormer',
-        personal_mission='Brainstorm and iterate on the best scales for the criteria for the decision-making process for the user.',
+        personal_mission='Brainstorm and iterate on the best scales for the criteria for the decision-making process.',
         other_prompt_sections=shared_prompt_sections + [
             Section(
                 name='Criteria Scale Definition Process',
                 list=[
-                    'After the criteria have been and the user is satisfied with them, come up with a 2 to 7 point scale for each criterion based on common sense.',
-                    'Iterate on the scales until the user is satisfied with them.'
+                    'After the criteria have been identifed and the user is satisfied with them, come up with a 2 to 7 point scale for each criterion, based on what makes sense for each criteria.',
+                    'Iterate on the scales with the critic until you both are satisfied with them.',
+                    'Once you both are satisfied, confirm the scales with the user and ask for feedback.'
                 ],
                 sub_sections=[
                     Section(name='Scale Definition', list=[
