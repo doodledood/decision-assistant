@@ -196,22 +196,64 @@ def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
     state.data = {**state.data, **dict(alternatives=alternatives)}
 
 
-def identify_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[BaseTool],
+def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                       state: DecisionAssistantState, spinner: Optional[Halo] = None):
     if state.data.get('criteria') is not None:
         return
 
-    criteria = chat_room(
-        chat_model=chat_model,
-        messages=[
-            SystemMessage(content=system_prompts.criteria_identification_system_prompt),
-            HumanMessage(content=f'# GOAL\n{state.data["goal"]}'),
+    ai = LangChainBasedAIChatParticipant(
+        name='Decision-Making Criteria Consultant',
+        role='Decision-Making Criteria Consultant',
+        mission='Assist users in identifying key criteria and their respective scales for their decision-making process.',
+        other_prompt_sections=[
+            Section(name='Criteria Identification Process', list=[
+                'This is the third part of the decision-making process, after the goal and alternatives have been identified. No need for a greeting.',
+                'Start by suggesting an initial set of criteria that is as orthogonal, non-overlapping, and comprehensive as possible and ask the user for feedback.',
+                'Iterate on the criteria until the user is satisfied with the list.'
+            ]),
+            Section('Criteria Scale Definition Process', list=[
+                'After the criteria have been and the user is satisfied with them, come up with a 2 to 7 point scale for each criterion based on common sense.',
+                'Iterate on the scales until the user is satisfied with them.'
+            ], sub_sections=[
+                Section(name='Scale Definition', list=[
+                    'The scale should be a list of labels only. No numerical values, no explainations. Example: "Very Expensive".',
+                    'The scale should be ordered from worst to best. Example: "Very Expensive" should come before "Expensive".',
+                    'Make should the values for the scale are roughly evenly spaced out. Example: "Very Expensive" should be roughly as far from "Expensive" as "Expensive" is from "Fair".'
+                ])
+            ]),
+            Section(name='Requirements', list=[
+                'At the end of the process there MUST be at least 1 criterion and no more than 15 criteria.',
+                'Scales MUST be on at least 2-point scale and no more than 7-point scale.'
+            ]),
+            Section('The Last Message', list=[
+                'The last response should include the list of confirmed criteria and their respective scales, numbered from 1 to N, where N is the best outcome for the criteria.'
+            ])
         ],
-        tools=default_tools_with_web_search,
-        result_schema=CriteriaIdentificationResult,
-        spinner=spinner
+        tools=tools,
+        chat_model=chat_model,
+        spinner=spinner)
+    user = UserChatParticipant(name='User')
+    participants = [ai, user]
+
+    chat = Chat(
+        backing_store=InMemoryChatDataBackingStore(),
+        renderer=TerminalChatRenderer(),
+        initial_participants=participants
     )
-    criteria = criteria.dict()['criteria']
+
+    chat_conductor = RoundRobinChatConductor()
+    output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+        sections=[
+            Section(name='Goal', text=state.data['goal']),
+            Section(name='Alternatives', list=state.data['alternatives']),
+        ]
+    )))
+    output = string_output_to_pydantic(
+        output=output,
+        chat_model=chat_model,
+        output_schema=CriteriaIdentificationResult
+    )
+    criteria = output.model_dump()['criteria']
 
     state.data = {**state.data, **dict(criteria=criteria)}
 
