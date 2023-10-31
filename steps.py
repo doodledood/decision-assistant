@@ -245,9 +245,9 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     ]
 
     criteria_brainstormer = LangChainBasedAIChatParticipant(
-        name='Decision-Making Criteria Brainstormer',
-        role='Decision-Making Criteria Brainstormer',
-        personal_mission='Brainstorm and iterate on criteria for the decision-making process for the user.',
+        name='Criteria Brainstormer',
+        role='Criteria Brainstormer',
+        personal_mission='Brainstorm and iterate on the best set of criteria for the decision-making process for the user.',
         other_prompt_sections=shared_prompt_sections + [
             Section(
                 name='Criteria Identification Process',
@@ -274,9 +274,9 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         chat_model=chat_model,
         spinner=spinner)
     criteria_scales_brain_stormer = LangChainBasedAIChatParticipant(
-        name='Decision-Making Criteria Scale Brainstormer',
-        role='Decision-Making Criteria Scale Brainstormer',
-        personal_mission='Brainstorm and iterate on scales for the criteria for the decision-making process for the user.',
+        name='Criteria Scale Brainstormer',
+        role='Criteria Scale Brainstormer',
+        personal_mission='Brainstorm and iterate on the best scales for the criteria for the decision-making process for the user.',
         other_prompt_sections=shared_prompt_sections + [
             Section(
                 name='Criteria Scale Definition Process',
@@ -303,8 +303,8 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         chat_model=chat_model,
         spinner=spinner)
     criteria_critic = LangChainBasedAIChatParticipant(
-        name='Decision-Making Criteria Critic',
-        role='Decision-Making Criteria Critic',
+        name='Criteria Critic',
+        role='Criteria Critic',
         personal_mission='Critique the criteria and provide feedback on what to improve.',
         other_prompt_sections=shared_prompt_sections + [
             Section(
@@ -316,6 +316,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                     Section(
                         name='Questions to ask yourself',
                         list=[
+                            'Are all the criteria named such that the worst option on their respective potential scales is the worst outcome for the decision, and vise-versa for the last label/best outcome?',
                             'Are there any criteria that are redundant or duplicated?',
                             'Are there any criteria that are missing to create a comprehensive set of criteria?',
                             'Is the criteria set maximally orthogonal and non-overlapping?',
@@ -331,8 +332,8 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         chat_model=chat_model,
         spinner=spinner)
     criteria_scale_critic = LangChainBasedAIChatParticipant(
-        name='Decision-Making Criteria Scale Critic',
-        role='Decision-Making Criteria Scale Critic',
+        name='Criteria Scale Critic',
+        role='Criteria Scale Critic',
         personal_mission='Critique the scales for the criteria and provide feedback on what to improve.',
         other_prompt_sections=shared_prompt_sections + [
             Section(
@@ -344,6 +345,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                     Section(
                         name='Questions to ask yourself',
                         list=[
+                            'Are all the labels on a scale ordered from worst to best?',
                             'Can a scale be simplified such that it is easier to assign a value to a piece of data based on it?',
                             'Is a scale too simple such that it is not useful for the decision-making process?',
                             'Are all the scales on a 2-point to 7-point scale?'
@@ -361,7 +363,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     chat = Chat(
         goal='Identify clear well-defined criteria and their respective scales for the decision.',
         speaker_interaction_schema='''1. The Criteria Brainstormer suggests an initial set of criteria based on the user input.
-2. The Criteria Critic critiques the criteria and suggests improvements.
+2. The Criteria Critic critiques the criteria suggested and suggests improvements.
 3. The Criteria Brainstormer iterates on the criteria until they think they are good enough and ask the user for feedback.
 4. If the user is not satisfied with the criteria, go back to step 1, refining the criteria based on the user feedback.
 5. If the user is satisfied with the criteria, it\'s time to define the scales for the criteria. Move to step 6.
@@ -378,7 +380,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
 
     chat_conductor = LangChainBasedAIChatConductor(
         chat_model=chat_model,
-        termination_condition='The criteria and their respective scales have been identified and confirmed by the user.'
+        termination_condition='The criteria and their respective scales have been identified, iterated on (if applicable), and finally, confirmed by the user.'
     )
     output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
         sections=[
