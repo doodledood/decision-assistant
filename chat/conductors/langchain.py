@@ -1,10 +1,11 @@
-from typing import Any, Dict, Callable, Optional, List, Tuple
+from typing import Any, Dict, Optional, List
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, AIMessage, BaseMessage
+from langchain.tools import BaseTool
 
-from chat.ai_utils import execute_chat_model_messages, FunctionTool
+from chat.ai_utils import execute_chat_model_messages
 from chat.base import ChatConductor, Chat, ActiveChatParticipant
 from chat.errors import ChatParticipantNotJoinedToChatError
 from chat.structured_prompt import StructuredPrompt, Section
@@ -13,7 +14,7 @@ from chat.structured_prompt import StructuredPrompt, Section
 class LangChainBasedAIChatConductor(ChatConductor):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
-    tools: Optional[List[FunctionTool]] = None
+    tools: Optional[List[BaseTool]] = None
     termination_condition: str = f'''Terminate the chat on the following conditions:
     - When the goal of the chat has been achieved
     - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
@@ -23,7 +24,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
                  chat_model: BaseChatModel,
                  termination_condition: Optional[str] = None,
                  spinner: Optional[Halo] = None,
-                 tools: Optional[List[FunctionTool]] = None,
+                 tools: Optional[List[BaseTool]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None):
         super().__init__()
 

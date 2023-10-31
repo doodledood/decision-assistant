@@ -8,7 +8,7 @@ import questionary
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage
-from langchain.tools import Tool
+from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
 import system_prompts
@@ -22,7 +22,6 @@ from presentation import generate_decision_report_as_html, save_html_to_file, op
 from chat.web_research import WebSearch
 from ranking.ranking import topsis_score, normalize_label_value
 from state import DecisionAssistantState
-from chat.ai_utils import FunctionTool
 
 
 class Criterion(BaseModel):
@@ -100,7 +99,7 @@ def gather_unique_pairwise_comparisons(criteria_names: List[str],
 
 
 def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
-                  tools: Optional[List[FunctionTool]] = None, spinner: Optional[Halo] = None):
+                  tools: Optional[List[BaseTool]] = None, spinner: Optional[Halo] = None):
     if state.data.get('goal') is not None:
         return
 
@@ -139,7 +138,7 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
     state.data = {**state.data, **dict(goal=goal)}
 
 
-def identify_alternatives(chat_model: ChatOpenAI, default_tools_with_web_search: List[Tool],
+def identify_alternatives(chat_model: ChatOpenAI, default_tools_with_web_search: List[BaseTool],
                           state: DecisionAssistantState, spinner: Optional[Halo] = None):
     if state.data.get('alternatives') is not None:
         return
@@ -174,7 +173,7 @@ def identify_alternatives(chat_model: ChatOpenAI, default_tools_with_web_search:
     state.data = {**state.data, **dict(alternatives=alternatives)}
 
 
-def identify_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[Tool],
+def identify_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[BaseTool],
                       state: DecisionAssistantState, spinner: Optional[Halo] = None):
     if state.data.get('criteria') is not None:
         return
@@ -194,7 +193,7 @@ def identify_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: Lis
     state.data = {**state.data, **dict(criteria=criteria)}
 
 
-def map_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[Tool],
+def map_criteria(chat_model: ChatOpenAI, default_tools_with_web_search: List[BaseTool],
                  state: DecisionAssistantState, spinner: Optional[Halo] = None):
     criteria_mapping = state.data.get('criteria_mapping', {})
 
@@ -252,7 +251,7 @@ def prioritize_criteria(state: DecisionAssistantState):
     state.data['criteria_weights'] = ahpy.Compare('Criteria', dict(criteria_comparisons)).target_weights
 
 
-def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_search: List[Tool],
+def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_search: List[BaseTool],
                                 state: DecisionAssistantState, spinner: Optional[Halo] = None):
     if state.data.get('criteria_research_queries') is not None:
         return
@@ -280,7 +279,7 @@ def generate_research_questions(chat_model: ChatOpenAI, default_tools_with_web_s
 
 
 def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_results: int,
-                     default_tools_with_web_search: List[Tool], state: DecisionAssistantState,
+                     default_tools_with_web_search: List[BaseTool], state: DecisionAssistantState,
                      spinner: Optional[Halo] = None,
                      fully_autonomous: bool = False):
     research_data = state.data.get('research_data')

@@ -1,15 +1,18 @@
 import re
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Type, Any
 
 from halo import Halo
+from langchain.callbacks.manager import CallbackManagerForToolRun
 from langchain.chat_models.openai import ChatOpenAI
-from pydantic import BaseModel, Field
+from langchain.tools import Tool, BaseTool
+from pydantic.v1 import BaseModel, Field
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import NoChatRenderer
+from chat.utils import json_string_to_pydantic
 from chat.web_research.page_analyzer import PageQueryAnalyzer
 from chat.web_research.search import SearchResultsProvider
 from chat.structured_prompt import Section, StructuredPrompt
@@ -148,10 +151,23 @@ class WebSearch:
         return True, final_answer
 
 
-class SearchTheWeb(BaseModel):
-    """Search the web. Use that to get an answer for a query you don't know the answer to, for recent events, or if the user asks you to."""
+class WebSearchToolArgs(BaseModel):
     query: str = Field(description='The query to search the web for.')
 
 
-def answer_query(web_search: WebSearch, args: SearchTheWeb, n_search_results: int = 3, spinner: Optional[Halo] = None):
-    return web_search.get_answer(query=args.query, n_results=n_search_results, spinner=spinner)[1]
+class WebResearchTool(BaseTool):
+    web_search: WebSearch
+    n_results: int = 3
+    spinner: Optional[Halo] = None
+    name: str = 'web_search'
+    description: str = "Research the web. Use that to get an answer for a query you don't know or unsure of the answer to, for recent events, or if the user asks you to. This will evaluate answer snippets, knowledge graphs, and the top N results from google and aggregate a result."
+    args_schema: Type[BaseModel] = WebSearchToolArgs
+    progress_text: str = 'Searching the web...'
+
+    def _run(
+            self,
+            query: str,
+            run_manager: Optional[CallbackManagerForToolRun] = None,
+            **kwargs: Any
+    ) -> Any:
+        return self.web_search.get_answer(query=query, n_results=self.n_results, spinner=self.spinner)[1]

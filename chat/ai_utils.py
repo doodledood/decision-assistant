@@ -1,39 +1,31 @@
-import dataclasses
-from typing import List, Optional, Dict, Any, Callable, TypeVar, Type, Union, Tuple
+import json
+from typing import List, Optional, Dict, Any, TypeVar, Type
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import BaseMessage, FunctionMessage
+from langchain.tools import BaseTool
+from langchain.tools.render import format_tool_to_openai_function
 from pydantic import BaseModel
 
 from chat.errors import FunctionNotFoundError
-from chat.utils import json_string_to_pydantic
-
-TFunctionArgsSchema = TypeVar('TFunctionArgsSchema', bound=Union[Type[BaseModel], Type[str]])
-
-
-@dataclasses.dataclass
-class FunctionTool:
-    args_schema: TFunctionArgsSchema
-    func: Callable[[TFunctionArgsSchema], str]
-    name: Optional[str] = None
+from chat.utils import fix_invalid_json
 
 
 def execute_chat_model_messages(
         chat_model: BaseChatModel,
         messages: List[BaseMessage],
         chat_model_args: Optional[Dict[str, Any]] = None,
-        tools: Optional[List[FunctionTool]] = None,
+        tools: Optional[List[BaseTool]] = None,
         spinner: Optional[Halo] = None) -> str:
     chat_model_args = chat_model_args or {}
 
     assert 'functions' not in chat_model_args, 'The `functions` argument is reserved for the `execute_chat_model_messages` function. If you want to add more functions use the `functions` argument to this method.'
 
     if tools is not None and len(tools) > 0:
-        chat_model_args['functions'] = [
-            pydantic_to_openai_function(function_name=tool.name, pydantic_type=tool.args_schema) for tool in tools]
+        chat_model_args['functions'] = [format_tool_to_openai_function(tool) for tool in tools]
 
-    function_map = {(tool.name or tool.args_schema.__name__): tool for tool in tools or []}
+    function_map = {tool.name: tool for tool in tools or []}
 
     all_messages = messages.copy()
 
@@ -43,23 +35,27 @@ def execute_chat_model_messages(
     while function_call is not None:
         function_name = function_call['name']
         if function_name in function_map:
+            tool = function_map[function_name]
             args = function_call['arguments']
 
             if spinner is not None:
-                progress_text = f'Executing function `{function_name}`...'
+                if hasattr(tool, 'progress_text'):
+                    progress_text = tool.progress_text
+                else:
+                    progress_text = f'Executing function `{function_name}`...'
 
                 spinner.start(progress_text)
 
-            tool = function_map[function_name]
-
-            if tool.args_schema != str:
-                args = json_string_to_pydantic(args, tool.args_schema)
-
-            result = tool.func(args)
+            # if tool.args_schema is not None and tool.args_schema != str:
+            #     args = json_string_to_pydantic(args, tool.args_schema)
+            #
+            args = fix_invalid_json(args)
+            args = json.loads(args)
+            result = tool.run(args)
 
             all_messages.append(FunctionMessage(
                 name=function_name,
-                content=result or 'None'
+                content=str(result) or 'None'
             ))
 
             last_message = chat_model.predict_messages(all_messages, **chat_model_args)

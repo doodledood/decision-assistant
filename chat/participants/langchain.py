@@ -1,14 +1,13 @@
-import dataclasses
-from typing import Dict, Any, List, Callable, Optional, Tuple
+from typing import Dict, Any, List, Optional
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import BaseMessage, AIMessage, HumanMessage, SystemMessage
+from langchain.tools import BaseTool
 
-from chat.ai_utils import execute_chat_model_messages, FunctionTool
+from chat.ai_utils import execute_chat_model_messages
 from chat.base import ChatMessage, Chat, ActiveChatParticipant
 from chat.structured_prompt import Section, StructuredPrompt
-
 
 
 class LangChainBasedAIChatParticipant(ActiveChatParticipant):
@@ -16,7 +15,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
     other_prompt_sections: List[Section]
-    tools: Optional[List[FunctionTool]] = None,
+    tools: Optional[List[BaseTool]] = None,
     spinner: Optional[Halo] = None
 
     class Config:
@@ -29,7 +28,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                  role: str = 'AI Assistant',
                  personal_mission: str = 'Be a helpful AI assistant.',
                  other_prompt_sections: Optional[List[Section]] = None,
-                 tools: Optional[List[FunctionTool]] = None,
+                 tools: Optional[List[BaseTool]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  **kwargs

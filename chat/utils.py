@@ -5,6 +5,9 @@ from pydantic import BaseModel
 
 
 def fix_invalid_json(json_string):
+    # Cut anything before the first { and after the last }
+    json_string = json_string[json_string.find('{'):json_string.rfind('}') + 1]
+
     # Use regular expression to find all string fields in the JSON
     pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
     fixed_json = ''

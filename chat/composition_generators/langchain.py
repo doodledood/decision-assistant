@@ -1,10 +1,11 @@
-from typing import Dict, Any, Callable, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import SystemMessage, HumanMessage, BaseMessage
+from langchain.tools import BaseTool
 
-from chat.ai_utils import execute_chat_model_messages, FunctionTool
+from chat.ai_utils import execute_chat_model_messages
 from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition
 from chat.composition_generators import ManageParticipantsOutputSchema
 from chat.parsing_utils import string_output_to_pydantic
@@ -15,13 +16,13 @@ from chat.structured_prompt import StructuredPrompt, Section
 class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
-    tools: Optional[List[FunctionTool]] = None,
+    tools: Optional[List[BaseTool]] = None,
     spinner: Optional[Halo] = None
     n_output_parsing_tries: int = 3
 
     def __init__(self,
                  chat_model: BaseChatModel,
-                 tools: Optional[List[FunctionTool]] = None,
+                 tools: Optional[List[BaseTool]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  n_output_parsing_tries: int = 3):

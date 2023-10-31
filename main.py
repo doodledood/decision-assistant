@@ -13,7 +13,7 @@ from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from chat.web_research.page_retriever import ScraperAPIPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
-from chat.web_research.web_research import SearchTheWeb, answer_query
+from chat.web_research.web_research import WebSearchToolArgs, answer_query
 from sequential_process import Step, SequentialProcess
 from state import DecisionAssistantState, load_state, save_state
 from steps import identify_goal, identify_alternatives, identify_criteria, map_criteria, prioritize_criteria, \
@@ -51,7 +51,7 @@ def run_decision_assistant(
         )
     )
     default_participant_tools = [
-        FunctionTool(args_schema=SearchTheWeb,
+        FunctionTool(args_schema=WebSearchToolArgs,
                      func=partial(answer_query, web_search))
     ]
 
