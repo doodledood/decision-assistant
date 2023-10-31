@@ -7,11 +7,9 @@ import ahpy
 import questionary
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
-import system_prompts
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
