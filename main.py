@@ -8,12 +8,11 @@ from halo import Halo
 from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import TokenTextSplitter
 
-from chat.ai_utils import FunctionTool
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from chat.web_research.page_retriever import ScraperAPIPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
-from chat.web_research.web_research import WebSearchToolArgs, answer_query
+from chat.web_research.web_research import WebResearchTool
 from sequential_process import Step, SequentialProcess
 from state import DecisionAssistantState, load_state, save_state
 from steps import identify_goal, identify_alternatives, identify_criteria, map_criteria, prioritize_criteria, \
@@ -51,8 +50,7 @@ def run_decision_assistant(
         )
     )
     default_participant_tools = [
-        FunctionTool(args_schema=WebSearchToolArgs,
-                     func=partial(answer_query, web_search))
+        WebResearchTool(web_search=web_search, n_results=n_search_results, spinner=spinner)
     ]
 
     spinner.start('Loading previous state...')
@@ -73,19 +71,19 @@ def run_decision_assistant(
             ),
             Step(
                 name='Alternative Listing',
-                func=partial(identify_alternatives, chat_model, default_tools_with_web_search, spinner=spinner),
+                func=partial(identify_alternatives, chat_model, default_participant_tools, spinner=spinner),
                 on_step_start=lambda _: spinner.start('Identifying alternatives...'),
                 on_step_completed=lambda _: spinner.succeed('Identified alternatives.')
             ),
             Step(
                 name='Criteria Identification',
-                func=partial(identify_criteria, chat_model, default_tools_with_web_search, spinner=spinner),
+                func=partial(identify_criteria, chat_model, default_participant_tools, spinner=spinner),
                 on_step_start=lambda _: spinner.start('Identifying criteria...'),
                 on_step_completed=lambda _: spinner.succeed('Identified criteria.')
             ),
             Step(
                 name='Criteria Mapping',
-                func=partial(map_criteria, chat_model, default_tools_with_web_search, spinner=spinner),
+                func=partial(map_criteria, chat_model, default_participant_tools, spinner=spinner),
                 on_step_start=lambda _: spinner.start('Mapping criteria...'),
                 on_step_completed=lambda _: spinner.succeed('Mapped criteria.')
             ),
@@ -97,13 +95,13 @@ def run_decision_assistant(
             ),
             Step(
                 name='Research Questions Generation',
-                func=partial(generate_research_questions, chat_model, default_tools_with_web_search, spinner=spinner),
+                func=partial(generate_research_questions, chat_model, default_participant_tools, spinner=spinner),
                 on_step_start=lambda _: spinner.start('Generating research questions...'),
                 on_step_completed=lambda _: spinner.succeed('Generated research questions.')
             ),
             Step(
                 name='Data Research',
-                func=partial(perform_research, chat_model, web_search, n_search_results, default_tools_with_web_search,
+                func=partial(perform_research, chat_model, web_search, n_search_results, default_participant_tools,
                              spinner=spinner, fully_autonomous=fully_autonomous_research),
                 on_step_start=lambda _: spinner.start('Researching data...'),
                 on_step_completed=lambda _: spinner.succeed('Researched data.')

@@ -488,9 +488,9 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
 
 
 def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_results: int,
-                     default_tools_with_web_search: List[BaseTool], state: DecisionAssistantState,
+                     tools: List[BaseTool], state: DecisionAssistantState,
                      spinner: Optional[Halo] = None,
-                     fully_autonomous: bool = False):
+                     fully_autonomous: bool = True):
     research_data = state.data.get('research_data')
     if research_data is None:
         research_data = {}
@@ -556,23 +556,84 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
             if alternative_criterion_research_data['aggregated'] != {}:
                 continue
 
-            alternative_criterion_research_data_str = '\n\n'.join(
-                [f'## {query}\n{answer}' for query, answer in alternative_criterion_research_data['raw'].items()]
+            ai = LangChainBasedAIChatParticipant(
+                name='Decision-Making Process Researcher',
+                role='Decision-Making Process Researcher',
+                mission='Refine research findings through user interaction and assign an accurate label based on data, user input, and criteria mapping.',
+                other_prompt_sections=[
+                    Section(
+                        name='Process',
+                        list=[
+                            'This is the sixth part of the decision-making process, after the goal, alternatives, criteria, criteria mapping, and research queries have been identified. No need for a greeting.',
+                            'Present the researched data to the user and assign a preliminary label & ask for feedback',
+                            'Revise the research findings based on user input, until the user is satisfied with the findings and label.',
+                        ],
+                    ),
+                    Section(
+                        name='Research Presentation',
+                        list=[
+                            'Maintain original findings if no new user input.',
+                            'Mention the sources of the research findings as inline links.'
+                        ]
+                    ),
+                    Section(
+                        name='Label Assignment',
+                        list=[
+                            'Assign one label per criterion per alternative based on scale and value assignment rules. A label should be a string only, e.g., "Very Expensive".',
+                            'If unclear, make an educated guess based on data and user input.'
+                        ]
+                    ),
+                    Section(
+                        name='The First Message',
+                        list=[
+                            'Your first message should look something like this: "Here is what I found about {alternative} for {criterion}:\n\n{research_findings}\n\nBecause {reason_for_label_assignment}, I think the label for {alternative} for {criterion} should be {label}. What do you think? Do you have anything else to add, clarify or change that might affect this label?"'
+                        ]
+                    ),
+                    Section(
+                        name='The Last Message',
+                        list=[
+                            'The last response should include the refined research findings for a criterion\'s alternative in rich markdown format with all the citations and links inline.',
+                            'Does not include conversational fluff. Think about it like a research report.',
+                        ]
+                    )
+                ],
+                tools=tools,
+                chat_model=chat_model,
+                spinner=spinner)
+            user = UserChatParticipant(name='User')
+            participants = [ai, user]
+
+            chat = Chat(
+                goal='Generate a template for automated research queries for each criterion, whose answers can be used as context when evaluating alternatives.',
+                backing_store=InMemoryChatDataBackingStore(),
+                renderer=TerminalChatRenderer(),
+                initial_participants=participants,
+                max_total_messages=2 if fully_autonomous else None
             )
 
-            criterion_full_research_data = chat_room(
+            chat_conductor = RoundRobinChatConductor()
+            output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+                sections=[
+                    Section(name='Goal', text=state.data['goal']),
+                    Section(name='Alternatives', list=state.data['alternatives']),
+                    Section(name='Criteria Mappings',
+                            sub_sections=[
+                                Section(name=criterion_name, text=criterion_mapping) for
+                                criterion_name, criterion_mapping in
+                                state.data['criteria_mapping'].items()
+                            ]),
+                    Section(name='Research Findings',
+                            sub_sections=[
+                                Section(name=query, text=answer) for query, answer in
+                                alternative_criterion_research_data[
+                                    'raw'].items()
+                            ])
+                ]
+            )))
+            criterion_full_research_data = string_output_to_pydantic(
+                output=output,
                 chat_model=chat_model,
-                messages=[
-                    SystemMessage(
-                        content=system_prompts.alternative_criteria_research_system_prompt
-                    ),
-                    HumanMessage(
-                        content=f'# GOAL\n{state.data["goal"]}\n\n# ALTERNATIVE\n{alternative}\n\n# CRITERION MAPPING\n{criterion_mapping}\n\n# RESEARCH FINDINGS\n{alternative_criterion_research_data_str}'),
-                ],
-                tools=default_tools_with_web_search,
-                result_schema=AlternativeCriteriaResearchFindingsResult,
-                spinner=spinner,
-                get_immediate_answer=fully_autonomous
+                output_schema=AlternativeCriteriaResearchFindingsResult
             )
 
             research_data[alternative][criterion_name]['aggregated'] = {
