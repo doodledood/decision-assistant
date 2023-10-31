@@ -27,8 +27,7 @@ class JSONOutputParserChatParticipant(ActiveChatParticipant):
         last_message = messages[-1]
 
         try:
-            json_string = last_message.content[last_message.content.index('{'):last_message.content.rindex('}') + 1]
-            json_string = fix_invalid_json(json_string)
+            json_string = fix_invalid_json(last_message.content)
             self.output = model = json_string_to_pydantic(json_string, self.output_schema)
 
             return f'{model.model_dump_json()} TERMINATE'

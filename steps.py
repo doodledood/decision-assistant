@@ -15,9 +15,10 @@ import system_prompts
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
+from chat.parsing_utils import string_output_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import TerminalChatRenderer
-from chat.structured_prompt import Section
+from chat.structured_prompt import Section, StructuredPrompt
 from presentation import generate_decision_report_as_html, save_html_to_file, open_html_file_in_browser
 from chat.web_research import WebSearch
 from ranking.ranking import topsis_score, normalize_label_value
@@ -138,13 +139,36 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
     state.data = {**state.data, **dict(goal=goal)}
 
 
-def identify_alternatives(chat_model: ChatOpenAI, default_tools_with_web_search: List[BaseTool],
+def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
                           state: DecisionAssistantState, spinner: Optional[Halo] = None):
     if state.data.get('alternatives') is not None:
         return
 
     ai = LangChainBasedAIChatParticipant(
-        name='Assistant',
+        name='Decision-Making Alternative Consultant',
+        role='Decision-Making Alternative Consultant',
+        mission='Assist the user in identifying alternatives for the decision-making process.',
+        other_prompt_sections=[
+            Section(name='Interaction Schema', list=[
+                'This is the second part of the decision-making process, after the goal has been identified. No need for a greeting.',
+                'Start by asking the user for alternatives they had in mind for the decision.',
+                'Assist the user in generating alternatives if they are unsure or struggle to come up with options or need help researching more ideas. You can use the web search tool and your own knowledge for this.',
+                'List the final list of alternatives and confirm with the user before moving on to the next step.'
+            ]),
+            Section(name='Requirements', list=[
+                'At the end of the process there should be at least 2 alternatives and no more than 20.'
+            ]),
+            Section(name='Alternatives', list=[
+                'The alternatives should be clear and specific.',
+                'The alternatives should be options that the user can choose from.',
+                'Naming the alternatives should be done in a way that makes it easy to refer to them later on.',
+                'For example, for a goal such as "Decide which school to go to": The alternative "Go to school X" is bad, while "School X" is good.'
+            ]),
+            Section('The Last Message', list=[
+                'The last response should include the list of confirmed alternatives.'
+            ])
+        ],
+        tools=tools,
         chat_model=chat_model,
         spinner=spinner)
     user = UserChatParticipant(name='User')
@@ -157,18 +181,17 @@ def identify_alternatives(chat_model: ChatOpenAI, default_tools_with_web_search:
     )
 
     chat_conductor = RoundRobinChatConductor()
-    goal = chat_conductor.initiate_chat_with_result(chat=chat)
-    alternatives = chat_room(
+    output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+        sections=[
+            Section(name='Goal', text=state.data['goal']),
+        ]
+    )))
+    output = string_output_to_pydantic(
+        output=output,
         chat_model=chat_model,
-        messages=[
-            SystemMessage(content=system_prompts.alternative_listing_system_prompt),
-            HumanMessage(content=f'# GOAL\n{state.data["goal"]}'),
-        ],
-        tools=default_tools_with_web_search,
-        result_schema=AlternativeListingResult,
-        spinner=spinner
+        output_schema=AlternativeListingResult
     )
-    alternatives = alternatives.dict()['alternatives']
+    alternatives = output.alternatives
 
     state.data = {**state.data, **dict(alternatives=alternatives)}
 
