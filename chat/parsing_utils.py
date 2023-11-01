@@ -1,4 +1,3 @@
-# Based directly on David Shaprio's BSHR Loop: https://github.com/daveshap/BSHR_Loop
 from typing import Type, Optional, List
 
 from halo import Halo
