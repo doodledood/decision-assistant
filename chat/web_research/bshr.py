@@ -1,5 +1,7 @@
 # Based directly on David Shaprio's BSHR Loop: https://github.com/daveshap/BSHR_Loop
 import datetime
+import json
+from functools import partial
 from typing import Callable, Optional
 
 from dotenv import load_dotenv
@@ -8,6 +10,7 @@ from langchain.cache import SQLiteCache, GPTCache
 from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import TokenTextSplitter
 from langchain.globals import set_llm_cache
+from pydantic import BaseModel
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
@@ -20,11 +23,28 @@ from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from chat.web_research.page_retriever import ScraperAPIPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
 from chat.web_research.web_research import WebResearchTool
+from sequential_process import SequentialProcess, Step
+
+
+class BHSRState(BaseModel):
+    information_need: str
+    evidence: Optional[str]
+
+
+def save_state(state: BHSRState, state_file: Optional[str]):
+    if state_file is None:
+        return
+
+    data = state.model_dump()
+    with open(state_file, 'w') as f:
+        json.dump(data, f, indent=2)
+
 
 if __name__ == '__main__':
     load_dotenv()
 
-    llm_cache = SQLiteCache()
+    state_file = 'output/bshr_state.json'
+    llm_cache = SQLiteCache(database_path='../../output/llm_cache.db')
     set_llm_cache(llm_cache)
 
     chat_model = ChatOpenAI(
@@ -100,27 +120,20 @@ if __name__ == '__main__':
         chat_model=chat_model,
         spinner=spinner)
 
-
-    class UserWithEvidenceChatParticipant(UserChatParticipant):
-        def __init__(self, get_evidence: Callable[[], Optional[str]], name: str = 'User'):
-            super().__init__(name=name)
-
-            self.get_evidence = get_evidence
-
-        def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
-            user_response = super().on_new_chat_message(chat=chat, message=message)
-
-            evidence = self.get_evidence()
-            if evidence is None:
-                return user_response
-
-            return str(StructuredPrompt(
-                sections=[
-                    Section(name='Previous Evidence', text=evidence),
-                    Section(name='User Comment', text=user_response)
-                ]
-            ))
-
+    process = SequentialProcess(
+        steps=[
+            Step(
+                name='Query Generation',
+                func=partial(identify_goal, chat_model, spinner=spinner),
+                on_step_start=lambda _: spinner.start('Generating queries...'),
+                on_step_completed=lambda _: spinner.succeed('Queries generated.')
+            )
+        ],
+        initial_state={
+            'information_need'
+        },
+        save_state=partial(save_state, state_file=state_file)
+    )
 
     evidence = None
 
