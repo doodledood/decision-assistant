@@ -11,7 +11,7 @@ from langchain.globals import set_llm_cache
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
-from chat.conductors import RoundRobinChatConductor
+from chat.conductors import RoundRobinChatConductor, LangChainBasedAIChatConductor
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import TerminalChatRenderer
 from chat.structured_prompt import Section, StructuredPrompt
@@ -130,12 +130,23 @@ if __name__ == '__main__':
     while True:
         chat = Chat(
             goal='The goal of this chat is to generate a data-backed hypothesis that satisfices the information need of the user.',
+            speaker_interaction_schema='''1. The user will provide a query or information need.
+2. If the query or information need is clear, the query generator will generate a list of queries based on the information need.
+3. Otherwise, the user will clarify the query or information need first and then the query generator will generate a list of queries based on the information need.
+4. The web searcher will search the web for the queries and provide the results.
+5. The hypothesis generator will generate a hypothesis based on the results.
+6. The satisficing checker will determine if the information need has been satisficed.
+7. The SPR writer will generate a summary of the entire conversation and evidence up to this point.
+''',
             backing_store=InMemoryChatDataBackingStore(),
             renderer=TerminalChatRenderer(),
             initial_participants=participants
         )
 
-        chat_conductor = RoundRobinChatConductor()
+        chat_conductor = LangChainBasedAIChatConductor(
+            chat_model=chat_model,
+            termination_condition='The satisficing checker has determined that the information need has been satisficed, or the user has indicated that the information need has been satisficed, or the user wants to end the chat.'
+        )
         evidence = chat_conductor.initiate_chat_with_result(chat=chat)
 
         print(evidence)
