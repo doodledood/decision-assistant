@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor, LangChainBasedAIChatConductor
-from chat.parsing_utils import string_output_to_pydantic
+from chat.parsing_utils import chat_messages_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import TerminalChatRenderer
 from chat.structured_prompt import Section, StructuredPrompt
@@ -43,7 +43,7 @@ class AlternativeListingResult(BaseModel):
 
 class CriterionMappingResult(BaseModel):
     criterion_mapping: str = Field(
-        description='An explaination for the criterion on how to assign a value from the scale to a piece of data. Direct, no fluff.')
+        description='An explaination for the criterion on how to assign a value from the scale to a piece of data. Direct, no fluff. Numbered from 1. to N. where N is the best outcome for the criterion.')
 
 
 class CriteriaResearchQueriesResult(BaseModel):
@@ -150,9 +150,9 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
     )
 
     chat_conductor = RoundRobinChatConductor()
-    output = chat_conductor.initiate_chat_with_result(chat=chat)
-    goal = string_output_to_pydantic(
-        output=output,
+    _ = chat_conductor.initiate_chat_with_result(chat=chat)
+    goal = chat_messages_to_pydantic(
+        chat_messages=chat.get_messages(),
         chat_model=chat_model,
         output_schema=GoalIdentificationResult
     )
@@ -217,13 +217,13 @@ def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
     )
 
     chat_conductor = RoundRobinChatConductor()
-    output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+    _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
         sections=[
             Section(name='Goal', text=state.data['goal']),
         ]
     )))
-    output = string_output_to_pydantic(
-        output=output,
+    output = chat_messages_to_pydantic(
+        chat_messages=chat.get_messages(),
         chat_model=chat_model,
         output_schema=AlternativeListingResult
     )
@@ -383,14 +383,14 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         chat_model=chat_model,
         termination_condition='The criteria and their respective scales have been identified, iterated on (if applicable), and finally, confirmed by the user.'
     )
-    output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+    _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
         sections=[
             Section(name='Goal', text=state.data['goal']),
             Section(name='Alternatives', list=state.data['alternatives']),
         ]
     )))
-    output = string_output_to_pydantic(
-        output=output,
+    output = chat_messages_to_pydantic(
+        chat_messages=chat.get_messages(),
         chat_model=chat_model,
         output_schema=CriteriaIdentificationResult
     )
@@ -403,21 +403,28 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                  state: DecisionAssistantState, spinner: Optional[Halo] = None):
     criteria_mapping = state.data.get('criteria_mapping', {})
 
-    for criterion in state.data['criteria']:
+    for i, criterion in enumerate(state.data['criteria']):
         if criterion['name'] in criteria_mapping:
             continue
 
-        ai = LangChainBasedAIChatParticipant(
+        shared_prompt_sections = [
+            Section(
+                name='Process Stage',
+                text='This is the fourth part of the decision-making process, after the goal, alternatives, and criteria have been identified. No need for a greeting.'
+            )
+        ]
+        criteria_mapper = LangChainBasedAIChatParticipant(
             name='Decision-Making Criteria Mapping Consultant',
             role='Decision-Making Criteria Mapping Consultant',
             personal_mission='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given scale for each criterion in a decision-making process.',
-            other_prompt_sections=[
+            other_prompt_sections=shared_prompt_sections + [
                 Section(
                     name='Interaction Schema',
                     list=[
-                        'This is the fourth part of the decision-making process, after the goal, alternatives, and criteria have been identified. No need for a greeting.',
-                        'Start by suggesting a mapping for the criterion at hand and ask the user for feedback.',
-                        'Iterate on the mapping until the user is satisfied with it.'
+                        'Start by suggesting a mapping for the criterion at hand, and asking the Mapping Critic for feedback.',
+                        'Iterate on the mapping with the Critic until you are both satisfied with it.',
+                        'Once you are both satisfied, confirm the mapping with the user and ask for feedback.',
+                        'Continue iterating on the mapping with the Critic and user until the user is satisfied with it.'
                     ]
                 ),
                 Section(
@@ -451,18 +458,65 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
             tools=tools,
             chat_model=chat_model,
             spinner=spinner)
+        criteria_mapping_critic = LangChainBasedAIChatParticipant(
+            name='Criteria Mapping Critic',
+            role='Criteria Mapping Critic',
+            personal_mission='Critique the criteria mapping and provide feedback on what to improve.',
+            other_prompt_sections=shared_prompt_sections + [
+                Section(
+                    name='Interaction Schema',
+                    list=[
+                        'Give direct feedback on the mapping suggested by the Criteria Mapper.',
+                        'Iterate on the mapping with the Mapper until you are both satisfied with it.',
+                        'Once you are both satisfied, the Mapper should confirm the mapping with the user and ask for feedback.',
+                        'Continue iterating on the mapping with the Critic and user until the user is satisfied with it.'
+                    ]
+                ),
+                Section(
+                    name='Criteria Mapping Critiquing',
+                    list=[
+                        'When critiquing the criteria mapping, make sure it is clear, non-ambiguous, and does not contradict or interfere with previous mappings or future ones to follow.',
+                    ],
+                    sub_sections=[
+                        Section(
+                            name='Questions to ask yourself',
+                            list=[
+                                'Is the mapping clear and non-ambiguous?',
+                                'Does the mapping contradict or interfere with previous mappings or future ones to follow?',
+                                'Does the mapping include a clear explaination & decision tree on how to assign each label?'
+                                'Does the mapping cover all the labels in the scale?',
+                                'Does the mapping take into account the goal of the decision-making process?'
+                                'Is the mapping based on concrete, measurable, and reproducable data like indexes, statistics, and numbers when applicable?',
+                                'For non-subjective criteria only: Is the mapping too subjective or vague?',
+                            ]
+                        )
+                    ]
+                )
+            ],
+            tools=tools,
+            chat_model=chat_model,
+            spinner=spinner)
         user = UserChatParticipant(name='User')
-        participants = [user, ai]
+        participants = [user, criteria_mapper, criteria_mapping_critic]
 
         chat = Chat(
             goal='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given scale for each criterion in a decision-making process.',
+            speaker_interaction_schema='''1. The Criteria Mapper suggests an initial mapping for the criterion based on the user input.
+2. The Criteria Mapping Critic critiques the mapping suggested and suggests improvements.
+3. The Criteria Mapper & Critic continue iterating on the mapping until they think it is good enough and ask the user for feedback.
+4. If the user is not satisfied with the mapping, go back to step 1, refining the mapping based on the user feedback.
+5. If the user is satisfied with the mapping, it\'s time to move on to the next criterion.
+            ''',
             backing_store=InMemoryChatDataBackingStore(),
             renderer=TerminalChatRenderer(),
             initial_participants=participants
         )
 
-        chat_conductor = RoundRobinChatConductor()
-        output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+        chat_conductor = LangChainBasedAIChatConductor(
+            chat_model=chat_model,
+            termination_condition='The criterion mapping has been identified, iterated on (if applicable), and finally, confirmed by the user.'
+        )
+        _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
             sections=[
                 Section(
                     name='Goal',
@@ -476,12 +530,12 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                 Section(
                     name='Criteria Left to Map',
                     list=[criterion_name for criterion_name in
-                          [criterion['name'] for criterion in state.data['criteria'] if
+                          [f'{j + 1}. {criterion["name"]}' for j, criterion in enumerate(state.data['criteria']) if
                            criterion['name'] not in criteria_mapping]]
                 ),
                 Section(
                     name='Current Criterion',
-                    text=criterion['name']
+                    text=f'{i + 1}. {criterion["name"]}'
                 ),
                 Section(
                     name='Current Criterion Scale',
@@ -490,8 +544,8 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                 )
             ]
         )))
-        output = string_output_to_pydantic(
-            output=output,
+        output = chat_messages_to_pydantic(
+            chat_messages=chat.get_messages(),
             chat_model=chat_model,
             output_schema=CriterionMappingResult
         )
@@ -577,7 +631,7 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
     )
 
     chat_conductor = RoundRobinChatConductor()
-    output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+    _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
         sections=[
             Section(name='Goal', text=state.data['goal']),
             Section(name='Alternatives', list=state.data['alternatives']),
@@ -588,8 +642,8 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
                     ]),
         ]
     )))
-    output = string_output_to_pydantic(
-        output=output,
+    output = chat_messages_to_pydantic(
+        chat_messages=chat.get_messages(),
         chat_model=chat_model,
         output_schema=CriteriaResearchQueriesResult
     )
@@ -724,7 +778,7 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
             )
 
             chat_conductor = RoundRobinChatConductor()
-            output = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+            _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
                 sections=[
                     Section(name='Goal', text=state.data['goal']),
                     Section(name='Alternatives', list=state.data['alternatives']),
@@ -742,8 +796,8 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
                             ])
                 ]
             )))
-            criterion_full_research_data = string_output_to_pydantic(
-                output=output,
+            criterion_full_research_data = chat_messages_to_pydantic(
+                chat_messages=chat.get_messages(),
                 chat_model=chat_model,
                 output_schema=AlternativeCriteriaResearchFindingsResult
             )

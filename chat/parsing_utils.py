@@ -1,15 +1,16 @@
-from typing import Type, Optional
+from typing import Type, Optional, List
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
 
 from chat.backing_stores import InMemoryChatDataBackingStore
-from chat.base import TOutputSchema, Chat
+from chat.base import TOutputSchema, Chat, ChatMessage
 from chat.conductors import RoundRobinChatConductor
 from chat.errors import MessageCouldNotBeParsedError
 from chat.participants import LangChainBasedAIChatParticipant
 from chat.participants.output_parser import JSONOutputParserChatParticipant
 from chat.renderers import NoChatRenderer
+from chat.structured_prompt import Section, StructuredPrompt
 from chat.utils import pydantic_to_json_schema
 
 
@@ -19,12 +20,34 @@ def string_output_to_pydantic(output: str,
                               spinner: Optional[Halo] = None,
                               n_tries: int = 3,
                               hide_message: bool = True) -> TOutputSchema:
+    return chat_messages_to_pydantic(
+        chat_messages=[ChatMessage(sender='Human', text=output)],
+        chat_model=chat_model,
+        output_schema=output_schema,
+        spinner=spinner,
+        n_tries=n_tries,
+        hide_message=hide_message
+    )
+
+
+def chat_messages_to_pydantic(chat_messages: List[ChatMessage],
+                              chat_model: BaseChatModel,
+                              output_schema: Type[TOutputSchema],
+                              spinner: Optional[Halo] = None,
+                              n_tries: int = 3,
+                              hide_message: bool = True) -> TOutputSchema:
     text_to_json_ai = LangChainBasedAIChatParticipant(
         chat_model=chat_model,
-        name='Text to JSON Converter',
-        role='Text to JSON Converter',
-        personal_mission='You will be provided some TEXT and a JSON SCHEMA. Your only mission is to convert the TEXT '
+        name='Chat Messages to JSON Converter',
+        role='Chat Messages to JSON Converter',
+        personal_mission='You will given PREVIOUS MESSAGES and a JSON SCHEMA. Your only mission is to convert the previous chat messages '
                          'to a JSON that follows the JSON SCHEMA provided. Your message should include only correct JSON.',
+        other_prompt_sections=[
+            Section(name='NOTES', list=[
+                'Usually a JSON needs to be objective and contain no fluff. For example: "I am a human." should become {"type": "human"}',
+                'However, some fields may in fact require entire sentences. For example: "I am a human." should become {"response": "I am a human."}',
+            ]),
+        ],
         spinner=spinner
     )
     json_parser = JSONOutputParserChatParticipant(output_schema=output_schema)
@@ -40,10 +63,22 @@ def string_output_to_pydantic(output: str,
 
     _ = conductor.initiate_chat_with_result(
         chat=parser_chat,
-        initial_message=f'# TEXT\n{output}\n\n# JSON SCHEMA\n{pydantic_to_json_schema(output_schema)}'
+        initial_message=str(StructuredPrompt(
+            sections=[
+                Section(
+                    name='Previous Messages',
+                    list=[f'{m.sender_name}: {m.content}' for m in chat_messages],
+                    list_item_prefix=None
+                ),
+                Section(
+                    name='Json Schema',
+                    text=str(pydantic_to_json_schema(output_schema))
+                )
+            ]
+        ))
     )
 
     if json_parser.output is None:
-        raise MessageCouldNotBeParsedError(output)
+        raise MessageCouldNotBeParsedError('An output could not be parsed from the chat messages.')
 
     return json_parser.output
