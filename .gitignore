@@ -161,3 +161,4 @@ cython_debug/
 
 state.json
 decision_report.html
+*.db

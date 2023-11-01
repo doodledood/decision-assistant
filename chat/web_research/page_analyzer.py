@@ -71,7 +71,8 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
                 initial_participants=[
                     UserChatParticipant(),
                     LangChainBasedAIChatParticipant(
-                        name='',
+                        name='Web Page Query Answerer',
+                        role='Web Page Query Answerer',
                         personal_mission='Answer queries based on provided (partial) web page data from the web.',
                         chat_model=self.chat_model,
                         other_prompt_sections=[

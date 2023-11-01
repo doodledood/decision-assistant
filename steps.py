@@ -502,7 +502,7 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
 
         chat = Chat(
             goal='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given scale for each criterion in a decision-making process.',
-            speaker_interaction_schema='''1. The Criteria Mapper suggests an initial mapping for the criterion based on the user input.
+            speaker_interaction_schema='''1. The Criteria Mapper should suggest an initial mapping for the criterion based on the user input.
 2. The Criteria Mapping Critic critiques the mapping suggested and suggests improvements.
 3. The Criteria Mapper & Critic continue iterating on the mapping until they think it is good enough and ask the user for feedback.
 4. If the user is not satisfied with the mapping, go back to step 1, refining the mapping based on the user feedback.
@@ -517,34 +517,43 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
             chat_model=chat_model,
             termination_condition='The criterion mapping has been identified, iterated on (if applicable), and finally, confirmed by the user.'
         )
-        _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
-            sections=[
-                Section(
-                    name='Goal',
-                    text=state.data['goal']
-                ),
-                Section(
-                    name='Previously Mapping Criteria',
-                    list=[f'{criteria_names.index(criterion_name)}. {criterion_name}: {criterion_mapping}' for criterion_name, criterion_mapping in
-                          criteria_mapping.items()],
-                ),
-                Section(
-                    name='Criteria Left to Map',
-                    list=[f'{criteria_names.index(criterion_name)}. {criterion_name}' for criterion_name in
-                          [criterion["name"] for criterion in state.data['criteria'] if
-                           criterion['name'] not in criteria_mapping]]
-                ),
-                Section(
-                    name='Current Criterion',
-                    text=f'{criteria_names.index(criterion["name"])}. {criterion["name"]}'
-                ),
-                Section(
-                    name='Current Criterion Scale',
-                    list=criterion['scale'],
-                    list_item_prefix=None
-                )
-            ]
-        )))
+        _ = chat_conductor.initiate_chat_with_result(
+            chat=chat,
+            initial_message=str(StructuredPrompt(
+                sections=[
+                    Section(
+                        name='Goal',
+                        text=state.data['goal']
+                    ),
+                    Section(
+                        name='Previously Mapping Criteria',
+                        list=[
+                            f'{criteria_names.index(criterion_name)}. {criterion_name}: {criterion_mapping}'
+                            for criterion_name, criterion_mapping in
+                            criteria_mapping.items()],
+                    ),
+                    Section(
+                        name='Criteria Left to Map',
+                        list=[
+                            f'{criteria_names.index(criterion_name)}. {criterion_name}'
+                            for criterion_name in
+                            [criterion["name"] for criterion in
+                             state.data['criteria'] if
+                             criterion['name'] not in criteria_mapping]]
+                    ),
+                    Section(
+                        name='Current Criterion',
+                        text=f'{criteria_names.index(criterion["name"])}. {criterion["name"]}'
+                    ),
+                    Section(
+                        name='Current Criterion Scale',
+                        list=criterion['scale'],
+                        list_item_prefix=None
+                    )
+                ]
+            )),
+            from_participant=user
+        )
         output = chat_messages_to_pydantic(
             chat_messages=chat.get_messages(),
             chat_model=chat_model,

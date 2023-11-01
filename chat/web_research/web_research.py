@@ -12,7 +12,6 @@ from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import NoChatRenderer
-from chat.utils import json_string_to_pydantic
 from chat.web_research.page_analyzer import PageQueryAnalyzer
 from chat.web_research.search import SearchResultsProvider
 from chat.structured_prompt import Section, StructuredPrompt
@@ -111,6 +110,7 @@ class WebSearch:
                 UserChatParticipant(),
                 LangChainBasedAIChatParticipant(
                     name='Query Answer Aggregator',
+                    role='Query Answer Aggregator',
                     personal_mission='Analyze query answers, discard unlikely ones, and provide an aggregated final response.',
                     chat_model=self.chat_model,
                     other_prompt_sections=[
