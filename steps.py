@@ -43,7 +43,7 @@ class AlternativeListingResult(BaseModel):
 
 class CriterionMappingResult(BaseModel):
     criterion_mapping: str = Field(
-        description='An explaination for the criterion on how to assign a value from the scale to a piece of data. Direct, no fluff. Numbered from 1. to N. where N is the best outcome for the criterion.')
+        description='An explaination for the criterion on how to assign a value from the scale to a piece of data. Direct, no fluff. Should be formatted like: "1. LABEL_1: EXPLANATION_1;..." - 1 is the first label is the worst outcome for the criterion.')
 
 
 class CriteriaResearchQueriesResult(BaseModel):
@@ -402,6 +402,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
 def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                  state: DecisionAssistantState, spinner: Optional[Halo] = None):
     criteria_mapping = state.data.get('criteria_mapping', {})
+    criteria_names = [criterion['name'] for criterion in state.data['criteria']]
 
     for i, criterion in enumerate(state.data['criteria']):
         if criterion['name'] in criteria_mapping:
@@ -486,7 +487,7 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                                 'Does the mapping include a clear explaination & decision tree on how to assign each label?'
                                 'Does the mapping cover all the labels in the scale?',
                                 'Does the mapping take into account the goal of the decision-making process?'
-                                'Is the mapping based on concrete, measurable, and reproducable data like indexes, statistics, and numbers when applicable?',
+                                'Is the mapping based on concrete, specific, measurable, and reproducable data like indexes, statistics, and numbers when applicable?',
                                 'For non-subjective criteria only: Is the mapping too subjective or vague?',
                             ]
                         )
@@ -524,18 +525,18 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                 ),
                 Section(
                     name='Previously Mapping Criteria',
-                    list=[f'{criterion_name}: {criterion_mapping}' for criterion_name, criterion_mapping in
-                          criteria_mapping.items()]
+                    list=[f'{criteria_names.index(criterion_name)}. {criterion_name}: {criterion_mapping}' for criterion_name, criterion_mapping in
+                          criteria_mapping.items()],
                 ),
                 Section(
                     name='Criteria Left to Map',
-                    list=[criterion_name for criterion_name in
-                          [f'{j + 1}. {criterion["name"]}' for j, criterion in enumerate(state.data['criteria']) if
+                    list=[f'{criteria_names.index(criterion_name)}. {criterion_name}' for criterion_name in
+                          [criterion["name"] for criterion in state.data['criteria'] if
                            criterion['name'] not in criteria_mapping]]
                 ),
                 Section(
                     name='Current Criterion',
-                    text=f'{i + 1}. {criterion["name"]}'
+                    text=f'{criteria_names.index(criterion["name"])}. {criterion["name"]}'
                 ),
                 Section(
                     name='Current Criterion Scale',
