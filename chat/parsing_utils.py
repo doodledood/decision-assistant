@@ -1,3 +1,4 @@
+# Based directly on David Shaprio's BSHR Loop: https://github.com/daveshap/BSHR_Loop
 from typing import Type, Optional, List
 
 from halo import Halo
@@ -21,7 +22,7 @@ def string_output_to_pydantic(output: str,
                               n_tries: int = 3,
                               hide_message: bool = True) -> TOutputSchema:
     return chat_messages_to_pydantic(
-        chat_messages=[ChatMessage(id=1, sender_name='Unknown', text=output)],
+        chat_messages=[ChatMessage(id=1, sender_name='Unknown', content=output)],
         chat_model=chat_model,
         output_schema=output_schema,
         spinner=spinner,
