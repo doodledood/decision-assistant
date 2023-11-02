@@ -69,7 +69,8 @@ class QueryGenerationResult(BaseModel):
 
 
 class HypothesisGenerationResult(BaseModel):
-    hypothesis: str = Field(description='A new or updated hypothesis based on the materials provided. Rich formatting using Markdown. Should include all relevant citations inline.')
+    hypothesis: str = Field(
+        description='A new or updated hypothesis based on the materials provided. Rich formatting using Markdown. Should include all relevant citations inline.')
 
 
 class SatisficationCheckResult(BaseModel):
@@ -302,11 +303,12 @@ def brainstorm_search_hypothesize_refine(
     if state_file is not None:
         spinner.start('Loading previous state...')
 
-    initial_state = load_state(state_file)
-    if initial_state is None:
+    loaded_state = load_state(state_file)
+    if loaded_state is None:
         initial_state = BHSRState() if initial_state is None else initial_state
         spinner.stop()
     else:
+        initial_state = loaded_state
         spinner.succeed('Loaded previous state.')
 
     process = SequentialProcess(
@@ -422,7 +424,10 @@ if __name__ == '__main__':
     spinner = Halo(spinner='dots')
 
     hypothesis = run_brainstorm_search_hypothesize_refine_loop(
-        initial_state=BHSRState(information_need='What is the safest state in the US?'),
+        initial_state=BHSRState(
+            information_need='What are the top 10 countries to relocate to from israel. I am looking for a place with '
+                             'a high safety, low to non muslim population, good economy, good relations to israel, '
+                             'good weather, highly stable, no natural disasters, etc.'),
         web_search=web_search,
         chat_model=chat_model,
         n_search_results=n_search_results,
