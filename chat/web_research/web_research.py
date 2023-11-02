@@ -130,6 +130,7 @@ class WebSearch:
                             ]),
                             Section(name='Final Answer Notes', list=[
                                 'Do not fabricate information. Stick to provided data.',
+                                'You will be given the top search results from a search engine, there is a reason they are the top results. You should pay attention to all of them and think about the query intent.'
                                 'If the answer is not found in the page data, state it clearly.',
                                 'Should be formatted in Markdown with inline citations.'
                             ])
