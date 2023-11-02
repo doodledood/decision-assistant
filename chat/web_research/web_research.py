@@ -12,6 +12,7 @@ from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import NoChatRenderer
+from chat.web_research.errors import TransientHTTPError, NonTransientHTTPError
 from chat.web_research.page_analyzer import PageQueryAnalyzer
 from chat.web_research.search import SearchResultsProvider
 from chat.structured_string import Section, StructuredString
@@ -87,14 +88,25 @@ class WebSearch:
                 if spinner is not None:
                     spinner.start(f'Reading & analyzing #{result.position} result "{result.title}"')
 
-                page_result = self.page_query_analyzer.analyze(url=result.link, title=result.title, query=query,
-                                                               spinner=spinner)
+                try:
+                    page_result = self.page_query_analyzer.analyze(url=result.link, title=result.title, query=query,
+                                                                   spinner=spinner)
+                    answer = page_result.answer
 
-                if spinner is not None:
-                    spinner.succeed(f'Read & analyzed #{result.position} result "{result.title}".')
+                    if spinner is not None:
+                        spinner.succeed(f'Read & analyzed #{result.position} result "{result.title}".')
+                except Exception as e:
+                    if type(e) in (TransientHTTPError, NonTransientHTTPError):
+                        if spinner is not None:
+                            spinner.warn(
+                                f'Failed to read & analyze #{result.position} result "{result.title}", moving on.')
+
+                        answer = 'Unable to answer query because the page could not be read.'
+                    else:
+                        raise
 
                 qna.append({
-                    'answer': page_result.answer,
+                    'answer': answer,
                     'source': result.link
                 })
 
