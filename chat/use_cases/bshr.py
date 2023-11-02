@@ -108,7 +108,7 @@ def generate_queries(state: BHSRState,
             initial_message=str(StructuredString(sections=[
                 Section(name='Information Need', text=state.information_need),
                 Section(name='Previous Queries & Answers', sub_sections=[
-                    Section(name=query, text=answer, uppercase_name=False) for query, answer in
+                    Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for query, answer in
                     state.answers_to_queries.items()
                 ]),
                 Section(name='Current Hypothesis', text=state.current_hypothesis)
@@ -181,7 +181,7 @@ def generate_hypothesis(state: BHSRState,
         initial_message=str(StructuredString(sections=[
             Section(name='Information Need', text=state.information_need),
             Section(name='Previous Queries & Answers', sub_sections=[
-                Section(name=query, text=answer, uppercase_name=False) for query, answer in
+                Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for query, answer in
                 state.answers_to_queries.items()
             ]),
             Section(name='Previous Hypothesis', text=state.current_hypothesis)
@@ -223,7 +223,7 @@ def check_satisficing(state: BHSRState,
         initial_message=str(StructuredString(sections=[
             Section(name='Information Need', text=state.information_need),
             Section(name='Previous Queries & Answers', sub_sections=[
-                Section(name=query, text=answer, uppercase_name=False) for query, answer in
+                Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for query, answer in
                 state.answers_to_queries.items()
             ]),
             Section(name='Previous Hypothesis', text=state.current_hypothesis),
