@@ -286,7 +286,7 @@ def check_satisficing(state: BHSRState,
 def brainstorm_search_hypothesize_refine(
         web_search: WebSearch,
         chat_model: BaseChatModel,
-        initial_query: Optional[str] = None,
+        initial_state: Optional[BHSRState] = None,
         n_search_results: int = 3,
         state_file: Optional[str] = None,
         spinner: Optional[Halo] = None) -> BHSRState:
@@ -303,7 +303,7 @@ def brainstorm_search_hypothesize_refine(
 
     initial_state = load_state(state_file)
     if initial_state is None:
-        initial_state = BHSRState(information_need=initial_query)
+        initial_state = BHSRState() if initial_state is None else initial_state
         spinner.stop()
     else:
         spinner.succeed('Loaded previous state.')
@@ -315,7 +315,7 @@ def brainstorm_search_hypothesize_refine(
                 func=partial(
                     generate_queries,
                     chat_model=chat_model,
-                    interactive_user=initial_query is None,
+                    interactive_user=initial_state.information_need is None,
                     shared_sections=shared_sections,
                     web_search_tool=web_search_tool,
                     spinner=spinner
@@ -369,12 +369,12 @@ def run_brainstorm_search_hypothesize_refine_loop(
         web_search: WebSearch,
         chat_model: BaseChatModel,
         n_search_results: int = 3,
-        initial_query: Optional[str] = None,
+        initial_state: Optional[BHSRState] = None,
         state_file: Optional[str] = None,
         spinner: Optional[Halo] = None) -> str:
     while True:
         state = brainstorm_search_hypothesize_refine(
-            initial_query=initial_query,
+            initial_state=initial_state,
             web_search=web_search,
             chat_model=chat_model,
             n_search_results=n_search_results,
@@ -421,7 +421,7 @@ if __name__ == '__main__':
     spinner = Halo(spinner='dots')
 
     hypothesis = run_brainstorm_search_hypothesize_refine_loop(
-        initial_query='What is the safest state in the US?',
+        initial_state=BHSRState(information_need='What is the safest state in the US?'),
         web_search=web_search,
         chat_model=chat_model,
         n_search_results=n_search_results,
