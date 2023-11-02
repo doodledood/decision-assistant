@@ -236,37 +236,12 @@ def check_satisficing(state: BHSRState,
     state.proposed_hypothesis = None
 
 
-if __name__ == '__main__':
-    load_dotenv()
-
-    output_dir = Path(os.getenv('OUTPUT_DIR', '../../output'))
-    output_dir.mkdir(exist_ok=True, parents=True)
-
-    n_search_results = 2
-
-    state_file = str(output_dir / 'bshr_state.json')
-    llm_cache = SQLiteCache(database_path=str(output_dir / 'llm_cache.db'))
-    set_llm_cache(llm_cache)
-
-    chat_model = ChatOpenAI(
-        temperature=0.0,
-        model='gpt-4-0613'
-    )
-    web_search = WebSearch(
-        chat_model=chat_model,
-        search_results_provider=GoogleSerperSearchResultsProvider(),
-        page_query_analyzer=OpenAIChatPageQueryAnalyzer(
-            chat_model=ChatOpenAI(
-                temperature=0.0,
-                model='gpt-3.5-turbo-16k-0613',
-            ),
-            page_retriever=ScraperAPIPageRetriever(),
-            text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000),
-            use_first_split_only=True
-        )
-    )
-
-    spinner = Halo(spinner='dots')
+def brainstorm_search_hypothesize_refine(
+        web_search: WebSearch,
+        chat_model: BaseChatModel,
+        n_search_results=3,
+        state_file: Optional[str] = None,
+        spinner: Optional[Halo] = None) -> BHSRState:
     shared_sections = [
         Section(
             name='Current Date (YYYY-MM-DD)',
@@ -275,7 +250,9 @@ if __name__ == '__main__':
     ]
     web_search_tool = WebResearchTool(web_search=web_search, n_results=n_search_results, spinner=spinner)
 
-    spinner.start('Loading previous state...')
+    if state_file is not None:
+        spinner.start('Loading previous state...')
+
     initial_state = load_state(state_file)
     if initial_state is None:
         initial_state = BHSRState()
@@ -335,9 +312,69 @@ if __name__ == '__main__':
         save_state=partial(save_state, state_file=state_file)
     )
 
+    state = process.run()
+    return state
+
+
+def run_brainstorm_search_hypothesize_refine_loop(
+        web_search: WebSearch,
+        chat_model: BaseChatModel,
+        n_search_results=3,
+        state_file: Optional[str] = None,
+        spinner: Optional[Halo] = None) -> str:
     while True:
-        initial_state = process.run()
-        if initial_state.is_satisficed:
+        state = brainstorm_search_hypothesize_refine(
+            web_search=web_search,
+            chat_model=chat_model,
+            n_search_results=n_search_results,
+            state_file=state_file,
+            spinner=spinner
+        )
+
+        if state.is_satisficed:
             break
 
-    print(f'Final Answer:\n============\n\n{initial_state.current_hypothesis}')
+    return state.current_hypothesis
+
+
+if __name__ == '__main__':
+    load_dotenv()
+
+    output_dir = Path(os.getenv('OUTPUT_DIR', '../../output'))
+    output_dir.mkdir(exist_ok=True, parents=True)
+
+    n_search_results = 2
+
+    state_file = str(output_dir / 'bshr_state.json')
+    llm_cache = SQLiteCache(database_path=str(output_dir / 'llm_cache.db'))
+    set_llm_cache(llm_cache)
+
+    chat_model = ChatOpenAI(
+        temperature=0.0,
+        model='gpt-4-0613'
+    )
+    web_search = WebSearch(
+        chat_model=chat_model,
+        search_results_provider=GoogleSerperSearchResultsProvider(),
+        page_query_analyzer=OpenAIChatPageQueryAnalyzer(
+            chat_model=ChatOpenAI(
+                temperature=0.0,
+                model='gpt-3.5-turbo-16k-0613',
+            ),
+            page_retriever=ScraperAPIPageRetriever(render_js=True),
+            text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000),
+            use_first_split_only=True
+        )
+    )
+
+    spinner = Halo(spinner='dots')
+
+    hypothesis = run_brainstorm_search_hypothesize_refine_loop(
+        web_search=web_search,
+        chat_model=chat_model,
+        n_search_results=n_search_results,
+        state_file=state_file,
+        spinner=spinner
+    )
+
+    print(f'Final Answer:\n----------------\n{hypothesis}\n----------------')
