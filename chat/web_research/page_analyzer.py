@@ -83,12 +83,21 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
                                     'Summarize the answer in a comprehensive, yet succinct way.',
                                 ], list_item_prefix=None),
                                 Section(name='Guidelines', list=[
-                                    'If the answer is not found in the page data, it\'s insufficent, or not relevant to the query at all, state it clearly.',
+                                    'If the answer is not found in the page data, it\'s insufficent, or not relevant '
+                                    'to the query at all, state it clearly.',
                                     'Do not fabricate information. Stick to provided data.',
-                                    'Provide context for the next call (e.g., if a paragraph was cut short, include relevant header information, section, etc. for continuity). Assume the data is partial data from the page. Be very detailed in the context.',
-                                    'If unable to answer but found important information, include it in the context for the next call.',
-                                    'Pay attention to the details of the query and make sure the answer is suitable for the intent of the query.',
-                                    'A potential answer might have been provided. This means you thought you found the answer in a previous partial text for the same page. You should double-check that and provide an alternative revised answer if you think it\'s wrong, or repeat it if you think it\'s right or cannot be validated using the current text.',
+                                    'Provide context for the next call (e.g., if a paragraph was cut short, include '
+                                    'relevant header information, section, etc. for continuity). Assume the data is '
+                                    'partial data from the page. Be very detailed in the context.',
+                                    'If unable to answer but found important information, include it in the context '
+                                    'for the next call.',
+                                    'Pay attention to the details of the query and make sure the answer is suitable '
+                                    'for the intent of the query.',
+                                    'A potential answer might have been provided. This means you thought you found '
+                                    'the answer in a previous partial text for the same page. You should double-check '
+                                    'that and provide an alternative revised answer if you think it\'s wrong, '
+                                    'or repeat it if you think it\'s right or cannot be validated using the current '
+                                    'text.',
                                 ])
                             ])
                         ]
