@@ -7,7 +7,7 @@ from langchain.tools import BaseTool
 
 from chat.ai_utils import execute_chat_model_messages
 from chat.base import ChatMessage, Chat, ActiveChatParticipant
-from chat.structured_prompt import Section, StructuredPrompt
+from chat.structured_string import Section, StructuredString
 
 
 class LangChainBasedAIChatParticipant(ActiveChatParticipant):
@@ -16,6 +16,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
     chat_model_args: Dict[str, Any]
     other_prompt_sections: List[Section]
     tools: Optional[List[BaseTool]] = None,
+    ignore_group_chat_environment: bool = False
     spinner: Optional[Halo] = None
 
     class Config:
@@ -31,6 +32,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                  tools: Optional[List[BaseTool]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
+                 ignore_group_chat_environment: bool = False,
                  **kwargs
                  ):
         super().__init__(name=name, symbol=symbol, role=role, **kwargs)
@@ -44,44 +46,56 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
 
     def create_system_message(self, chat: 'Chat'):
         active_participants = chat.get_active_participants()
-        system_message = StructuredPrompt(
-            sections=[
-                Section(name='Personal Mission', text=self.personal_mission),
+        if ignore_group_chat_environment:
+            system_message = StructuredString(sections=[
                 Section(name='Name', text=self.name),
                 Section(name='Role', text=self.role),
-                Section(name='Chat', sub_sections=[
-                    Section(name='Goal', text=chat.goal or 'No explicit chat goal provided.'),
-                    Section(name='Participants', text='\n'.join(
-                        [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
-                         for p in active_participants])),
-                    Section(name='Rules', list=[
-                        'You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.',
-                        'You cannot have private conversations with other participants. Everyone can see all messages sent by all other participants.',
+                Section(name='Personal Mission', text=self.personal_mission),
+                *self.other_prompt_sections
+            ])
+        else:
+            system_message = StructuredString(
+                sections=[
+                    Section(name='Name', text=self.name),
+                    Section(name='Role', text=self.role),
+                    Section(name='Personal Mission', text=self.personal_mission),
+                    Section(name='Chat', sub_sections=[
+                        Section(name='Goal', text=chat.goal or 'No explicit chat goal provided.'),
+                        Section(name='Participants', text='\n'.join(
+                            [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
+                             for p in active_participants])),
+                        Section(name='Rules', list=[
+                            'You do not have to respond directly to the one who sent you a message. You can respond to anyone in the group chat.',
+                            'You cannot have private conversations with other participants. Everyone can see all messages sent by all other participants.',
+                        ]),
+                        Section(name='Messages', list=[
+                            'Include all participants messages, including your own',
+                            'They are prefixed by the sender\'s name (could also be everyone). For context only; it\'s not actually part of the message they sent. Example: "John: Hello, how are you?"',
+                            'Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not talk to them.',
+                        ]),
+                        Section(name='Well-Formatted Chat Response Examples', list=[
+                            '"Hello, how are you?"'
+                        ]),
+                        Section(name='Badly-Formatted Chat Response Examples', list=[
+                            '"John: Hello, how are you?"'
+                        ]),
                     ]),
-                    Section(name='Messages', list=[
-                        'Include all participants messages, including your own',
-                        'They are prefixed by the sender\'s name (could also be everyone). For context only; it\'s not actually part of the message they sent. Example: "John: Hello, how are you?"',
-                        'Some messages could have been sent by participants who are no longer a part of this conversation. Use their contents for context only; do not talk to them.',
-                    ]),
-                    Section(name='Well-Formatted Response Examples', list=[
-                        '"Hello, how are you?"',
-                        '"I am doing well, thanks. How are you?"',
-                    ]),
-                    Section(name='Badly-Formatted Response Examples', list=[
-                        '"John: Hello, how are you?"',
-                        '"Assistant: I am doing well, thanks. How are you?"',
-                    ]),
-                ]),
-                *self.other_prompt_sections,
-            ]
-        )
+                    *self.other_prompt_sections,
+                ]
+            )
+
         return str(system_message)
 
-    def chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> List[BaseMessage]:
+    def chat_messages_to_chat_model_messages(self, chat_messages: List[ChatMessage]) -> \
+    List[BaseMessage]:
         messages = []
         for message in chat_messages:
-            content = \
-                f'{message.sender_name}: {message.content}'
+            if self.ignore_group_chat_environment:
+                content = \
+                    f'{message.sender_name}: {message.content}'
+            else:
+                content = message.content
+
             if message.sender_name == self.name:
                 messages.append(AIMessage(content=content))
             else:

@@ -14,7 +14,7 @@ from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipa
 from chat.renderers import NoChatRenderer
 from chat.web_research.page_analyzer import PageQueryAnalyzer
 from chat.web_research.search import SearchResultsProvider
-from chat.structured_prompt import Section, StructuredPrompt
+from chat.structured_string import Section, StructuredString
 
 video_watch_urls_patterns = [
     r'youtube.com/watch\?v=([a-zA-Z0-9_-]+)',
@@ -139,7 +139,7 @@ class WebSearch:
             ], max_total_messages=2)
         chat_conductor = RoundRobinChatConductor()
         final_answer = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(
-            StructuredPrompt(sections=[
+            StructuredString(sections=[
                 Section(name='Query', text=query),
                 Section(name='Answers', text=formatted_answers)
             ])

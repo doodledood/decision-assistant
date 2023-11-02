@@ -10,7 +10,7 @@ from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition
 from chat.composition_generators import ManageParticipantsOutputSchema
 from chat.parsing_utils import string_output_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant
-from chat.structured_prompt import StructuredPrompt, Section
+from chat.structured_string import StructuredString, Section
 
 
 class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
@@ -92,7 +92,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
     def create_compose_chat_participants_system_prompt(self, chat: 'Chat') -> str:
         active_participants = chat.get_active_participants()
-        system_message = StructuredPrompt(sections=[
+        system_message = StructuredString(sections=[
             Section(name='Mission',
                     text='Evaluate the chat conversation based on the set goal and the speaker interaction schema. Make decisions about adding or removing participants based on their potential contribution towards achieving the goal. Update the interaction schema to reflect changes in participants.'),
             Section(name='Process', list=[
@@ -144,7 +144,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
         active_participants = chat.get_active_participants()
 
-        prompt = StructuredPrompt(sections=[
+        prompt = StructuredString(sections=[
             Section(name='Chat Goal', text=chat.goal or 'No explicit chat goal provided.'),
             Section(name='Currently Active Participants',
                     list=[f'{participant.name} ({participant.role})' for participant in active_participants]),

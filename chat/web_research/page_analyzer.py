@@ -12,7 +12,7 @@ from chat.conductors import RoundRobinChatConductor
 from chat.parsing_utils import string_output_to_pydantic
 from chat.participants import UserChatParticipant, LangChainBasedAIChatParticipant
 from chat.renderers import NoChatRenderer
-from chat.structured_prompt import Section, StructuredPrompt
+from chat.structured_string import Section, StructuredString
 from chat.web_research.page_retriever import PageRetriever
 from bs4 import BeautifulSoup
 
@@ -96,7 +96,7 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
                 ], max_total_messages=2)
             chat_conductor = RoundRobinChatConductor()
             final_answer = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(
-                StructuredPrompt(sections=[
+                StructuredString(sections=[
                     Section(name='Query', text=query),
                     Section(name='Url', text=url),
                     Section(name='Title', text=title),

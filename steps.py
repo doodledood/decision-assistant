@@ -16,7 +16,7 @@ from chat.conductors import RoundRobinChatConductor, LangChainBasedAIChatConduct
 from chat.parsing_utils import chat_messages_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import TerminalChatRenderer
-from chat.structured_prompt import Section, StructuredPrompt
+from chat.structured_string import Section, StructuredString
 from presentation import generate_decision_report_as_html, save_html_to_file, open_html_file_in_browser
 from chat.web_research import WebSearch
 from ranking.ranking import topsis_score, normalize_label_value
@@ -217,7 +217,7 @@ def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
     )
 
     chat_conductor = RoundRobinChatConductor()
-    _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+    _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredString(
         sections=[
             Section(name='Goal', text=state.data['goal']),
         ]
@@ -383,7 +383,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         chat_model=chat_model,
         termination_condition='The criteria and their respective scales have been identified, iterated on (if applicable), and finally, confirmed by the user.'
     )
-    _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+    _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredString(
         sections=[
             Section(name='Goal', text=state.data['goal']),
             Section(name='Alternatives', list=state.data['alternatives']),
@@ -519,7 +519,7 @@ def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         )
         _ = chat_conductor.initiate_chat_with_result(
             chat=chat,
-            initial_message=str(StructuredPrompt(
+            initial_message=str(StructuredString(
                 sections=[
                     Section(
                         name='Goal',
@@ -641,7 +641,7 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
     )
 
     chat_conductor = RoundRobinChatConductor()
-    _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+    _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredString(
         sections=[
             Section(name='Goal', text=state.data['goal']),
             Section(name='Alternatives', list=state.data['alternatives']),
@@ -788,7 +788,7 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
             )
 
             chat_conductor = RoundRobinChatConductor()
-            _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredPrompt(
+            _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredString(
                 sections=[
                     Section(name='Goal', text=state.data['goal']),
                     Section(name='Alternatives', list=state.data['alternatives']),

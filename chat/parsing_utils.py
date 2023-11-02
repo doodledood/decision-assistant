@@ -10,7 +10,7 @@ from chat.errors import MessageCouldNotBeParsedError
 from chat.participants import LangChainBasedAIChatParticipant
 from chat.participants.output_parser import JSONOutputParserChatParticipant
 from chat.renderers import NoChatRenderer
-from chat.structured_prompt import Section, StructuredPrompt
+from chat.structured_string import Section
 from chat.utils import pydantic_to_json_schema
 
 
@@ -40,43 +40,34 @@ def chat_messages_to_pydantic(chat_messages: List[ChatMessage],
         chat_model=chat_model,
         name='Chat Messages to JSON Converter',
         role='Chat Messages to JSON Converter',
-        personal_mission='You will given PREVIOUS MESSAGES and a JSON SCHEMA. Your only mission is to convert the previous chat messages '
-                         'to a JSON that follows the JSON SCHEMA provided. Your message should include only correct JSON.',
+        personal_mission='Your only purpose is to convert the previous chat messages (usually the last one)'
+                         'to a valid and logical JSON that follows the JSON SCHEMA provided. Your message should '
+                         'include only correct JSON.',
         other_prompt_sections=[
+            Section(name='JSON SCHEMA', text=str(pydantic_to_json_schema(output_schema))),
             Section(name='NOTES', list=[
-                'Usually a JSON needs to be objective and contain no fluff. For example: "I am a human." should become {"type": "human"}',
-                'However, some fields may in fact require entire sentences. For example: "I am a human." should become {"response": "I am a human."}',
+                'Usually a JSON needs to be objective and contain no fluff. For example: "I am a human." should '
+                'become {"type": "human"}',
+                'However, some fields may in fact require entire sentences. For example: "I am a human." should '
+                'become {"response": "I am a human."}',
             ]),
         ],
+        ignore_group_chat_environment=True,
         spinner=spinner
     )
     json_parser = JSONOutputParserChatParticipant(output_schema=output_schema)
 
     parser_chat = Chat(
+        goal='Convert the chat contents to a valid and logical JSON.',
         backing_store=InMemoryChatDataBackingStore(),
         renderer=NoChatRenderer(),
-        initial_participants=[json_parser, text_to_json_ai],
+        initial_participants=[text_to_json_ai, json_parser],
         hide_messages=hide_message,
-        max_total_messages=n_tries * 2
+        max_total_messages=1 + (n_tries - 1) * 2
     )
     conductor = RoundRobinChatConductor()
 
-    _ = conductor.initiate_chat_with_result(
-        chat=parser_chat,
-        initial_message=str(StructuredPrompt(
-            sections=[
-                Section(
-                    name='Previous Messages',
-                    list=[f'{m.sender_name}: {m.content}' for m in chat_messages],
-                    list_item_prefix=None
-                ),
-                Section(
-                    name='Json Schema',
-                    text=str(pydantic_to_json_schema(output_schema))
-                )
-            ]
-        ))
-    )
+    _ = conductor.initiate_chat_with_result(chat=parser_chat)
 
     if json_parser.output is None:
         raise MessageCouldNotBeParsedError('An output could not be parsed from the chat messages.')

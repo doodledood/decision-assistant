@@ -8,7 +8,7 @@ from langchain.tools import BaseTool
 from chat.ai_utils import execute_chat_model_messages
 from chat.base import ChatConductor, Chat, ActiveChatParticipant
 from chat.errors import ChatParticipantNotJoinedToChatError
-from chat.structured_prompt import StructuredPrompt, Section
+from chat.structured_string import StructuredString, Section
 
 
 class LangChainBasedAIChatConductor(ChatConductor):
@@ -35,7 +35,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
         self.spinner = spinner
 
     def create_next_speaker_system_prompt(self, chat: 'Chat') -> str:
-        system_message = StructuredPrompt(sections=[
+        system_message = StructuredString(sections=[
             Section(name='Mission',
                     text='Select the next speaker in the conversation based on the previous messages in the conversation and an optional SPEAKER INTERACTION SCHEMA. If it seems to you that the chat should end instead of selecting a next speaker, terminate it.'),
             Section(name='Rules', list=[
@@ -69,7 +69,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
         participants = chat.get_active_participants()
 
-        prompt = StructuredPrompt(sections=[
+        prompt = StructuredString(sections=[
             Section(name='Chat Goal', text=chat.goal or 'No explicit chat goal provided.'),
             Section(name='Currently Active Participants',
                     list=[f'{participant.name} ({participant.role})' for participant in participants]),

@@ -17,7 +17,7 @@ from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor, LangChainBasedAIChatConductor
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import TerminalChatRenderer
-from chat.structured_prompt import Section, StructuredPrompt
+from chat.structured_string import Section, StructuredString
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from chat.web_research.page_retriever import ScraperAPIPageRetriever
