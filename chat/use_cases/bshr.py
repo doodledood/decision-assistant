@@ -67,6 +67,10 @@ def generate_queries(state: BHSRState,
                      shared_sections: Optional[List[Section]] = None,
                      web_search_tool: Optional[BaseTool] = None,
                      spinner: Optional[Halo] = None):
+    if state.queries_to_run is not None and len(state.queries_to_run) > 0:
+        # Means we are continuing a previous session
+        return
+
     query_generator = LangChainBasedAIChatParticipant(
         name='Search Query Generator',
         role='Search Query Generator',
