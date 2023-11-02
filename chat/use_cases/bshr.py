@@ -145,11 +145,14 @@ def generate_queries(state: BHSRState,
             chat=chat,
             initial_message=str(StructuredString(sections=[
                 Section(name='Information Need', text=state.information_need),
-                Section(name='Previous Queries & Answers', sub_sections=[
-                    Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for query, answer in
-                    state.answers_to_queries.items()
-                ]),
-                Section(name='Current Hypothesis', text=state.current_hypothesis)
+                Section(name='Previous Queries & Answers',
+                        text='None' if state.answers_to_queries is None or len(state.answers_to_queries) == 0 else None,
+                        sub_sections=[
+                            Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for
+                            query, answer in
+                            (state.answers_to_queries or {}).items()
+                        ]),
+                Section(name='Current Hypothesis', text=str(state.current_hypothesis))
             ])),
             from_participant=user)
 
@@ -215,12 +218,15 @@ def generate_hypothesis(state: BHSRState,
     _, chat = get_response(
         query=str(StructuredString(sections=[
             Section(name='Information Need', text=state.information_need),
-            Section(name='Previous Queries & Answers', sub_sections=[
-                Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for query, answer in
-                state.answers_to_queries.items()
-            ]),
-            Section(name='Previous Hypothesis', text=state.current_hypothesis),
-            Section(name='Feedback', text=state.feedback),
+            Section(name='Previous Queries & Answers',
+                    text='None' if state.answers_to_queries is None or len(state.answers_to_queries) == 0 else None,
+                    sub_sections=[
+                        Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for
+                        query, answer in
+                        (state.answers_to_queries or {}).items()
+                    ]),
+            Section(name='Previous Hypothesis', text=str(state.current_hypothesis)),
+            Section(name='Feedback', text=str(state.feedback)),
         ])),
         answerer=hypothesis_generator
     )
@@ -256,12 +262,15 @@ def check_satisficing(state: BHSRState,
     _, chat = get_response(
         query=str(StructuredString(sections=[
             Section(name='Information Need', text=state.information_need),
-            Section(name='Previous Queries & Answers', sub_sections=[
-                Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for query, answer in
-                state.answers_to_queries.items()
-            ]),
-            Section(name='Previous Hypothesis', text=state.current_hypothesis),
-            Section(name='Proposed New Hypothesis', text=state.proposed_hypothesis)
+            Section(name='Previous Queries & Answers',
+                    text='None' if state.answers_to_queries is None or len(state.answers_to_queries) == 0 else None,
+                    sub_sections=[
+                        Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for
+                        query, answer in
+                        (state.answers_to_queries or {}).items()
+                    ]),
+            Section(name='Previous Hypothesis', text=str(state.current_hypothesis)),
+            Section(name='Proposed New Hypothesis', text=str(state.proposed_hypothesis))
         ])),
         answerer=satisficing_checker
     )
@@ -360,12 +369,12 @@ def run_brainstorm_search_hypothesize_refine_loop(
         web_search: WebSearch,
         chat_model: BaseChatModel,
         n_search_results: int = 3,
-        intial_query: Optional[str] = None,
+        initial_query: Optional[str] = None,
         state_file: Optional[str] = None,
         spinner: Optional[Halo] = None) -> str:
     while True:
         state = brainstorm_search_hypothesize_refine(
-            initial_query=intial_query,
+            initial_query=initial_query,
             web_search=web_search,
             chat_model=chat_model,
             n_search_results=n_search_results,
@@ -412,6 +421,7 @@ if __name__ == '__main__':
     spinner = Halo(spinner='dots')
 
     hypothesis = run_brainstorm_search_hypothesize_refine_loop(
+        initial_query='What is the safest state in the US?',
         web_search=web_search,
         chat_model=chat_model,
         n_search_results=n_search_results,
