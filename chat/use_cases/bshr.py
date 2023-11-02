@@ -38,6 +38,7 @@ class BHSRState(BaseModel):
     answers_to_queries: Optional[Dict[str, str]] = None
     current_hypothesis: Optional[str] = None
     proposed_hypothesis: Optional[str] = None
+    feedback: Optional[str] = None
     is_satisficed: Optional[bool] = None
 
 
