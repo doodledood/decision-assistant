@@ -171,6 +171,7 @@ def generate_hypothesis(state: BHSRState,
     chat = Chat(
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
+        max_total_messages=2,
         initial_participants=participants
     )
 
@@ -213,6 +214,7 @@ def check_satisficing(state: BHSRState,
     chat = Chat(
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
+        max_total_messages=2,
         initial_participants=participants
     )
 
