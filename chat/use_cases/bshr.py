@@ -4,11 +4,11 @@ import json
 import os
 from functools import partial
 from pathlib import Path
-from typing import Callable, Optional, List, Dict, Set
+from typing import Optional, List, Dict
 
 from dotenv import load_dotenv
 from halo import Halo
-from langchain.cache import SQLiteCache, GPTCache
+from langchain.cache import SQLiteCache
 from langchain.chat_models import ChatOpenAI
 from langchain.chat_models.base import BaseChatModel
 from langchain.text_splitter import TokenTextSplitter
