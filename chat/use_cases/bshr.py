@@ -106,7 +106,8 @@ def generate_queries(state: BHSRState,
                           'clarify the information need or make a best guess. The user will not be available to '
                           'respond back.')),
             Section(name='Refine Queries',
-                    text='You might be given a first-pass information need, in which case you will do the best you '
+                    text='You might be given a first-pass information need with "None" previous queries and answers, '
+                         'in which case you will do the best you'
                          'can to generate "naive queries" (uninformed search queries). However the USER might also '
                          'give you previous search queries or other background information such as accumulated notes. '
                          'If these materials are present, you are to generate "informed queries" - more specific '
