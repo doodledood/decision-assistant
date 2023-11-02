@@ -33,7 +33,7 @@ from sequential_process import SequentialProcess, Step
 
 class BHSRState(BaseModel):
     information_need: Optional[str] = None
-    queries_to_run: Optional[Set[str]] = None
+    queries_to_run: Optional[List[str]] = None
     answers_to_queries: Optional[Dict[str, str]] = None
     current_hypothesis: Optional[str] = None,
     is_satisficed: Optional[bool] = None
@@ -50,7 +50,7 @@ def save_state(state: BHSRState, state_file: Optional[str]):
 
 class QueryGenerationResult(BaseModel):
     information_need: str = Field(description='Information need as requested by the user.')
-    queries: Set[str] = Field(description='Set of queries to run.')
+    queries: List[str] = Field(description='Set of queries to run.')
 
 
 def query_generation(state: BHSRState,
