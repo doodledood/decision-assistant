@@ -51,6 +51,18 @@ def save_state(state: BHSRState, state_file: Optional[str]):
         json.dump(data, f, indent=2)
 
 
+def load_state(state_file: Optional[str]) -> Optional[BHSRState]:
+    if state_file is None:
+        return None
+
+    try:
+        with open(state_file, 'r') as f:
+            data = json.load(f)
+            return BHSRState.model_validate(data)
+    except FileNotFoundError:
+        return None
+
+
 class QueryGenerationResult(BaseModel):
     information_need: str = Field(description='Information need as requested by the user.')
     queries: List[str] = Field(description='Set of queries to run.')
@@ -263,6 +275,14 @@ if __name__ == '__main__':
     ]
     web_search_tool = WebResearchTool(web_search=web_search, n_results=n_search_results, spinner=spinner)
 
+    spinner.start('Loading previous state...')
+    initial_state = load_state(state_file)
+    if initial_state is None:
+        initial_state = BHSRState()
+        spinner.stop()
+    else:
+        spinner.succeed('Loaded previous state.')
+
     process = SequentialProcess(
         steps=[
             Step(
@@ -311,13 +331,13 @@ if __name__ == '__main__':
                 on_step_completed=lambda _: spinner.succeed('Satisfication checked.')
             ),
         ],
-        initial_state=BHSRState(),
+        initial_state=initial_state,
         save_state=partial(save_state, state_file=state_file)
     )
 
     while True:
-        state = process.run()
-        if state.is_satisficed:
+        initial_state = process.run()
+        if initial_state.is_satisficed:
             break
 
-    print(f'Final Answer:\n============\n\n{state.current_hypothesis}')
+    print(f'Final Answer:\n============\n\n{initial_state.current_hypothesis}')
