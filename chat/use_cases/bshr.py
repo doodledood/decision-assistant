@@ -80,6 +80,7 @@ class SatisficationCheckResult(BaseModel):
 
 def generate_queries(state: BHSRState,
                      chat_model: BaseChatModel,
+                     interactive_user: bool = True,
                      shared_sections: Optional[List[Section]] = None,
                      web_search_tool: Optional[BaseTool] = None,
                      spinner: Optional[Halo] = None):
@@ -90,14 +91,30 @@ def generate_queries(state: BHSRState,
     query_generator = LangChainBasedAIChatParticipant(
         name='Search Query Generator',
         role='Search Query Generator',
-        personal_mission='You will be given a specific query or problem by the user and you are to generate a list of questions that will be used to search the internet. Make sure you generate comprehensive and counterfactual search queries. Employ everything you know about information foraging and information literacy to generate the best possible questions. Use a step-by-step approach and think about the information need and the information domain before generating the queries.',
+        personal_mission='You will be given a specific query or problem by the user and you are to generate a list of '
+                         'questions that will be used to search the internet. Make sure you generate comprehensive '
+                         'and counterfactual search queries. Employ everything you know about information foraging '
+                         'and information literacy to generate the best possible questions. Use a step-by-step '
+                         'approach and think about the information need and the information domain before generating '
+                         'the queries.',
         other_prompt_sections=shared_sections + [
             Section(name='Unclear Information Need',
-                    text='If the information need or query are vague and unclear, either perform a web search to clarify the information need or ask the user for clarification'),
+                    text=('If the information need or query are vague and unclear, either perform a web search to '
+                          'clarify the information need or ask the user for clarification.' if interactive_user else
+                          'If the information need or query are vague and unclear, either perform a web search to '
+                          'clarify the information need or make a best guess. The user will not be available to '
+                          'respond back.')),
             Section(name='Refine Queries',
-                    text='You might be given a first-pass information need, in which case you will do the best you can to generate "naive queries" (uninformed search queries). However the USER might also give you previous search queries or other background information such as accumulated notes. If these materials are present, you are to generate "informed queries" - more specific search queries that aim to zero in on the correct information domain. Do not duplicate previously asked questions. Use the notes and other information presented to create targeted queries and/or to cast a wider net.'),
+                    text='You might be given a first-pass information need, in which case you will do the best you '
+                         'can to generate "naive queries" (uninformed search queries). However the USER might also '
+                         'give you previous search queries or other background information such as accumulated notes. '
+                         'If these materials are present, you are to generate "informed queries" - more specific '
+                         'search queries that aim to zero in on the correct information domain. Do not duplicate '
+                         'previously asked questions. Use the notes and other information presented to create '
+                         'targeted queries and/or to cast a wider net.'),
             Section(name='Termination',
-                    text='Once you generate a new set of queries to run, you should terminate the chat immediately by ending your message with TERMINATE')
+                    text='Once you generate a new set of queries to run, you should terminate the chat immediately by '
+                         'ending your message with TERMINATE')
         ],
         tools=[web_search_tool] if web_search_tool is not None else None,
         ignore_group_chat_environment=True,
@@ -109,7 +126,8 @@ def generate_queries(state: BHSRState,
     chat = Chat(
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
-        initial_participants=participants
+        initial_participants=participants,
+        max_total_messages=None if interactive_user else 2
     )
 
     chat_conductor = RoundRobinChatConductor()
@@ -178,7 +196,17 @@ def generate_hypothesis(state: BHSRState,
     hypothesis_generator = LangChainBasedAIChatParticipant(
         name='Information Needs Hypothesis Generator',
         role='Information Needs Hypothesis Generator',
-        personal_mission='You are an information needs hypothesis generator. You will be given a main information need or user query as well as a variety of materials, such as search results, previous hypotheses, and notes. Whatever information you receive, your output should be a revised, refined, or improved hypothesis. In this case, the hypothesis is a comprehensive answer to the user query or information need. To the best of your ability. Do not include citations in your hypothesis, as this will all be record via out-of-band processes (e.g. the information that you are shown will have metadata and cataloging working behind the scenes that you do not see). Even so, you should endeavour to write everything in complete, comprehensive sentences and paragraphs such that your hypothesis requires little to no outside context to understand. Your hypothesis must be relevant to the USER QUERY or INFORMATION NEED.',
+        personal_mission='You are an information needs hypothesis generator. You will be given a main information '
+                         'need or user query as well as a variety of materials, such as search results, '
+                         'previous hypotheses, and notes. Whatever information you receive, your output should be a '
+                         'revised, refined, or improved hypothesis. In this case, the hypothesis is a comprehensive '
+                         'answer to the user query or information need. To the best of your ability. Do not include '
+                         'citations in your hypothesis, as this will all be record via out-of-band processes (e.g. '
+                         'the information that you are shown will have metadata and cataloging working behind the '
+                         'scenes that you do not see). Even so, you should endeavour to write everything in complete, '
+                         'comprehensive sentences and paragraphs such that your hypothesis requires little to no '
+                         'outside context to understand. Your hypothesis must be relevant to the USER QUERY or '
+                         'INFORMATION NEED.',
         other_prompt_sections=shared_sections,
         ignore_group_chat_environment=True,
         chat_model=chat_model,
@@ -209,7 +237,17 @@ def check_satisficing(state: BHSRState,
     satisficing_checker = LangChainBasedAIChatParticipant(
         name='Information Needs Satisficing Checker',
         role='Information Needs Satisficing Checker',
-        personal_mission='You are an information needs satisficing checker. You will be given a litany of materials, including an original user query, previous search queries, their results, notes, and a final hypothesis. You are to generate a decision as to whether or not the information need has been satisficed or not. You are to make this judgment by virtue of several factors: amount and quality of searches performed, specificity and comprehensiveness of the hypothesis, and notes about the information domain and foraging (if present). Several things to keep in mind: the user\'s information need may not be answerable, or only partially answerable, given the available information or nature of the problem.  Unanswerable data needs are satisficed when data foraging doesn\'t turn up more relevant information. Use a step-by-step approach to determine whether or not the information need has been satisficed.',
+        personal_mission='You are an information needs satisficing checker. You will be given a litany of materials, '
+                         'including an original user query, previous search queries, their results, notes, '
+                         'and a final hypothesis. You are to generate a decision as to whether or not the information '
+                         'need has been satisficed or not. You are to make this judgment by virtue of several '
+                         'factors: amount and quality of searches performed, specificity and comprehensiveness of the '
+                         'hypothesis, and notes about the information domain and foraging (if present). Several '
+                         'things to keep in mind: the user\'s information need may not be answerable, '
+                         'or only partially answerable, given the available information or nature of the problem.  '
+                         'Unanswerable data needs are satisficed when data foraging doesn\'t turn up more relevant '
+                         'information. Use a step-by-step approach to determine whether or not the information need '
+                         'has been satisficed.',
         other_prompt_sections=shared_sections,
         ignore_group_chat_environment=True,
         chat_model=chat_model,
@@ -239,7 +277,8 @@ def check_satisficing(state: BHSRState,
 def brainstorm_search_hypothesize_refine(
         web_search: WebSearch,
         chat_model: BaseChatModel,
-        n_search_results=3,
+        initial_query: Optional[str] = None,
+        n_search_results: int = 3,
         state_file: Optional[str] = None,
         spinner: Optional[Halo] = None) -> BHSRState:
     shared_sections = [
@@ -255,7 +294,7 @@ def brainstorm_search_hypothesize_refine(
 
     initial_state = load_state(state_file)
     if initial_state is None:
-        initial_state = BHSRState()
+        initial_state = BHSRState(information_need=initial_query)
         spinner.stop()
     else:
         spinner.succeed('Loaded previous state.')
@@ -267,6 +306,7 @@ def brainstorm_search_hypothesize_refine(
                 func=partial(
                     generate_queries,
                     chat_model=chat_model,
+                    interactive_user=initial_query is None,
                     shared_sections=shared_sections,
                     web_search_tool=web_search_tool,
                     spinner=spinner
@@ -319,11 +359,13 @@ def brainstorm_search_hypothesize_refine(
 def run_brainstorm_search_hypothesize_refine_loop(
         web_search: WebSearch,
         chat_model: BaseChatModel,
-        n_search_results=3,
+        n_search_results: int = 3,
+        intial_query: Optional[str] = None,
         state_file: Optional[str] = None,
         spinner: Optional[Halo] = None) -> str:
     while True:
         state = brainstorm_search_hypothesize_refine(
+            initial_query=intial_query,
             web_search=web_search,
             chat_model=chat_model,
             n_search_results=n_search_results,
