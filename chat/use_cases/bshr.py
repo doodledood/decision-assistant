@@ -70,7 +70,7 @@ def generate_queries(state: BHSRState,
     query_generator = LangChainBasedAIChatParticipant(
         name='Search Query Generator',
         role='Search Query Generator',
-        personal_mission='You will be given a specific query or problem by the USER and you are to generate a JSON list of at most 5 questions that will be used to search the internet. Make sure you generate comprehensive and counterfactual search queries. Employ everything you know about information foraging and information literacy to generate the best possible questions.',
+        personal_mission='You will be given a specific query or problem by the user and you are to generate a list of at most 5 questions that will be used to search the internet. Make sure you generate comprehensive and counterfactual search queries. Employ everything you know about information foraging and information literacy to generate the best possible questions. Use a step-by-step approach and think about the information need and the information domain before generating the queries.',
         other_prompt_sections=shared_sections + [
             Section(name='Unclear Information Need',
                     text='If the information need or query are vague and unclear, either perform a web search to clarify the information need or ask the user for clarification'),
