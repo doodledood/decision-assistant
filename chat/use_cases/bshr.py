@@ -82,6 +82,7 @@ class SatisficationCheckResult(BaseModel):
 def generate_queries(state: BHSRState,
                      chat_model: BaseChatModel,
                      interactive_user: bool = True,
+                     max_queries: int = 5,
                      shared_sections: Optional[List[Section]] = None,
                      web_search_tool: Optional[BaseTool] = None,
                      spinner: Optional[Halo] = None):
@@ -93,11 +94,13 @@ def generate_queries(state: BHSRState,
         name='Search Query Generator',
         role='Search Query Generator',
         personal_mission='You will be given a specific query or problem by the user and you are to generate a list of '
-                         'questions that will be used to search the internet. Make sure you generate comprehensive, '
-                         'counterfactual, and maximally orthogonal search queries. Employ everything you know about '
+                         f'AT MOST {max_queries} questions that will be used to search the internet. Make sure you '
+                         f'generate comprehensive, counterfactual, and maximally orthogonal search queries. '
+                         'Employ everything you know about '
                          'information foraging and information literacy to generate the best possible questions. '
                          'Use a step-by-step approach and think about the information need and the information '
-                         'domain before generating the queries.',
+                         'domain before generating the queries. Order the queries by their importance and relevance '
+                         'to the main information need of the user.',
         other_prompt_sections=shared_sections + [
             Section(name='Unclear Information Need',
                     text=('If the information need or query are vague and unclear, either perform a web search to '
@@ -167,7 +170,7 @@ def generate_queries(state: BHSRState,
     if state.queries_to_run is None:
         state.queries_to_run = []
 
-    state.queries_to_run += output.queries
+    state.queries_to_run += output.queries[:max_queries]
 
 
 def search_queries(state: BHSRState,
