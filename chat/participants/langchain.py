@@ -40,6 +40,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.other_prompt_sections = other_prompt_sections or []
+        self.ignore_group_chat_environment = ignore_group_chat_environment
         self.tools = tools
         self.spinner = spinner
         self.personal_mission = personal_mission

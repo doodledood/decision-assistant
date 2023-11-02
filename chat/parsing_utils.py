@@ -42,15 +42,9 @@ def chat_messages_to_pydantic(chat_messages: List[ChatMessage],
         role='Chat Messages to JSON Converter',
         personal_mission='Your only purpose is to convert the previous chat messages (usually the last one)'
                          'to a valid and logical JSON that follows the JSON SCHEMA provided. Your message should '
-                         'include only correct JSON.',
+                         'include only correct JSON. No fluff.',
         other_prompt_sections=[
-            Section(name='JSON SCHEMA', text=str(pydantic_to_json_schema(output_schema))),
-            Section(name='NOTES', list=[
-                'Usually a JSON needs to be objective and contain no fluff. For example: "I am a human." should '
-                'become {"type": "human"}',
-                'However, some fields may in fact require entire sentences. For example: "I am a human." should '
-                'become {"response": "I am a human."}',
-            ]),
+            Section(name='JSON SCHEMA', text=str(pydantic_to_json_schema(output_schema)))
         ],
         ignore_group_chat_environment=True,
         spinner=spinner
@@ -59,6 +53,7 @@ def chat_messages_to_pydantic(chat_messages: List[ChatMessage],
 
     # Remove TERMINATE if present so the chat conductor doesn't end the chat prematurely
     if len(chat_messages) > 0:
+        chat_messages = chat_messages.copy()
         last_message = chat_messages[-1]
 
         try:

@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
-from chat.conductors import RoundRobinChatConductor, LangChainBasedAIChatConductor
-from chat.parsing_utils import string_output_to_pydantic, chat_messages_to_pydantic
+from chat.conductors import RoundRobinChatConductor
+from chat.parsing_utils import chat_messages_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import TerminalChatRenderer
 from chat.structured_string import Section, StructuredString
@@ -63,6 +63,8 @@ def query_generation(state: BHSRState,
         role='Search Query Generator',
         personal_mission='You will be given a specific query or problem by the USER and you are to generate a JSON list of at most 5 questions that will be used to search the internet. Make sure you generate comprehensive and counterfactual search queries. Employ everything you know about information foraging and information literacy to generate the best possible questions.',
         other_prompt_sections=shared_sections + [
+            Section(name='Unclear Information Need',
+                    text='If the information need or query are vague and unclear, either perform a web search to clarify the information need or ask the user for clarification'),
             Section(name='Refine Queries',
                     text='You might be given a first-pass information need, in which case you will do the best you can to generate "naive queries" (uninformed search queries). However the USER might also give you previous search queries or other background information such as accumulated notes. If these materials are present, you are to generate "informed queries" - more specific search queries that aim to zero in on the correct information domain. Do not duplicate previously asked questions. Use the notes and other information presented to create targeted queries and/or to cast a wider net.'),
             Section(name='Termination',
@@ -110,7 +112,34 @@ def query_generation(state: BHSRState,
     if state.information_need is None:
         state.information_need = output.information_need
 
-    state.queries_to_run = output.queries
+    if state.queries_to_run is None:
+        state.queries_to_run = []
+
+    state.queries_to_run += output.queries
+
+
+def search_queries(state: BHSRState,
+                   web_search: WebSearch,
+                   n_search_results: int = 3,
+                   spinner: Optional[Halo] = None):
+    if state.queries_to_run is None:
+        return
+
+    queries_and_answers = state.answers_to_queries if state.answers_to_queries is not None else {}
+    queries_to_run_set = set(state.queries_to_run)
+    for query in state.queries_to_run:
+        if query in queries_and_answers:
+            continue
+
+        answer = web_search.get_answer(query=query, n_results=n_search_results, spinner=spinner)[1]
+
+        queries_and_answers[query] = answer
+        queries_to_run_set.remove(query)
+
+        state.answers_to_queries = queries_and_answers
+        state.queries_to_run = list(queries_to_run_set)
+
+        yield state
 
 
 if __name__ == '__main__':
@@ -118,6 +147,8 @@ if __name__ == '__main__':
 
     output_dir = Path(os.getenv('OUTPUT_DIR', '../../output'))
     output_dir.mkdir(exist_ok=True, parents=True)
+
+    n_search_results = 2
 
     state_file = str(output_dir / 'bshr_state.json')
     llm_cache = SQLiteCache(database_path=str(output_dir / 'llm_cache.db'))
@@ -148,16 +179,8 @@ if __name__ == '__main__':
             text=datetime.datetime.utcnow().strftime('%Y-%m-%d')
         )
     ]
-    web_search_tool = WebResearchTool(web_search=web_search, n_results=3, spinner=spinner)
+    web_search_tool = WebResearchTool(web_search=web_search, n_results=n_search_results, spinner=spinner)
 
-    query_generator = LangChainBasedAIChatParticipant(
-        name='Search Query Generator',
-        role='Search Query Generator',
-        personal_mission='You will be given a specific query or problem by the USER and you are to generate a JSON list of at most 5 questions that will be used to search the internet. Make sure you generate comprehensive and counterfactual search queries. Employ everything you know about information foraging and information literacy to generate the best possible questions.',
-        other_prompt_sections=shared_sections,
-        ignore_group_chat_environment=True,
-        chat_model=chat_model,
-        spinner=spinner)
     web_searcher = LangChainBasedAIChatParticipant(
         name='Web Searcher',
         role='Web Searcher',
@@ -165,7 +188,7 @@ if __name__ == '__main__':
         other_prompt_sections=shared_sections,
         ignore_group_chat_environment=True,
         tools=[
-            WebResearchTool(web_search=web_search, n_results=3, spinner=spinner)
+            WebResearchTool(web_search=web_search, n_results=n_search_results, spinner=spinner)
         ],
         chat_model=chat_model,
         spinner=spinner)
@@ -216,6 +239,17 @@ if __name__ == '__main__':
                 ),
                 on_step_start=lambda _: spinner.start('Generating queries...'),
                 on_step_completed=lambda _: spinner.succeed('Queries generated.')
+            ),
+            Step(
+                name='Web Search',
+                func=partial(
+                    search_queries,
+                    web_search=web_search,
+                    n_search_results=n_search_results,
+                    spinner=spinner
+                ),
+                on_step_start=lambda _: spinner.start('Searching queries...'),
+                on_step_completed=lambda _: spinner.succeed('Queries answered.')
             )
         ],
         initial_state=BHSRState(),
