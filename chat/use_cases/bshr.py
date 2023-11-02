@@ -160,7 +160,10 @@ def generate_hypothesis(state: BHSRState,
         name='Information Needs Hypothesis Generator',
         role='Information Needs Hypothesis Generator',
         personal_mission='You are an information needs hypothesis generator. You will be given a main information need or user query as well as a variety of materials, such as search results, previous hypotheses, and notes. Whatever information you receive, your output should be a revised, refined, or improved hypothesis. In this case, the hypothesis is a comprehensive answer to the user query or information need. To the best of your ability. Do not include citations in your hypothesis, as this will all be record via out-of-band processes (e.g. the information that you are shown will have metadata and cataloging working behind the scenes that you do not see). Even so, you should endeavour to write everything in complete, comprehensive sentences and paragraphs such that your hypothesis requires little to no outside context to understand. Your hypothesis must be relevant to the USER QUERY or INFORMATION NEED.',
-        other_prompt_sections=shared_sections,
+        other_prompt_sections=shared_sections + [
+            Section(name='Termination',
+                    text='Once you generate a new or updated hypothesis, you should terminate the chat immediately by ending your message with TERMINATE')
+        ],
         ignore_group_chat_environment=True,
         chat_model=chat_model,
         spinner=spinner)
@@ -199,7 +202,10 @@ def check_satisficing(state: BHSRState,
         name='Information Needs Satisficing Checker',
         role='Information Needs Satisficing Checker',
         personal_mission='You are an information needs satisficing checker. You will be given a litany of materials, including an original user query, previous search queries, their results, notes, and a final hypothesis. You are to generate a decision as to whether or not the information need has been satisficed or not. You are to make this judgment by virtue of several factors: amount and quality of searches performed, specificity and comprehensiveness of the hypothesis, and notes about the information domain and foraging (if present). Several things to keep in mind: the user\'s information need may not be answerable, or only partially answerable, given the available information or nature of the problem.  Unanswerable data needs are satisficed when data foraging doesn\'t turn up more relevant information. Use a step-by-step approach to determine whether or not the information need has been satisficed.',
-        other_prompt_sections=shared_sections,
+        other_prompt_sections=shared_sections + [
+        Section(name='Termination',
+                text='Once you determine if the information need has been satisfied or not, you should terminate the chat immediately by ending your message with TERMINATE')
+        ],
         ignore_group_chat_environment=True,
         chat_model=chat_model,
         spinner=spinner)
