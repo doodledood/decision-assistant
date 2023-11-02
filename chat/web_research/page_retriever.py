@@ -42,3 +42,18 @@ class ScraperAPIPageRetriever(PageRetriever):
             raise TransientHTTPError(r.status_code, r.text)
 
         raise NonTransientHTTPError(r.status_code, r.text)
+
+
+class SimpleRequestsPageRetriever(PageRetriever):
+    @retry(retry=retry_if_exception_type(TransientHTTPError),
+           wait=wait_fixed(2) + wait_random(0, 2),
+           stop=stop_after_attempt(5))
+    def retrieve_html(self, url: str) -> str:
+        r = requests.get(url)
+        if r.status_code < 300:
+            return r.text
+
+        if r.status_code >= 500:
+            raise TransientHTTPError(r.status_code, r.text)
+
+        raise NonTransientHTTPError(r.status_code, r.text)
