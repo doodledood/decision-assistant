@@ -23,6 +23,7 @@ from chat.parsing_utils import chat_messages_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import TerminalChatRenderer
 from chat.structured_string import Section, StructuredString
+from chat.use_cases.request_response import get_response
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from chat.web_research.page_retriever import ScraperAPIPageRetriever
@@ -161,7 +162,6 @@ def generate_hypothesis(state: BHSRState,
                         chat_model: BaseChatModel,
                         shared_sections: Optional[List[Section]] = None,
                         spinner: Optional[Halo] = None):
-    user = UserChatParticipant()
     hypothesis_generator = LangChainBasedAIChatParticipant(
         name='Information Needs Hypothesis Generator',
         role='Information Needs Hypothesis Generator',
@@ -170,19 +170,9 @@ def generate_hypothesis(state: BHSRState,
         ignore_group_chat_environment=True,
         chat_model=chat_model,
         spinner=spinner)
-    participants = [user, hypothesis_generator]
-    chat = Chat(
-        backing_store=InMemoryChatDataBackingStore(),
-        renderer=TerminalChatRenderer(),
-        max_total_messages=2,
-        initial_participants=participants
-    )
 
-    chat_conductor = RoundRobinChatConductor()
-
-    _ = chat_conductor.initiate_chat_with_result(
-        chat=chat,
-        initial_message=str(StructuredString(sections=[
+    _, chat = get_response(
+        query=str(StructuredString(sections=[
             Section(name='Information Need', text=state.information_need),
             Section(name='Previous Queries & Answers', sub_sections=[
                 Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for query, answer in
@@ -191,10 +181,11 @@ def generate_hypothesis(state: BHSRState,
             Section(name='Previous Hypothesis', text=state.current_hypothesis),
             Section(name='Feedback', text=state.feedback),
         ])),
-        from_participant=user)
-
+        answerer=hypothesis_generator
+    )
     output = chat_messages_to_pydantic(chat_messages=chat.get_messages(), chat_model=chat_model,
                                        output_schema=HypothesisGenerationResult)
+
     state.proposed_hypothesis = output.hypothesis
 
 
@@ -202,7 +193,6 @@ def check_satisficing(state: BHSRState,
                       chat_model: BaseChatModel,
                       shared_sections: Optional[List[Section]] = None,
                       spinner: Optional[Halo] = None):
-    user = UserChatParticipant()
     satisficing_checker = LangChainBasedAIChatParticipant(
         name='Information Needs Satisficing Checker',
         role='Information Needs Satisficing Checker',
@@ -211,19 +201,9 @@ def check_satisficing(state: BHSRState,
         ignore_group_chat_environment=True,
         chat_model=chat_model,
         spinner=spinner)
-    participants = [user, satisficing_checker]
-    chat = Chat(
-        backing_store=InMemoryChatDataBackingStore(),
-        renderer=TerminalChatRenderer(),
-        max_total_messages=2,
-        initial_participants=participants
-    )
 
-    chat_conductor = RoundRobinChatConductor()
-
-    _ = chat_conductor.initiate_chat_with_result(
-        chat=chat,
-        initial_message=str(StructuredString(sections=[
+    _, chat = get_response(
+        query=str(StructuredString(sections=[
             Section(name='Information Need', text=state.information_need),
             Section(name='Previous Queries & Answers', sub_sections=[
                 Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for query, answer in
@@ -232,8 +212,8 @@ def check_satisficing(state: BHSRState,
             Section(name='Previous Hypothesis', text=state.current_hypothesis),
             Section(name='Proposed New Hypothesis', text=state.proposed_hypothesis)
         ])),
-        from_participant=user)
-
+        answerer=satisficing_checker
+    )
     output = chat_messages_to_pydantic(chat_messages=chat.get_messages(), chat_model=chat_model,
                                        output_schema=SatisficationCheckResult)
 

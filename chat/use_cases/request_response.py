@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import ActiveChatParticipant, Chat, TOutputSchema, ChatDataBackingStore, ChatRenderer
@@ -8,9 +8,9 @@ from chat.participants import UserChatParticipant
 from chat.renderers import TerminalChatRenderer
 
 
-def get_answer(query: str, answerer: ActiveChatParticipant,
-               backing_store: Optional[ChatDataBackingStore] = None,
-               renderer: Optional[ChatRenderer] = None) -> Union[str, TOutputSchema]:
+def get_response(query: str, answerer: ActiveChatParticipant,
+                 backing_store: Optional[ChatDataBackingStore] = None,
+                 renderer: Optional[ChatRenderer] = None) -> Tuple[Union[str, TOutputSchema], Chat]:
     user = UserChatParticipant(name='User')
     participants = [user, answerer]
 
@@ -24,4 +24,4 @@ def get_answer(query: str, answerer: ActiveChatParticipant,
     chat_conductor = RoundRobinChatConductor()
     answer = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=query, from_participant=user)
 
-    return answer
+    return answer, chat
