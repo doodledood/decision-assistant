@@ -6,6 +6,7 @@ from langchain.callbacks.manager import CallbackManagerForToolRun
 from langchain.chat_models.openai import ChatOpenAI
 from langchain.tools import Tool, BaseTool
 from pydantic.v1 import BaseModel, Field
+from tenacity import RetryError
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
@@ -96,7 +97,7 @@ class WebSearch:
                     if spinner is not None:
                         spinner.succeed(f'Read & analyzed #{result.position} result "{result.title}".')
                 except Exception as e:
-                    if type(e) in (TransientHTTPError, NonTransientHTTPError):
+                    if type(e) in (RetryError, TransientHTTPError, NonTransientHTTPError):
                         if spinner is not None:
                             spinner.warn(
                                 f'Failed to read & analyze #{result.position} result "{result.title}", moving on.')
