@@ -69,7 +69,7 @@ class QueryGenerationResult(BaseModel):
 
 
 class HypothesisGenerationResult(BaseModel):
-    hypothesis: str = Field(description='A new or updated hypothesis based on the materials provided.')
+    hypothesis: str = Field(description='A new or updated hypothesis based on the materials provided. Rich formatting using Markdown. Should include all relevant citations inline.')
 
 
 class SatisficationCheckResult(BaseModel):
@@ -209,7 +209,8 @@ def generate_hypothesis(state: BHSRState,
                          'scenes that you do not see). Even so, you should endeavour to write everything in complete, '
                          'comprehensive sentences and paragraphs such that your hypothesis requires little to no '
                          'outside context to understand. Your hypothesis must be relevant to the USER QUERY or '
-                         'INFORMATION NEED.',
+                         'INFORMATION NEED. Format the hypothesis in rich markdown and include all relevant citations '
+                         'inline.',
         other_prompt_sections=shared_sections,
         ignore_group_chat_environment=True,
         chat_model=chat_model,
