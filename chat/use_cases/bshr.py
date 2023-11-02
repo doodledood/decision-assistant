@@ -4,11 +4,12 @@ import json
 import os
 from functools import partial
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Type, Any
 
 from dotenv import load_dotenv
 from halo import Halo
 from langchain.cache import SQLiteCache
+from langchain.callbacks.manager import CallbackManagerForToolRun
 from langchain.chat_models import ChatOpenAI
 from langchain.chat_models.base import BaseChatModel
 from langchain.text_splitter import TokenTextSplitter
@@ -393,6 +394,39 @@ def run_brainstorm_search_hypothesize_refine_loop(
             break
 
     return state.current_hypothesis
+
+
+class BrainstormSearchHypothesizeRefineToolArgs(BaseModel):
+    query: str = Field(description='The query to thoroughly research.')
+
+
+class BrainstormSearchHypothesizeRefineTool(BaseTool):
+    web_search: WebSearch
+    chat_model: BaseChatModel
+    n_results: int = 3
+    state_file: Optional[str] = None
+    spinner: Optional[Halo] = None
+    name: str = 'web_research'
+    description: str = "Research the web using a Brainstorm-Search-Hypothesize-Refine approach. Use that to get a very comprehensive (but expensive) answer for a query you don't know or unsure of the answer to, for recent events, or if the user asks you to. This will evaluate answer snippets, knowledge graphs, and the top N results from google and aggregate a result for multiple queries. Very thorough research."
+    args_schema: Type[BaseModel] = BrainstormSearchHypothesizeRefineToolArgs
+    progress_text: str = 'Researching the topic (this may take a while)...'
+
+    def _run(
+            self,
+            query: str,
+            run_manager: Optional[CallbackManagerForToolRun] = None,
+            **kwargs: Any
+    ) -> Any:
+        hypothesis = run_brainstorm_search_hypothesize_refine_loop(
+            initial_state=BHSRState(information_need=query),
+            web_search=self.web_search,
+            chat_model=self.chat_model,
+            n_search_results=self.n_results,
+            state_file=self.state_file,
+            spinner=self.spinner
+        )
+
+        return hypothesis
 
 
 if __name__ == '__main__':
