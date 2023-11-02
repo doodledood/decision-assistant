@@ -46,7 +46,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
 
     def create_system_message(self, chat: 'Chat'):
         active_participants = chat.get_active_participants()
-        if ignore_group_chat_environment:
+        if self.ignore_group_chat_environment:
             system_message = StructuredString(sections=[
                 Section(name='Name', text=self.name),
                 Section(name='Role', text=self.role),

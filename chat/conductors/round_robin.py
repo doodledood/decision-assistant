@@ -22,9 +22,14 @@ class RoundRobinChatConductor(ChatConductor):
 
         # Rotate to the next participant in the list.
         participant_names = [participant.name for participant in active_participants]
-        last_speaker_index = participant_names.index(last_speaker)
-        next_speaker_index = (last_speaker_index + 1) % len(participant_names)
-        next_speaker_name = participant_names[next_speaker_index]
+
+        if last_speaker not in participant_names:
+            next_speaker_name = participant_names[0]
+        else:
+            last_speaker_index = participant_names.index(last_speaker)
+            next_speaker_index = (last_speaker_index + 1) % len(participant_names)
+            next_speaker_name = participant_names[next_speaker_index]
+
         next_speaker = chat.get_active_participant_by_name(next_speaker_name)
         if next_speaker is None or not isinstance(next_speaker, ActiveChatParticipant):
             raise ChatParticipantNotJoinedToChatError(next_speaker_name)
@@ -33,7 +38,12 @@ class RoundRobinChatConductor(ChatConductor):
 
     def get_chat_result(self, chat: 'Chat') -> str:
         result = super().get_chat_result(chat=chat)
-        result = result.replace('TERMINATE', '').strip()
+
+        try:
+            idx = result.rindex('TERMINATE')
+            result = result[:idx].strip()
+        except ValueError:
+            result = result.strip()
 
         return result
 

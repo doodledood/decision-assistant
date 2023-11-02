@@ -31,7 +31,7 @@ class SequentialProcess:
     def save_state(self, state: T):
         self.save_state_func(state)
 
-    def run(self):
+    def run(self) -> T:
         for step in self.steps:
             if step.on_step_start:
                 step.on_step_start(self.state)
@@ -50,3 +50,5 @@ class SequentialProcess:
                     step.on_step_failed(self.state)
 
                 raise e
+
+        return self.state

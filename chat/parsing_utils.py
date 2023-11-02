@@ -57,9 +57,28 @@ def chat_messages_to_pydantic(chat_messages: List[ChatMessage],
     )
     json_parser = JSONOutputParserChatParticipant(output_schema=output_schema)
 
+    # Remove TERMINATE if present so the chat conductor doesn't end the chat prematurely
+    if len(chat_messages) > 0:
+        last_message = chat_messages[-1]
+
+        try:
+            # Chop the content at the last instance of the word TERMINATE in the content
+            idx = last_message.content.rindex('TERMINATE')
+            new_content = last_message.content[:idx].strip()
+
+            last_message = ChatMessage(
+                id=last_message.id,
+                sender_name=last_message.sender_name,
+                content=new_content
+            )
+
+            chat_messages[-1] = last_message
+        except ValueError:
+            pass
+
     parser_chat = Chat(
         goal='Convert the chat contents to a valid and logical JSON.',
-        backing_store=InMemoryChatDataBackingStore(),
+        backing_store=InMemoryChatDataBackingStore(messages=chat_messages),
         renderer=NoChatRenderer(),
         initial_participants=[text_to_json_ai, json_parser],
         hide_messages=hide_message,
