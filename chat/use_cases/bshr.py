@@ -59,6 +59,8 @@ class HypothesisGenerationResult(BaseModel):
 
 
 class SatisficationCheckResult(BaseModel):
+    feedback: str = Field(
+        description='If not satisficed yet, feedback on why not satisfied and what to think about next. If satisficed, feedback can be empty.')
     is_satisficed: bool = Field(description='Whether or not the information need has been satisficed.')
 
 
@@ -186,7 +188,8 @@ def generate_hypothesis(state: BHSRState,
                 Section(name=query, text=f'```markdown\n{answer}\n```', uppercase_name=False) for query, answer in
                 state.answers_to_queries.items()
             ]),
-            Section(name='Previous Hypothesis', text=state.current_hypothesis)
+            Section(name='Previous Hypothesis', text=state.current_hypothesis),
+            Section(name='Feedback', text=state.feedback),
         ])),
         from_participant=user)
 
@@ -234,6 +237,7 @@ def check_satisficing(state: BHSRState,
     output = chat_messages_to_pydantic(chat_messages=chat.get_messages(), chat_model=chat_model,
                                        output_schema=SatisficationCheckResult)
 
+    state.feedback = output.feedback
     state.is_satisficed = output.is_satisficed
     state.current_hypothesis = state.proposed_hypothesis
     state.proposed_hypothesis = None
