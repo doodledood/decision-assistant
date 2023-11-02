@@ -45,11 +45,14 @@ class ScraperAPIPageRetriever(PageRetriever):
 
 
 class SimpleRequestsPageRetriever(PageRetriever):
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
     @retry(retry=retry_if_exception_type(TransientHTTPError),
            wait=wait_fixed(2) + wait_random(0, 2),
            stop=stop_after_attempt(5))
     def retrieve_html(self, url: str) -> str:
-        r = requests.get(url)
+        r = requests.get(url, **self.kwargs)
         if r.status_code < 300:
             return r.text
 
