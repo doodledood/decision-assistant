@@ -36,6 +36,7 @@ class BHSRState(BaseModel):
     queries_to_run: Optional[List[str]] = None
     answers_to_queries: Optional[Dict[str, str]] = None
     current_hypothesis: Optional[str] = None,
+    proposed_hypothesis: Optional[str] = None,
     is_satisficed: Optional[bool] = None
 
 
@@ -53,7 +54,15 @@ class QueryGenerationResult(BaseModel):
     queries: List[str] = Field(description='Set of queries to run.')
 
 
-def query_generation(state: BHSRState,
+class HypothesisGenerationResult(BaseModel):
+    hypothesis: str = Field(description='A new or updated hypothesis based on the materials provided.')
+
+
+class SatisficationCheckResult(BaseModel):
+    is_satisficed: bool = Field(description='Whether or not the information need has been satisficed.')
+
+
+def generate_queries(state: BHSRState,
                      chat_model: BaseChatModel,
                      shared_sections: Optional[List[Section]] = None,
                      web_search_tool: Optional[BaseTool] = None,
@@ -142,6 +151,88 @@ def search_queries(state: BHSRState,
         yield state
 
 
+def generate_hypothesis(state: BHSRState,
+                        chat_model: BaseChatModel,
+                        shared_sections: Optional[List[Section]] = None,
+                        spinner: Optional[Halo] = None):
+    user = UserChatParticipant()
+    hypothesis_generator = LangChainBasedAIChatParticipant(
+        name='Information Needs Hypothesis Generator',
+        role='Information Needs Hypothesis Generator',
+        personal_mission='You are an information needs hypothesis generator. You will be given a main information need or user query as well as a variety of materials, such as search results, previous hypotheses, and notes. Whatever information you receive, your output should be a revised, refined, or improved hypothesis. In this case, the hypothesis is a comprehensive answer to the user query or information need. To the best of your ability. Do not include citations in your hypothesis, as this will all be record via out-of-band processes (e.g. the information that you are shown will have metadata and cataloging working behind the scenes that you do not see). Even so, you should endeavour to write everything in complete, comprehensive sentences and paragraphs such that your hypothesis requires little to no outside context to understand. Your hypothesis must be relevant to the USER QUERY or INFORMATION NEED.',
+        other_prompt_sections=shared_sections,
+        ignore_group_chat_environment=True,
+        chat_model=chat_model,
+        spinner=spinner)
+    participants = [user, hypothesis_generator]
+    chat = Chat(
+        backing_store=InMemoryChatDataBackingStore(),
+        renderer=TerminalChatRenderer(),
+        initial_participants=participants
+    )
+
+    chat_conductor = RoundRobinChatConductor()
+
+    _ = chat_conductor.initiate_chat_with_result(
+        chat=chat,
+        initial_message=str(StructuredString(sections=[
+            Section(name='Information Need', text=state.information_need),
+            Section(name='Previous Queries & Answers', sub_sections=[
+                Section(name=query, text=answer, uppercase_name=False) for query, answer in
+                state.answers_to_queries.items()
+            ]),
+            Section(name='Previous Hypothesis', text=state.current_hypothesis)
+        ])),
+        from_participant=user)
+
+    output = chat_messages_to_pydantic(chat_messages=chat.get_messages(), chat_model=chat_model,
+                                       output_schema=HypothesisGenerationResult)
+    state.proposed_hypothesis = output.hypothesis
+
+
+def check_satisficing(state: BHSRState,
+                      chat_model: BaseChatModel,
+                      shared_sections: Optional[List[Section]] = None,
+                      spinner: Optional[Halo] = None):
+    user = UserChatParticipant()
+    satisficing_checker = LangChainBasedAIChatParticipant(
+        name='Information Needs Satisficing Checker',
+        role='Information Needs Satisficing Checker',
+        personal_mission='You are an information needs satisficing checker. You will be given a litany of materials, including an original user query, previous search queries, their results, notes, and a final hypothesis. You are to generate a decision as to whether or not the information need has been satisficed or not. You are to make this judgment by virtue of several factors: amount and quality of searches performed, specificity and comprehensiveness of the hypothesis, and notes about the information domain and foraging (if present). Several things to keep in mind: the user\'s information need may not be answerable, or only partially answerable, given the available information or nature of the problem.  Unanswerable data needs are satisficed when data foraging doesn\'t turn up more relevant information. Use a step-by-step approach to determine whether or not the information need has been satisficed.',
+        other_prompt_sections=shared_sections,
+        ignore_group_chat_environment=True,
+        chat_model=chat_model,
+        spinner=spinner)
+    participants = [user, satisficing_checker]
+    chat = Chat(
+        backing_store=InMemoryChatDataBackingStore(),
+        renderer=TerminalChatRenderer(),
+        initial_participants=participants
+    )
+
+    chat_conductor = RoundRobinChatConductor()
+
+    _ = chat_conductor.initiate_chat_with_result(
+        chat=chat,
+        initial_message=str(StructuredString(sections=[
+            Section(name='Information Need', text=state.information_need),
+            Section(name='Previous Queries & Answers', sub_sections=[
+                Section(name=query, text=answer, uppercase_name=False) for query, answer in
+                state.answers_to_queries.items()
+            ]),
+            Section(name='Previous Hypothesis', text=state.current_hypothesis),
+            Section(name='Proposed New Hypothesis', text=state.proposed_hypothesis)
+        ])),
+        from_participant=user)
+
+    output = chat_messages_to_pydantic(chat_messages=chat.get_messages(), chat_model=chat_model,
+                                       output_schema=SatisficationCheckResult)
+
+    state.is_satisficed = output.is_satisficed
+    state.current_hypothesis = state.proposed_hypothesis
+    state.proposed_hypothesis = None
+
+
 if __name__ == '__main__':
     load_dotenv()
 
@@ -181,57 +272,12 @@ if __name__ == '__main__':
     ]
     web_search_tool = WebResearchTool(web_search=web_search, n_results=n_search_results, spinner=spinner)
 
-    web_searcher = LangChainBasedAIChatParticipant(
-        name='Web Searcher',
-        role='Web Searcher',
-        personal_mission='Search the web for all the queries generated in the last step by the query generator and give the answers found to each.',
-        other_prompt_sections=shared_sections,
-        ignore_group_chat_environment=True,
-        tools=[
-            WebResearchTool(web_search=web_search, n_results=n_search_results, spinner=spinner)
-        ],
-        chat_model=chat_model,
-        spinner=spinner)
-    hypothesis_generator = LangChainBasedAIChatParticipant(
-        name='Information Needs Hypothesis Generator',
-        role='Information Needs Hypothesis Generator',
-        personal_mission='You are an information needs hypothesis generator. You will be given a main information need or user query as well as a variety of materials, such as search results, previous hypotheses, and notes. Whatever information you receive, your output should be a revised, refined, or improved hypothesis. In this case, the hypothesis is a comprehensive answer to the user query or information need. To the best of your ability. Do not include citations in your hypothesis, as this will all be record via out-of-band processes (e.g. the information that you are shown will have metadata and cataloging working behind the scenes that you do not see). Even so, you should endeavour to write everything in complete, comprehensive sentences and paragraphs such that your hypothesis requires little to no outside context to understand. Your hypothesis must be relevant to the USER QUERY or INFORMATION NEED.',
-        other_prompt_sections=shared_sections,
-        ignore_group_chat_environment=True,
-        chat_model=chat_model,
-        spinner=spinner)
-    satisficing_checker = LangChainBasedAIChatParticipant(
-        name='Information Needs Satisficing Checker',
-        role='Information Needs Satisficing Checker',
-        personal_mission='You are an information needs satisficing checker. You will be given a litany of materials, including an original user query, previous search queries, their results, notes, and a final hypothesis. You are to generate a decision as to whether or not the information need has been satisficed or not. You are to make this judgment by virtue of several factors: amount and quality of searches performed, specificity and comprehensiveness of the hypothesis, and notes about the information domain and foraging (if present). Several things to keep in mind: the user\'s information need may not be answerable, or only partially answerable, given the available information or nature of the problem.  Unanswerable data needs are satisficed when data foraging doesn\'t turn up more relevant information.',
-        other_prompt_sections=shared_sections,
-        ignore_group_chat_environment=True,
-        chat_model=chat_model,
-        spinner=spinner)
-    spr_writer = LangChainBasedAIChatParticipant(
-        name='SPR Writer',
-        role='SPR Writer',
-        personal_mission='You are a Sparse Priming Representation (SPR) writer. An SPR is a particular kind of use of language for advanced NLP, NLU, and NLG tasks, particularly useful for the latest generation of Large Language Models (LLMs). You will be given information by the USER which you are to render as an SPR.',
-        other_prompt_sections=shared_sections + [
-            Section(
-                name='Theory',
-                text='LLMs are a kind of deep neural network. They have been demonstrated to embed knowledge, abilities, and concepts, ranging from reasoning to planning, and even to theory of mind. These are called latent abilities and latent content, collectively referred to as latent space. The latent space of an LLM can be activated with the correct series of words as inputs, which will create a useful internal state of the neural network. This is not unlike how the right shorthand cues can prime a human mind to think in a certain way. Like human minds, LLMs are associative, meaning you only need to use the correct associations to "prime" another model to think in the same way.'
-            ),
-            Section(
-                name='Methodology',
-                text='Render the input as a distilled list of succinct statements, assertions, associations, concepts, analogies, and metaphors. The idea is to capture as much, conceptually, as possible but with as few words as possible. Write it in a way that makes sense to you, as the future audience will be another language model, not a human.'
-            )
-        ],
-        ignore_group_chat_environment=True,
-        chat_model=chat_model,
-        spinner=spinner)
-
     process = SequentialProcess(
         steps=[
             Step(
                 name='Query Generation',
                 func=partial(
-                    query_generation,
+                    generate_queries,
                     chat_model=chat_model,
                     shared_sections=shared_sections,
                     web_search_tool=web_search_tool,
@@ -250,7 +296,29 @@ if __name__ == '__main__':
                 ),
                 on_step_start=lambda _: spinner.start('Searching queries...'),
                 on_step_completed=lambda _: spinner.succeed('Queries answered.')
-            )
+            ),
+            Step(
+                name='Hypothesis Generation',
+                func=partial(
+                    generate_hypothesis,
+                    chat_model=chat_model,
+                    shared_sections=shared_sections,
+                    spinner=spinner
+                ),
+                on_step_start=lambda _: spinner.start('Generating hypothesis...'),
+                on_step_completed=lambda _: spinner.succeed('Hypothesis generated.')
+            ),
+            Step(
+                name='Satificing Check',
+                func=partial(
+                    check_satisficing,
+                    chat_model=chat_model,
+                    shared_sections=shared_sections,
+                    spinner=spinner
+                ),
+                on_step_start=lambda _: spinner.start('Checking satisfication condition...'),
+                on_step_completed=lambda _: spinner.succeed('Satisfication checked.')
+            ),
         ],
         initial_state=BHSRState(),
         save_state=partial(save_state, state_file=state_file)
