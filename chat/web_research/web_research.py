@@ -1,5 +1,5 @@
 import re
-from typing import Optional, Tuple, Type, Any
+from typing import Optional, Tuple, Type, Any, List
 
 from halo import Halo
 from langchain.callbacks.manager import CallbackManagerForToolRun
@@ -55,52 +55,83 @@ class WebSearch:
         self.page_query_analyzer = page_query_analyzer
         self.skip_results_if_answer_snippet_found = skip_results_if_answer_snippet_found
 
-    def get_answer(self, query: str, n_results: int = 3, spinner: Optional[Halo] = None) -> Tuple[bool, str]:
-        if spinner is not None:
-            spinner.start(f'Getting search results for "{query}"...')
-
-        search_results = self.search_results_provider.search(query=query, n_results=n_results)
-
-        if spinner is not None:
-            spinner.succeed(f'Got search results for "{query}".')
-
-        if len(search_results.organic_results) == 0 and search_results.answer_snippet is None:
-            return False, 'Nothing was found on the web for this query.'
-
+    def get_answer(self, query: str, n_results: int = 3, urls: Optional[List[str]] = None,
+                   spinner: Optional[Halo] = None) -> Tuple[bool, str]:
         qna = []
+        if urls is None:
+            if spinner is not None:
+                spinner.start(f'Getting search results for "{query}"...')
 
-        if search_results.knowledge_graph_description is not None:
-            qna.append({
-                'answer': search_results.knowledge_graph_description,
-                'source': 'Knowledge Graph'
-            })
+            search_results = self.search_results_provider.search(query=query, n_results=n_results)
 
-        if search_results.answer_snippet is not None:
-            qna.append({
-                'answer': search_results.answer_snippet,
-                'source': 'Answer Snippet'
-            })
+            if spinner is not None:
+                spinner.succeed(f'Got search results for "{query}".')
 
-        if not self.skip_results_if_answer_snippet_found or search_results.answer_snippet is None:
-            for result in search_results.organic_results:
-                if url_unsupported(result.link):
+            if len(search_results.organic_results) == 0 and search_results.answer_snippet is None:
+                return False, 'Nothing was found on the web for this query.'
+
+            if search_results.knowledge_graph_description is not None:
+                qna.append({
+                    'answer': search_results.knowledge_graph_description,
+                    'source': 'Knowledge Graph'
+                })
+
+            if search_results.answer_snippet is not None:
+                qna.append({
+                    'answer': search_results.answer_snippet,
+                    'source': 'Answer Snippet'
+                })
+
+            if not self.skip_results_if_answer_snippet_found or search_results.answer_snippet is None:
+                for result in search_results.organic_results:
+                    if url_unsupported(result.link):
+                        continue
+
+                    if spinner is not None:
+                        spinner.start(f'Reading & analyzing #{result.position} result "{result.title}"')
+
+                    try:
+                        page_result = self.page_query_analyzer.analyze(url=result.link, title=result.title, query=query,
+                                                                       spinner=spinner)
+                        answer = page_result.answer
+
+                        if spinner is not None:
+                            spinner.succeed(f'Read & analyzed #{result.position} result "{result.title}".')
+                    except Exception as e:
+                        if type(e) in (RetryError, TransientHTTPError, NonTransientHTTPError):
+                            if spinner is not None:
+                                spinner.warn(
+                                    f'Failed to read & analyze #{result.position} result "{result.title}", moving on.')
+
+                            answer = 'Unable to answer query because the page could not be read.'
+                        else:
+                            raise
+
+                    qna.append({
+                        'answer': answer,
+                        'source': result.link
+                    })
+        else:
+            # Urls were provided, search in those urls instead of searching using a search engine
+            for url in urls:
+                if url_unsupported(url):
                     continue
 
                 if spinner is not None:
-                    spinner.start(f'Reading & analyzing #{result.position} result "{result.title}"')
+                    spinner.start(f'Reading & analyzing URL "{url}"')
 
                 try:
-                    page_result = self.page_query_analyzer.analyze(url=result.link, title=result.title, query=query,
+                    page_result = self.page_query_analyzer.analyze(url=url, title="Unknown", query=query,
                                                                    spinner=spinner)
                     answer = page_result.answer
 
                     if spinner is not None:
-                        spinner.succeed(f'Read & analyzed #{result.position} result "{result.title}".')
+                        spinner.succeed(f'Read & analyzed URL "{url}".')
                 except Exception as e:
                     if type(e) in (RetryError, TransientHTTPError, NonTransientHTTPError):
                         if spinner is not None:
                             spinner.warn(
-                                f'Failed to read & analyze #{result.position} result "{result.title}", moving on.')
+                                f'Failed to read & analyze URL "{url}", moving on.')
 
                         answer = 'Unable to answer query because the page could not be read.'
                     else:
@@ -108,7 +139,7 @@ class WebSearch:
 
                 qna.append({
                     'answer': answer,
-                    'source': result.link
+                    'source': url
                 })
 
         if spinner is not None:
@@ -167,6 +198,8 @@ class WebSearch:
 
 class WebSearchToolArgs(BaseModel):
     query: str = Field(description='The query to search the web for.')
+    urls: Optional[List[str]] = Field(
+        description='A list of urls to search for the query in. If provided, the query will be searched in these urls. If not provided, the query will be searched in the top search results from a search engine. Provide urls only when the user mentions a URL (if applicable)')
 
 
 class WebResearchTool(BaseTool):
@@ -181,7 +214,8 @@ class WebResearchTool(BaseTool):
     def _run(
             self,
             query: str,
+            urls: Optional[List[str]] = None,
             run_manager: Optional[CallbackManagerForToolRun] = None,
             **kwargs: Any
     ) -> Any:
-        return self.web_search.get_answer(query=query, n_results=self.n_results, spinner=self.spinner)[1]
+        return self.web_search.get_answer(query=query, n_results=self.n_results, urls=urls, spinner=self.spinner)[1]
