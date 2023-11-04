@@ -27,7 +27,8 @@ from chat.structured_string import Section, StructuredString
 from chat.use_cases.request_response import get_response
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
-from chat.web_research.page_retriever import ScraperAPIPageRetriever
+
+from chat.web_research.page_retrievers.selenium_retriever import SeleniumPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
 from chat.web_research.web_research import WebResearchTool
 from sequential_process import SequentialProcess, Step
@@ -453,7 +454,9 @@ if __name__ == '__main__':
                 temperature=0.0,
                 model='gpt-3.5-turbo-16k-0613',
             ),
-            page_retriever=ScraperAPIPageRetriever(render_js=True),
+            page_retriever=SeleniumPageRetriever(),
+            # page_retriever=SimpleRequestsPageRetriever(),
+            # page_retriever=ScraperAPIPageRetriever(render_js=True),
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000),
             use_first_split_only=True
         )
@@ -462,10 +465,6 @@ if __name__ == '__main__':
     spinner = Halo(spinner='dots')
 
     hypothesis = run_brainstorm_search_hypothesize_refine_loop(
-        initial_state=BHSRState(
-            information_need='What are the top 10 countries to relocate to from israel. I am looking for a place with '
-                             'a high safety, low to non muslim population, good economy, good relations to israel, '
-                             'good weather, highly stable, no natural disasters, etc.'),
         web_search=web_search,
         chat_model=chat_model,
         n_search_results=n_search_results,

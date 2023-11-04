@@ -13,23 +13,23 @@ from chat.parsing_utils import string_output_to_pydantic
 from chat.participants import UserChatParticipant, LangChainBasedAIChatParticipant
 from chat.renderers import NoChatRenderer
 from chat.structured_string import Section, StructuredString
-from chat.web_research.page_retriever import PageRetriever
-from bs4 import BeautifulSoup
+from .page_retrievers import PageRetriever
+from bs4 import BeautifulSoup, Comment
 
 
-def extract_html_text(html_string):
-    soup = BeautifulSoup(html_string, 'html.parser')
+def tag_visible(element):
+    if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
+        return False
+    if isinstance(element, Comment):
+        return False
+    return True
 
-    # Remove all tag attributes
-    for tag in soup.find_all(True):
-        tag.attrs = {}
 
-    # Remove any tag that doesn't have visible text
-    for tag in soup.find_all(True):
-        if not tag.get_text(strip=True):
-            tag.extract()
-
-    text = soup.text
+def extract_html_text(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    texts = soup.find_all(text=True)
+    visible_texts = filter(tag_visible, texts)
+    text = u" ".join(t.strip() for t in visible_texts)
 
     # Close down double new lines to single new lines
     while '\n\n' in text:
