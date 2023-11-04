@@ -25,6 +25,9 @@ except ModuleNotFoundError as e:
 class SeleniumPageRetriever:
     def __init__(self, headless: bool = True, timeout: int = 30, minimum_wait_time: int = 2,
                  wait_and_extract_html: Optional[callable] = None):
+
+        assert timeout >= minimum_wait_time, "Timeout must be greater than or equal to minimum_wait_time."
+        
         self.chrome_options = Options()
 
         if headless:
@@ -56,7 +59,7 @@ class SeleniumPageRetriever:
 
         try:
             # Wait for the main document to be ready
-            WebDriverWait(driver, self.timeout).until(
+            WebDriverWait(driver, self.timeout - self.minimum_wait_time).until(
                 lambda d: d.execute_script("return document.readyState") == "complete"
             )
 
