@@ -2,12 +2,10 @@ import traceback
 from typing import Type, Any, Optional
 
 from halo import Halo
-from langchain.agents import initialize_agent
-from langchain.callbacks.manager import CallbackManagerForToolRun, AsyncCallbackManagerForToolRun
+from langchain.callbacks.manager import CallbackManagerForToolRun
 from langchain.text_splitter import TokenTextSplitter
 from langchain.tools import BaseTool
 import pydantic.v1 as pydantic_v1
-from langchain.utilities.wikipedia import WikipediaAPIWrapper
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
@@ -19,7 +17,8 @@ from dotenv import load_dotenv
 from chat.renderers import TerminalChatRenderer
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
-from chat.web_research.page_retriever import ScraperAPIPageRetriever
+from chat.web_research.page_retrievers.scraper_api_retriever import ScraperAPIPageRetriever
+from chat.web_research.page_retrievers.selenium_retriever import SeleniumPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
 from chat.web_research.web_research import WebResearchTool
 
@@ -77,7 +76,7 @@ if __name__ == '__main__':
                 temperature=0.0,
                 model='gpt-3.5-turbo-16k-0613'
             ),
-            page_retriever=ScraperAPIPageRetriever(),
+            page_retriever=SeleniumPageRetriever(),
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000),
             use_first_split_only=True
         )

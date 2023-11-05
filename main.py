@@ -10,7 +10,8 @@ from langchain.text_splitter import TokenTextSplitter
 
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
-from chat.web_research.page_retriever import ScraperAPIPageRetriever
+
+from chat.web_research.page_retrievers.selenium_retriever import SeleniumPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
 from chat.web_research.web_research import WebResearchTool
 from sequential_process import Step, SequentialProcess
@@ -27,7 +28,6 @@ def run_decision_assistant(
         state_file: Optional[str] = 'output/state.json',
         report_file: str = 'output/decision_report.html',
         n_search_results: int = 3,
-        render_js_when_researching: bool = False,
         fully_autonomous_research: bool = True
 ):
     if state_file is not None:
@@ -45,7 +45,7 @@ def run_decision_assistant(
         search_results_provider=GoogleSerperSearchResultsProvider(),
         page_query_analyzer=OpenAIChatPageQueryAnalyzer(
             chat_model=fast_chat_model,
-            page_retriever=ScraperAPIPageRetriever(render_js=render_js_when_researching),
+            page_retriever=SeleniumPageRetriever(),
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000)
         )
     )

@@ -14,28 +14,40 @@ from chat.participants import UserChatParticipant, LangChainBasedAIChatParticipa
 from chat.renderers import NoChatRenderer
 from chat.structured_string import Section, StructuredString
 from .page_retrievers import PageRetriever
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup, Comment, NavigableString
 
 
-def tag_visible(element):
-    if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
-        return False
-    if isinstance(element, Comment):
-        return False
-    return True
+def clean_html(content):
+    # Parse the HTML content
+    soup = BeautifulSoup(content, 'html.parser')
 
+    # Remove non-visible tags
+    for invisible_elem in soup(['style', 'script', 'meta', '[document]', 'head', 'title']):
+        invisible_elem.extract()
 
-def extract_html_text(html):
-    soup = BeautifulSoup(html, 'html.parser')
-    texts = soup.find_all(text=True)
-    visible_texts = filter(tag_visible, texts)
-    text = u" ".join(t.strip() for t in visible_texts)
+    # Remove comment nodes
+    for comment in soup.findAll(text=lambda text: isinstance(text, Comment)):
+        comment.extract()
 
-    # Close down double new lines to single new lines
-    while '\n\n' in text:
-        text = text.replace('\n\n', '\n')
+    # Function to check if a tag contains text
+    def tag_contains_text(tag):
+        if isinstance(tag, NavigableString):
+            return tag.strip() != ''
+        return any(tag_contains_text(child) for child in tag.children if not isinstance(child, Comment))
 
-    return text
+    # Remove tags that don't contain text or don't have children that contain text
+    for tag in soup.find_all(True):
+        if not tag_contains_text(tag):
+            tag.decompose()
+        else:
+            # Strip all attributes from tags that contain text, expect hrefs on links
+            href = tag.attrs.get('href')
+            tag.attrs = {}
+
+            if href is not None:
+                tag.attrs['href'] = href
+
+    return str(soup)
 
 
 class PageQueryAnalysisResult(BaseModel):
@@ -58,9 +70,9 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
 
     def analyze(self, url: str, title: str, query: str, spinner: Optional[Halo] = None) -> PageQueryAnalysisResult:
         html = self.page_retriever.retrieve_html(url)
-        html_text = extract_html_text(html)
+        cleaned_html = clean_html(html)  # extract_html_text(html)
 
-        docs = self.text_splitter.create_documents([html_text])
+        docs = self.text_splitter.create_documents([cleaned_html])
 
         answer = 'No answer yet.'
         for i, doc in enumerate(docs):
@@ -73,22 +85,22 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
                     LangChainBasedAIChatParticipant(
                         name='Web Page Query Answerer',
                         role='Web Page Query Answerer',
-                        personal_mission='Answer queries based on provided (partial) web page data from the web.',
+                        personal_mission='Answer queries based on provided (partial) web page content from the web.',
                         chat_model=self.chat_model,
                         other_prompt_sections=[
                             Section(name='Crafting a Query Answer', sub_sections=[
                                 Section(name='Process', list=[
-                                    'Analyze the query and the given data',
+                                    'Analyze the query and the given content',
                                     'If context is provided, use it to answer the query.',
                                     'Summarize the answer in a comprehensive, yet succinct way.',
                                 ], list_item_prefix=None),
                                 Section(name='Guidelines', list=[
-                                    'If the answer is not found in the page data, it\'s insufficent, or not relevant '
+                                    'If the answer is not found in the page content, it\'s insufficent, or not relevant '
                                     'to the query at all, state it clearly.',
-                                    'Do not fabricate information. Stick to provided data.',
+                                    'Do not fabricate information. Stick to provided content.',
                                     'Provide context for the next call (e.g., if a paragraph was cut short, include '
-                                    'relevant header information, section, etc. for continuity). Assume the data is '
-                                    'partial data from the page. Be very detailed in the context.',
+                                    'relevant header information, section, etc. for continuity). Assume the content is '
+                                    'partial content from the page. Be very detailed in the context.',
                                     'If unable to answer but found important information, include it in the context '
                                     'for the next call.',
                                     'Pay attention to the details of the query and make sure the answer is suitable '
@@ -110,7 +122,7 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
                     Section(name='Url', text=url),
                     Section(name='Title', text=title),
                     Section(name='Previous Answer', text=answer),
-                    Section(name='Page Text', text=text)
+                    Section(name='Page Content', text=text)
                 ])
             ))
             result = string_output_to_pydantic(

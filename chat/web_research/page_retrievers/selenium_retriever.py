@@ -1,9 +1,15 @@
 import json
+import logging
+import os
 import time
-from typing import Optional
 
+from bs4 import BeautifulSoup
+from selenium.webdriver.chrome.webdriver import WebDriver
+from selenium.webdriver.remote.remote_connection import LOGGER
+from tenacity import retry, retry_if_exception_type, wait_fixed, stop_after_attempt, wait_random
+
+from . import PageRetriever
 from ..errors import TransientHTTPError, NonTransientHTTPError
-from .base import PageRetriever
 
 try:
     from selenium import webdriver
@@ -21,16 +27,26 @@ except ModuleNotFoundError as e:
         "You can do this by running `pip install selenium webdriver_manager`."
     ) from e
 
+LOGGER.setLevel(logging.NOTSET)
 
-class SeleniumPageRetriever:
-    def __init__(self, headless: bool = True, timeout: int = 30, minimum_wait_time: int = 2,
-                 wait_and_extract_html: Optional[callable] = None):
 
-        assert timeout >= minimum_wait_time, "Timeout must be greater than or equal to minimum_wait_time."
-        
+class SeleniumPageRetriever(PageRetriever):
+    def __init__(self, headless: bool = True, main_page_timeout: int = 30, iframe_timeout: int = 10,
+                 main_page_min_wait: int = 2):
+
+        assert main_page_timeout >= main_page_min_wait, "Timeout must be greater than or equal to minimum_wait_time."
+
         self.chrome_options = Options()
 
-        if headless:
+        self.main_page_min_wait = main_page_min_wait
+        self.main_page_timeout = main_page_timeout
+        self.iframe_timeout = iframe_timeout
+        self.headless = headless
+
+        self.configure_chrome_options()
+
+    def configure_chrome_options(self):
+        if self.headless:
             self.chrome_options.add_argument("--headless")
 
         self.chrome_options.add_argument("--no-sandbox")  # Bypass OS security model
@@ -39,79 +55,93 @@ class SeleniumPageRetriever:
         self.chrome_options.add_argument("disable-infobars")  # Disabling infobars
         self.chrome_options.add_argument("--disable-extensions")  # Disabling extensions
         self.chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
+        self.chrome_options.add_argument("--ignore-certificate-errors")  # Ignore certificate errors
+        self.chrome_options.add_argument("--incognito")  # Incognito mode
+        self.chrome_options.add_argument("--log-level=0")  # To disable the logging
 
         # Enable Performance Logging
         self.chrome_options.set_capability("goog:loggingPrefs", {'performance': 'ALL'})
 
-        self.service = Service(ChromeDriverManager().install())
-        self.minimum_wait_time = minimum_wait_time
-        self.timeout = timeout
-
-        if wait_and_extract_html is None:
-            # The default wait condition waits for document readiness and all iframes as well.
-            self.wait_and_extract_html = self.default_wait_and_extract_html
-        else:
-            self.wait_and_extract_html = wait_and_extract_html
-
-    def default_wait_and_extract_html(self, driver):
+    def extract_html_from_driver(self, driver: WebDriver):
         # Wait for minimum time first
-        time.sleep(self.minimum_wait_time)
+        time.sleep(self.main_page_min_wait)
 
         try:
             # Wait for the main document to be ready
-            WebDriverWait(driver, self.timeout - self.minimum_wait_time).until(
+            WebDriverWait(driver, self.main_page_timeout - self.main_page_min_wait).until(
                 lambda d: d.execute_script("return document.readyState") == "complete"
             )
 
-            # Retrieve all iframe elements
-            iframes = driver.find_elements(By.TAG_NAME, "iframe")
-            main_html = driver.page_source  # Capture the main document HTML
+            # Capture the main document HTML
+            main_html = driver.page_source
+            soup = BeautifulSoup(main_html, 'html.parser')
 
-            # Function to switch to an available frame and capture its HTML
-            def capture_frame_html(frame):
-                WebDriverWait(driver, self.timeout).until(
-                    EC.frame_to_be_available_and_switch_to_it(frame)
-                )
-                frame_html = driver.page_source  # Get the iframe's HTML
-                driver.switch_to.default_content()  # Switch back to main content
-                return frame_html
+            # Find all iframe elements
+            iframes = driver.find_elements(By.TAG_NAME, "iframe")
 
             # Iterate over each iframe, switch to it, and capture its HTML
-            for iframe in iframes:
-                iframe_html = capture_frame_html(iframe)
-                frame_id = iframe.get_attribute('id')
-                # Replace the iframe placeholder in the main HTML with the actual iframe content
-                main_html = main_html.replace(f'<iframe id="{frame_id}"',
-                                              f'<iframe id="{frame_id}">{iframe_html}</iframe>', 1)
+            for index, iframe in enumerate(iframes):
+                # Wait for the iframe to be available and for its document to be fully loaded
+                WebDriverWait(driver, self.iframe_timeout).until(
+                    lambda d: EC.frame_to_be_available_and_switch_to_it(iframe)(d) and
+                              d.execute_script("return document.readyState") == "complete"
+                )
 
-            return main_html  # Return modified main HTML including iframe contents
+                # Capture the iframe HTML
+                iframe_html = driver.page_source
+                iframe_soup = BeautifulSoup(iframe_html, 'html.parser')
+                iframe_body = iframe_soup.find('body')
+
+                # Insert the iframe body after the iframe element in the main document
+                soup_iframe = soup.find_all('iframe')[index]
+                soup_iframe.insert_after(iframe_body)
+
+                # Switch back to the main content after each iframe
+                driver.switch_to.default_content()
+
+            # The soup object now contains the modified HTML
+            full_html = str(soup)
+
+            return full_html
         except (WebDriverException, NoSuchFrameException, TimeoutException):
             return False
 
+    @retry(retry=retry_if_exception_type(TransientHTTPError),
+           wait=wait_fixed(2) + wait_random(0, 2),
+           stop=stop_after_attempt(5))
     def retrieve_html(self, url: str) -> str:
+        driver = None
+        service = None
         try:
-            with webdriver.Chrome(service=self.service, options=self.chrome_options) as driver:
-                driver.get(url)
+            service = Service(ChromeDriverManager().install(), log_output=os.devnull)
+            driver = webdriver.Chrome(service=service, options=self.chrome_options)
+            driver.get(url)
 
-                html = self.wait_and_extract_html(driver)
-                if not html:
-                    raise Exception("Failed to load the page correctly with iframes.")
+            # Wait and extract the HTML
+            full_html = self.extract_html_from_driver(driver)
 
-                logs = driver.get_log("performance")
-                status_code = None
-                for entry in logs:
-                    log = json.loads(entry["message"])["message"]
-                    if log["method"] == "Network.responseReceived" and "response" in log["params"]:
-                        status_code = log["params"]["response"]["status"]
-                        break
+            # Now retrieve the logs and check the status code
+            logs = driver.get_log("performance")
+            status_code = None
+            for entry in logs:
+                log = json.loads(entry["message"])["message"]
+                if log["method"] == "Network.responseReceived" and "response" in log["params"]:
+                    status_code = log["params"]["response"]["status"]
+                    break
 
-                if status_code is None:
-                    raise Exception("No HTTP response received.")
-                elif status_code >= 500:
-                    raise TransientHTTPError(status_code, "Server error encountered.")
-                elif 400 <= status_code < 500:
-                    raise NonTransientHTTPError(status_code, "Client error encountered.")
+            if status_code is None:
+                raise Exception("No HTTP response received.")
+            elif status_code >= 500:
+                raise TransientHTTPError(status_code, "Server error encountered.")
+            elif 400 <= status_code < 500:
+                raise NonTransientHTTPError(status_code, "Client error encountered.")
 
-                return html
+            return full_html  # or driver.page_source if you wish to return the original source
         except TimeoutException:
             raise TransientHTTPError(408, "Timeout while waiting for the page to load.")
+        finally:
+            if driver:
+                driver.quit()
+
+            if service:
+                service.stop()
