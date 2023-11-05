@@ -16,7 +16,7 @@ from chat.web_research.search import GoogleSerperSearchResultsProvider
 from chat.web_research.web_research import WebResearchTool
 from chat.sequencial_process import Step, SequentialProcess
 from state import DecisionAssistantState, load_state, save_state
-from steps import identify_goal, identify_alternatives, identify_criteria, map_criteria, prioritize_criteria, \
+from steps import identify_goal, identify_alternatives, identify_criteria, prioritize_criteria, \
     generate_research_questions, perform_research, analyze_data, compile_data_for_presentation, present_report
 
 
@@ -80,12 +80,6 @@ def run_decision_assistant(
                 func=partial(identify_criteria, chat_model, default_participant_tools, spinner=spinner),
                 on_step_start=lambda _: spinner.start('Identifying criteria...'),
                 on_step_completed=lambda _: spinner.succeed('Identified criteria.')
-            ),
-            Step(
-                name='Criteria Mapping',
-                func=partial(map_criteria, chat_model, default_participant_tools, spinner=spinner),
-                on_step_start=lambda _: spinner.start('Mapping criteria...'),
-                on_step_completed=lambda _: spinner.succeed('Mapped criteria.')
             ),
             Step(
                 name='Criteria Prioritization',

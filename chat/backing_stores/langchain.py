@@ -11,7 +11,7 @@ from chat.base import ChatMessage, ChatParticipant
 def base_message_to_chat_message(base_message: BaseMessage) -> ChatMessage:
     content = base_message.content
 
-    pattern = re.compile(r'(\d+)\.\s*(.+?):\s*(.*)')
+    pattern = re.compile(r'(\d+)\.\s*(.+?):\s*(.*)', re.DOTALL)
     match = pattern.match(content)
 
     if not match:

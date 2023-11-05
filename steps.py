@@ -7,10 +7,13 @@ import ahpy
 import questionary
 from halo import Halo
 from langchain.chat_models import ChatOpenAI
+from langchain.llms.openai import OpenAI
+from langchain.memory import ConversationSummaryBufferMemory
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from chat.backing_stores import InMemoryChatDataBackingStore
+from chat.backing_stores.langchain import LangChainMemoryBasedChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor, LangChainBasedAIChatConductor
 from chat.parsing_utils import chat_messages_to_pydantic
@@ -25,6 +28,8 @@ from state import DecisionAssistantState
 
 class Criterion(BaseModel):
     name: str = Field(description='The name of the criterion. Example: "Affordability".')
+    description: str = Field(
+        description='A description of the criterion. Includes the sub-criteria and how to assign scale values to data.')
     scale: List[str] = Field(
         description='The scale of the criterion, from worst to best. Labels only. No numerical value, '
                     'no explainations. Example: "Very Expensive".')
@@ -40,13 +45,6 @@ class CriteriaIdentificationResult(BaseModel):
 
 class AlternativeListingResult(BaseModel):
     alternatives: List[str] = Field(description='The identified alternatives for the decision.')
-
-
-class CriterionMappingResult(BaseModel):
-    criterion_mapping: str = Field(
-        description='An explaination for the criterion on how to assign a value from the scale to a piece of data. '
-                    'Direct, no fluff. Should be formatted like: "1. LABEL_1: EXPLANATION_1;..." - 1 is the first '
-                    'label is the worst outcome for the criterion.')
 
 
 class CriteriaResearchQueriesResult(BaseModel):
@@ -265,18 +263,49 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         personal_mission='Brainstorm and iterate on the best set of criteria for the decision-making process.',
         other_prompt_sections=shared_prompt_sections + [
             Section(
-                name='Criteria Identification Process',
+                name='Criteria Identification Methodology',
                 list=[
                     'Start by suggesting an initial set of criteria that is as orthogonal, non-overlapping, '
-                    'and comprehensive as possible.',
+                    'and comprehensive as possible (including the scale, sub-criteria, and description).',
                     'Iterate on the criteria with the critic until you both are satisfied with them.',
-                    'Once you both are satisfied, confirm the criteria with the user and ask for feedback.'
+                    'Once you both are satisfied, confirm the criteria with the user and ask for feedback.',
+                    'The criteria should include the scale of the criterion description of the criterion, including '
+                    'the sub-criteria and how to assign scale values to data.'
                 ]
             ),
+            Section(name='Criteria Description', list=[
+                'The description should include the sub-criteria and how to assign scale values to data. That means '
+                'that each criterion should include concrete measures (like indexes, specific indicators, statistics '
+                'if there are any) to allow for the researcher to accurately compare alternatives later on',
+                'The measures should be as objective and specific as possible.',
+                'These measures should be reflective of the sub-criteria and the scale of the criterion.'
+            ]),
+            Section(name='Scale Definition', list=[
+                'The scale should be a list of labels only. No numerical values, no explainations. Example: '
+                '"Very Expensive".',
+                'The scale should be ordered from worst to best. Example: "Very Expensive" should come before '
+                '"Expensive".',
+                'Make should the values for the scale are roughly evenly spaced out. Example: "Very '
+                'Expensive" should be roughly as far from "Expensive" as "Expensive" is from "Fair".'
+            ]),
+            Section(name='General Formatting', list=[
+                'Make sure all the criteria are formatted nicely in markdown format and are easy to read, including '
+                'their description, sub-criteria and explainations.'
+            ]),
             Section(
                 name='Requirements',
-                list=[
-                    'At the end of the process there MUST be at least 1 criterion and no more than 15 criteria.',
+                sub_sections=[
+                    Section(
+                        name='Criteria',
+                        list=[
+                            'At the end of the process there MUST be at least 1 criterion and no more than 15 criteria.',
+                        ]),
+                    Section(
+                        name='Scales',
+                        list=[
+                            'Scales MUST be on at least 2-point scale and no more than 7-point scale.'
+                        ]
+                    )
                 ]
             ),
             Section(
@@ -284,40 +313,6 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                 list=[
                     'The last response should include the list of confirmed criteria and their respective scales, '
                     'numbered from 1 to N, where N is the best outcome for the criteria.'
-                ]
-            )
-        ],
-        tools=tools,
-        chat_model=chat_model,
-        spinner=spinner)
-    criteria_scales_brain_stormer = LangChainBasedAIChatParticipant(
-        name='Criteria Scale Brainstormer',
-        role='Criteria Scale Brainstormer',
-        personal_mission='Brainstorm and iterate on the best scales for the criteria for the decision-making process.',
-        other_prompt_sections=shared_prompt_sections + [
-            Section(
-                name='Criteria Scale Definition Process',
-                list=[
-                    'After the criteria have been identifed and the user is satisfied with them, come up with a 2 to '
-                    '7 point scale for each criterion, based on what makes sense for each criteria.',
-                    'Iterate on the scales with the critic until you both are satisfied with them.',
-                    'Once you both are satisfied, confirm the scales with the user and ask for feedback.'
-                ],
-                sub_sections=[
-                    Section(name='Scale Definition', list=[
-                        'The scale should be a list of labels only. No numerical values, no explainations. Example: '
-                        '"Very Expensive".',
-                        'The scale should be ordered from worst to best. Example: "Very Expensive" should come before '
-                        '"Expensive".',
-                        'Make should the values for the scale are roughly evenly spaced out. Example: "Very '
-                        'Expensive" should be roughly as far from "Expensive" as "Expensive" is from "Fair".'
-                    ])
-                ]
-            ),
-            Section(
-                name='Requirements',
-                list=[
-                    'Scales MUST be on at least 2-point scale and no more than 7-point scale.'
                 ]
             )
         ],
@@ -333,6 +328,8 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                 name='Criteria Critiquing',
                 list=[
                     'When critiquing the criteria, make sure they are orthogonal, non-overlapping, and comprehensive.',
+                    'When critiquing the scales, make sure they are ordered from worst to best, evenly spaced out, '
+                    'and have labels that make sense.',
                 ],
                 sub_sections=[
                     Section(
@@ -345,31 +342,13 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                             'Are there any criteria that are missing to create a comprehensive set of criteria?',
                             'Is the criteria set maximally orthogonal and non-overlapping?',
                             'Are there any criteria that are too subjective or vague?',
+                            'Same thing for the sub-criteria within the main criteria.',
                             'Is there at least 1 criterion identified?',
-                            'Are there no more than 15 criteria identified?'
-                        ]
-                    )
-                ]
-            )
-        ],
-        tools=tools,
-        chat_model=chat_model,
-        spinner=spinner)
-    criteria_scale_critic = LangChainBasedAIChatParticipant(
-        name='Criteria Scale Critic',
-        role='Criteria Scale Critic',
-        personal_mission='Critique the scales for the criteria and provide feedback on what to improve.',
-        other_prompt_sections=shared_prompt_sections + [
-            Section(
-                name='Criteria Scale Critiquing',
-                list=[
-                    'When critiquing the scales, make sure they are ordered from worst to best, evenly spaced out, '
-                    'and have labels that make sense.',
-                ],
-                sub_sections=[
-                    Section(
-                        name='Questions to ask yourself',
-                        list=[
+                            'Are there no more than 15 criteria identified?',
+                            'Are all the descriptions for the criteria clear and easy to understand?',
+                            'Do all the descriptions include concrete measures (like indexes, metrics, statistics, '
+                            'etc. - if possible) that can be effectively used to'
+                            'research and compare alternatives later on?',
                             'Are all the labels on a scale ordered from worst to best?',
                             'Can a scale be simplified such that it is easier to assign a value to a piece of data '
                             'based on it?',
@@ -384,29 +363,37 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         chat_model=chat_model,
         spinner=spinner)
     user = UserChatParticipant(name='User')
-    participants = [user, criteria_brainstormer, criteria_scales_brain_stormer, criteria_critic, criteria_scale_critic]
+    participants = [user, criteria_brainstormer, criteria_critic]
+
+    max_context_size = OpenAI.modelname_to_contextsize(chat_model.model_name)
 
     chat = Chat(
         goal='Identify clear well-defined criteria and their respective scales for the decision.',
-        speaker_interaction_schema='''1. The Criteria Brainstormer suggests an initial set of criteria based on the user input. 2. The Criteria Critic critiques the criteria suggested and suggests improvements.
-3. The Criteria Brainstormer iterates on the criteria until they think they are good enough and ask the user for feedback.
-4. If the user is not satisfied with the criteria, go back to step 1, refining the criteria based on the user feedback.
-5. If the user is satisfied with the criteria, it\'s time to define the scales for the criteria. Move to step 6.
-6. The Criteria Scale Brainstormer suggests an initial set of scales for the criteria.
-7. The Criteria Scale Critic critiques the scales and suggests improvements.
-8. The Criteria Scale Brainstormer iterates on the scales until they think they are good enough and ask the user for feedback.
-9. If the user is not satisfied with the scales, go back to step 6, refining the scales based on the user feedback.
-10. If the user is satisfied with the scales, the criteria identification process is complete. The Criteria Brainstormer should present the final list of criteria and their respective scales to the user.
-''',
-        backing_store=InMemoryChatDataBackingStore(),
+        speaker_interaction_schema=(
+            '1. The Criteria Brainstormer suggests an initial set of criteria (including description and scales) '
+            'based on the user input.\n'
+            '2. The Criteria Critic critiques the criteria suggested and suggests improvements.\n'
+            '3. The Criteria Brainstormer iterates on the criteria until they think they are good enough and ask the '
+            'user for feedback.\n'
+            '4. If the user is not satisfied with the criteria, go back to step 1, refining the criteria based on the '
+            'user feedback.\n'
+            '5. If the user is satisfied with the criteria, the criteria identification process is complete. The '
+            'Criteria Brainstormer should present the final list of criteria and their respective scales to the '
+            'user.\n'),
+        backing_store=LangChainMemoryBasedChatDataBackingStore(
+            memory=ConversationSummaryBufferMemory(
+                llm=chat_model,
+                max_token_limit=max_context_size * 0.5
+            )
+        ),
         renderer=TerminalChatRenderer(),
         initial_participants=participants
     )
 
     chat_conductor = LangChainBasedAIChatConductor(
         chat_model=chat_model,
-        termination_condition='The criteria and their respective scales have been identified, iterated on (if '
-                              'applicable), and finally, confirmed by the user.'
+        termination_condition='The criteria, their respective scales, description and sub-criteria have been '
+                              'identified, iterated on (if applicable), and finally, confirmed by the user.'
     )
     _ = chat_conductor.initiate_chat_with_result(chat=chat, initial_message=str(StructuredString(
         sections=[
@@ -422,195 +409,6 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     criteria = output.model_dump()['criteria']
 
     state.data = {**state.data, **dict(criteria=criteria)}
-
-
-def map_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
-                 state: DecisionAssistantState, spinner: Optional[Halo] = None):
-    criteria_mapping = state.data.get('criteria_mapping', {})
-    criteria_names = [criterion['name'] for criterion in state.data['criteria']]
-
-    for i, criterion in enumerate(state.data['criteria']):
-        if criterion['name'] in criteria_mapping:
-            continue
-
-        shared_prompt_sections = [
-            Section(
-                name='Process Stage',
-                text='This is the fourth part of the decision-making process, after the goal, alternatives, '
-                     'and criteria have been identified. No need for a greeting.'
-            )
-        ]
-        criteria_mapper = LangChainBasedAIChatParticipant(
-            name='Decision-Making Criteria Mapping Consultant',
-            role='Decision-Making Criteria Mapping Consultant',
-            personal_mission='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given '
-                             'scale for each criterion in a decision-making process.',
-            other_prompt_sections=shared_prompt_sections + [
-                Section(
-                    name='Interaction Schema',
-                    list=[
-                        'Start by suggesting a mapping for the criterion at hand, and asking the Mapping Critic for '
-                        'feedback.',
-                        'Iterate on the mapping with the Critic until you are both satisfied with it.',
-                        'Once you are both satisfied, confirm the mapping with the user and ask for feedback.',
-                        'Continue iterating on the mapping with the Critic and user until the user is satisfied with '
-                        'it.'
-                    ]
-                ),
-                Section(
-                    name='Criterion Mapping',
-                    list=[
-                        'A mapping is like a decision tree for mapping research data onto a given scale for a '
-                        'criterion.',
-                        'Based on the mapping, an autonomous bot should be able to assign a value from the scale to a '
-                        'piece of data.',
-                        'Make sure the current mapping does not contradict or interfere with previous mappings or '
-                        'future ones to follow.',
-                        'Each mapping should be unique within all the criteria, unless specified by the user.',
-                        'A mapping could also be looked at like sub-criteria of the criterion - we don\'t want these '
-                        'duplicated as that makes the results less accurate.'
-                    ],
-                    sub_sections=[
-                        Section(
-                            name='Subjective Criterion',
-                            list=[
-                                'For subjective criteria like "Affordability", engage in a deeper dialogue with the '
-                                'user to understand their preferences and thinking.',
-                                'If the criterion is entirely user feeling based, just explain a value mapping by '
-                                'saying something like "User feels very good about this".'
-                            ]
-                        )
-                    ]
-                ),
-                Section(
-                    name='The Last Message',
-                    list=[
-                        'The last response should include the list of confirmed criteria mapping.',
-                        'The list should be formatted like: "1. LABEL_1: EXPLANATION_1\n2. ..." where 1. is the worst '
-                        'option and N. is the best option.',
-                        'It should end with the word TERMINATE at the end of the message to signal the end of the chat.'
-                    ]
-                )
-            ],
-            tools=tools,
-            chat_model=chat_model,
-            spinner=spinner)
-        criteria_mapping_critic = LangChainBasedAIChatParticipant(
-            name='Criteria Mapping Critic',
-            role='Criteria Mapping Critic',
-            personal_mission='Critique the criteria mapping and provide feedback on what to improve.',
-            other_prompt_sections=shared_prompt_sections + [
-                Section(
-                    name='Interaction Schema',
-                    list=[
-                        'Give direct feedback on the mapping suggested by the Criteria Mapper.',
-                        'Iterate on the mapping with the Mapper until you are both satisfied with it.',
-                        'Once you are both satisfied, the Mapper should confirm the mapping with the user and ask for '
-                        'feedback.',
-                        'Continue iterating on the mapping with the Critic and user until the user is satisfied with '
-                        'it.'
-                    ]
-                ),
-                Section(
-                    name='Criteria Mapping Critiquing',
-                    list=[
-                        'When critiquing the criteria mapping, make sure it is clear, non-ambiguous, and does not '
-                        'contradict or interfere with previous mappings or future ones to follow.',
-                    ],
-                    sub_sections=[
-                        Section(
-                            name='Questions to ask yourself',
-                            list=[
-                                'Is the mapping clear and non-ambiguous?',
-                                'Does the mapping contradict or interfere with previous mappings or future ones to '
-                                'follow?',
-                                'Does the mapping include a clear explanation & decision tree on how to assign each '
-                                'label?'
-                                'Does the mapping cover all the labels in the scale?',
-                                'Does the mapping take into account the goal of the decision-making process?'
-                                'Is the mapping based on concrete, specific, measurable, and reproducable data like '
-                                'indexes, statistics, and numbers when applicable?',
-                                'For non-subjective criteria only: Is the mapping too subjective or vague?',
-                            ]
-                        )
-                    ]
-                )
-            ],
-            tools=tools,
-            chat_model=chat_model,
-            spinner=spinner)
-        user = UserChatParticipant(name='User')
-        participants = [user, criteria_mapper, criteria_mapping_critic]
-
-        chat = Chat(
-            goal='Develop a concrete, non-ambiguous decision tree for mapping research data onto a given scale for '
-                 'each criterion in a decision-making process.',
-            speaker_interaction_schema='''1. The Criteria Mapper should suggest an initial mapping for the criterion based on the user input.
-2. The Criteria Mapping Critic critiques the mapping suggested and suggests improvements.
-3. The Criteria Mapper & Critic continue iterating on the mapping until they think it is good enough and ask the user for feedback.
-4. If the user is not satisfied with the mapping, go back to step 1, refining the mapping based on the user feedback.
-5. If the user is satisfied with the mapping, it\'s time to move on to the next criterion.
-            ''',
-            backing_store=InMemoryChatDataBackingStore(),
-            renderer=TerminalChatRenderer(),
-            initial_participants=participants
-        )
-
-        chat_conductor = LangChainBasedAIChatConductor(
-            chat_model=chat_model,
-            termination_condition='The criterion mapping has been identified, iterated on (if applicable), '
-                                  'and finally, confirmed by the user.'
-        )
-        _ = chat_conductor.initiate_chat_with_result(
-            chat=chat,
-            initial_message=str(StructuredString(
-                sections=[
-                    Section(
-                        name='Goal',
-                        text=state.data['goal']
-                    ),
-                    Section(
-                        name='Previously Mapping Criteria',
-                        list=[
-                            f'{criteria_names.index(criterion_name)}. {criterion_name}: {criterion_mapping}'
-                            for criterion_name, criterion_mapping in
-                            criteria_mapping.items()],
-                    ),
-                    Section(
-                        name='Criteria Left to Map',
-                        list=[
-                            f'{criteria_names.index(criterion_name)}. {criterion_name}'
-                            for criterion_name in
-                            [criterion["name"] for criterion in
-                             state.data['criteria'] if
-                             criterion['name'] not in criteria_mapping]]
-                    ),
-                    Section(
-                        name='Current Criterion',
-                        text=f'{criteria_names.index(criterion["name"])}. {criterion["name"]}'
-                    ),
-                    Section(
-                        name='Current Criterion Scale',
-                        list=criterion['scale'],
-                        list_item_prefix=None
-                    )
-                ]
-            )),
-            from_participant=user
-        )
-        output = chat_messages_to_pydantic(
-            chat_messages=chat.get_messages(),
-            chat_model=chat_model,
-            output_schema=CriterionMappingResult
-        )
-        criterion_mapping = output.model_dump()['criterion_mapping']
-        criteria_mapping[criterion['name']] = criterion_mapping
-
-        state.data = {**state.data,
-                      **dict(criteria_mapping=criteria_mapping)}
-        yield state
-
-    state.data = {**state.data, **dict(criteria_mapping=criteria_mapping)}
 
 
 def prioritize_criteria(state: DecisionAssistantState):
@@ -648,8 +446,8 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
             Section(
                 name='Process',
                 list=[
-                    'This is the fifth part of the decision-making process, after the goal, alternatives, criteria, '
-                    'and criteria mapping have been identified. No need for a greeting.',
+                    'This is the fifth part of the decision-making process, after the goal, alternatives and criteria, '
+                    'have been identified. No need for a greeting.',
                     'For each criterion, generate relevant, orthogonal, and comprehensive set query templates.',
                 ],
                 list_item_prefix=None
@@ -697,10 +495,11 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
         sections=[
             Section(name='Goal', text=state.data['goal']),
             Section(name='Alternatives', list=state.data['alternatives']),
-            Section(name='Criteria Mappings',
+            Section(name='Criteria',
                     sub_sections=[
-                        Section(name=criterion_name, text=criterion_mapping) for criterion_name, criterion_mapping in
-                        state.data['criteria_mapping'].items()
+                        Section(name=criterion['name'], text=criterion['description'], list=criterion['scale'],
+                                list_item_prefix=None) for criterion in
+                        state.data['criteria'].items()
                     ]),
         ]
     )))
@@ -775,8 +574,6 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
         for i, criterion in enumerate(state.data['criteria']):
             criterion_name = criterion['name']
 
-            # Present research data, discuss, aggregate, assign a proper label, and confirm with the user
-            criterion_mapping = state.data['criteria_mapping'][criterion_name]
             alternative_criterion_research_data = alternative_research_data[criterion_name]
 
             # Already researched and aggregated, skip
@@ -787,13 +584,13 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
                 name='Decision-Making Process Researcher',
                 role='Decision-Making Process Researcher',
                 personal_mission='Refine research findings through user interaction and assign an accurate label '
-                                 'based on data, user input, and criteria mapping.',
+                                 'based on data, user input, and criteria.',
                 other_prompt_sections=[
                     Section(
                         name='Process',
                         list=[
                             'This is the sixth part of the decision-making process, after the goal, alternatives, '
-                            'criteria, criteria mapping, and research queries have been identified. No need for a '
+                            'criteria, and research queries have been identified. No need for a '
                             'greeting.',
                             'Present the researched data to the user and assign a preliminary label & ask for feedback',
                             'Revise the research findings based on user input, until the user is satisfied with the '
@@ -855,11 +652,10 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
                 sections=[
                     Section(name='Goal', text=state.data['goal']),
                     Section(name='Alternatives', list=state.data['alternatives']),
-                    Section(name='Criteria Mappings',
+                    Section(name='Criterion',
                             sub_sections=[
-                                Section(name=criterion_name, text=criterion_mapping) for
-                                criterion_name, criterion_mapping in
-                                state.data['criteria_mapping'].items()
+                                Section(name=criterion_name, text=criterion['description'], list=criterion['scale'],
+                                        list_item_prefix=None)
                             ]),
                     Section(name='Research Findings',
                             sub_sections=[
