@@ -23,7 +23,7 @@ if __name__ == '__main__':
                                          spinner=spinner)
     rob = LangChainBasedAIChatParticipant(name='Rob', role='Funny Prankster',
                                           personal_mission='Take the lead and try to prank the boring AI. Collaborate '
-                                                           'with the user when releavnt and make him laugh!',
+                                                           'with the user when relevant and make him laugh!',
                                           chat_model=chat_model,
                                           spinner=spinner)
     user = UserChatParticipant(name='User')
