@@ -455,8 +455,6 @@ if __name__ == '__main__':
                 model='gpt-3.5-turbo-16k-0613',
             ),
             page_retriever=SeleniumPageRetriever(),
-            # page_retriever=SimpleRequestsPageRetriever(),
-            # page_retriever=ScraperAPIPageRetriever(render_js=True),
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000),
             use_first_split_only=True
         )
