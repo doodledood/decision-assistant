@@ -11,7 +11,7 @@ class InMemoryChatDataBackingStore(ChatDataBackingStore):
 
     def __init__(self, messages: Optional[List[ChatMessage]] = None,
                  participants: Optional[List[ChatParticipant]] = None):
-        self.messages = sorted(messages or [], key=lambda m: m.id)
+        self.messages = messages or []
         self.participants = {participant.name: participant for participant in (participants or [])}
         self.last_message_id = None if len(self.messages) == 0 else self.messages[-1].id
 
