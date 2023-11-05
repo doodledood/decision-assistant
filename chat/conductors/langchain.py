@@ -2,11 +2,11 @@ from typing import Any, Dict, Optional, List
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
-from langchain.schema import SystemMessage, HumanMessage, AIMessage, BaseMessage
+from langchain.schema import SystemMessage, HumanMessage, AIMessage, BaseMessage, BaseRetriever, Document
 from langchain.tools import BaseTool
 
 from chat.ai_utils import execute_chat_model_messages
-from chat.base import ChatConductor, Chat, ActiveChatParticipant
+from chat.base import ChatConductor, Chat, ActiveChatParticipant, ChatMessage
 from chat.errors import ChatParticipantNotJoinedToChatError
 from chat.structured_string import StructuredString, Section
 
@@ -15,6 +15,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
     tools: Optional[List[BaseTool]] = None
+    retriever: Optional[BaseRetriever] = None
     termination_condition: str = f'''Terminate the chat on the following conditions:
     - When the goal of the chat has been achieved
     - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
@@ -23,6 +24,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
     def __init__(self,
                  chat_model: BaseChatModel,
                  termination_condition: Optional[str] = None,
+                 retriever: Optional[BaseRetriever] = None,
                  spinner: Optional[Halo] = None,
                  tools: Optional[List[BaseTool]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None):
@@ -31,20 +33,32 @@ class LangChainBasedAIChatConductor(ChatConductor):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.tools = tools
+        self.retriever = retriever
         self.termination_condition = termination_condition
         self.spinner = spinner
 
     def create_next_speaker_system_prompt(self, chat: 'Chat') -> str:
+        chat_messages = chat.get_messages()
+
+        if self.retriever is not None and len(chat_messages) > 0:
+            relevant_docs = self.get_relevant_docs(messages=chat_messages)
+        else:
+            relevant_docs = []
+
         system_message = StructuredString(sections=[
             Section(name='Mission',
-                    text='Select the next speaker in the conversation based on the previous messages in the conversation and an optional SPEAKER INTERACTION SCHEMA. If it seems to you that the chat should end instead of selecting a next speaker, terminate it.'),
+                    text='Select the next speaker in the conversation based on the previous messages in the '
+                         'conversation and an optional SPEAKER INTERACTION SCHEMA. If it seems to you that the chat '
+                         'should end instead of selecting a next speaker, terminate it.'),
             Section(name='Rules', list=[
                 'You can only select one of the participants in the group chat.'
             ]),
             Section(name='Termination Condition', text=self.termination_condition),
             Section(name='Process', list=[
-                'Look at the last message in the conversation and determine who should speak next based on the SPEAKER INTERACTION SCHEMA, if provided.',
-                'If based on TERMINATION CONDITION you determine that the chat should end, you should return the string TERMINATE instead of a participant name.'
+                'Look at the last message in the conversation and determine who should speak next based on the '
+                'SPEAKER INTERACTION SCHEMA, if provided.',
+                'If based on TERMINATION CONDITION you determine that the chat should end, you should return the '
+                'string TERMINATE instead of a participant name.'
             ]),
             Section(name='Input',
                     list=[
@@ -54,11 +68,21 @@ class LangChainBasedAIChatConductor(ChatConductor):
                         'Previous messages from the conversation',
                     ]),
             Section(name='Output',
-                    text='The name of the next speaker in the conversation. Or, TERMINATE if the chat should end, instead.'),
+                    text='The name of the next speaker in the conversation. Or, TERMINATE if the chat should end, '
+                         'instead.'),
             Section(name='Example Outputs', list=[
                 '"John"',
                 '"TERMINATE"'
-            ])
+            ]),
+            Section(name='Additional Context for Selection',
+                    text='None' if len(
+                        relevant_docs) == 0 else 'The following documents may be relevant for your selection of the '
+                                                 'next speaker, only use them for context for a better response, '
+                                                 'if applicable',
+                    sub_sections=[
+                        Section(name=f'Document {i + 1}', text=f'```{doc.page_content}```') for i, doc in
+                        enumerate(relevant_docs)
+                    ]),
         ])
 
         return str(system_message)
@@ -132,3 +156,6 @@ class LangChainBasedAIChatConductor(ChatConductor):
             spinner=self.spinner,
             chat_model_args=self.chat_model_args
         )
+
+    def get_relevant_docs(self, messages: List[ChatMessage]) -> List[Document]:
+        return self.retriever.get_relevant_documents(query=messages[-1].content)
