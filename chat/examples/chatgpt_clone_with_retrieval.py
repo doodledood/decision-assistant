@@ -36,6 +36,7 @@ if __name__ == '__main__':
     ai = LangChainBasedAIChatParticipant(
         name='Assistant',
         chat_model=chat_model,
+        # Pass the retriever to the AI participant
         retriever=retriever,
         spinner=spinner)
     user = UserChatParticipant(name='User')
