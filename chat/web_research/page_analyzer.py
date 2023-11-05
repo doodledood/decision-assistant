@@ -70,7 +70,7 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
 
     def analyze(self, url: str, title: str, query: str, spinner: Optional[Halo] = None) -> PageQueryAnalysisResult:
         html = self.page_retriever.retrieve_html(url)
-        cleaned_html = clean_html(html)  # extract_html_text(html)
+        cleaned_html = clean_html(html)
 
         docs = self.text_splitter.create_documents([cleaned_html])
 
