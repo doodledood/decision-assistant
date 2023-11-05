@@ -26,7 +26,7 @@ if __name__ == '__main__':
         'The user likes to eat Chocolate.'
     ]
 
-    # Make sure you have OPENAI_API_KEY set in your .env file
+    # Make sure you have OPENAI_API_KEY set in your environment variables.
     embeddings = OpenAIEmbeddings()
 
     # Make sure you install chromadb: `pip install chromadb`
