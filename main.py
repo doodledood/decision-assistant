@@ -14,7 +14,7 @@ from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from chat.web_research.page_retrievers.selenium_retriever import SeleniumPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
 from chat.web_research.web_research import WebResearchTool
-from sequential_process import Step, SequentialProcess
+from chat.sequencial_process import Step, SequentialProcess
 from state import DecisionAssistantState, load_state, save_state
 from steps import identify_goal, identify_alternatives, identify_criteria, map_criteria, prioritize_criteria, \
     generate_research_questions, perform_research, analyze_data, compile_data_for_presentation, present_report
