@@ -32,7 +32,7 @@ def base_message_to_chat_message(base_message: BaseMessage) -> ChatMessage:
     )
 
 
-class LangchainMemoryBasedChatDataBackingStore(InMemoryChatDataBackingStore):
+class LangChainMemoryBasedChatDataBackingStore(InMemoryChatDataBackingStore):
     memory: BaseChatMemory
     memory_key_getter: Callable[[BaseChatMemory], str]
     no_output_message: str = '##NO_OUTPUT##'

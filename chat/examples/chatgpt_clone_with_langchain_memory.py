@@ -2,7 +2,7 @@ from halo import Halo
 from langchain.memory import ConversationBufferMemory, ConversationTokenBufferMemory, ConversationSummaryBufferMemory
 
 from chat.backing_stores import InMemoryChatDataBackingStore
-from chat.backing_stores.langchain import LangchainMemoryBasedChatDataBackingStore
+from chat.backing_stores.langchain import LangChainMemoryBasedChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     memory = ConversationSummaryBufferMemory(llm=chat_model, max_token_limit=100)
     chat = Chat(
-        backing_store=LangchainMemoryBasedChatDataBackingStore(memory=memory),
+        backing_store=LangChainMemoryBasedChatDataBackingStore(memory=memory),
         renderer=TerminalChatRenderer(),
         initial_participants=participants
     )
