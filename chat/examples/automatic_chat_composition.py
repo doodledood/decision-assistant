@@ -26,8 +26,11 @@ if __name__ == '__main__':
     chat = Chat(
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
-        goal='Come up with a plan for the user to invest their money. The goal is to maximize wealth over the long-term, while minimizing risk.',
+        # Set up a proper goal so the composition generator can use it to generate the composition that will best fit
+        goal='Come up with a plan for the user to invest their money. The goal is to maximize wealth over the '
+             'long-term, while minimizing risk.',
         initial_participants=[user],
+        # Pass in a composition generator to the chat
         composition_generator=LangChainBasedAIChatCompositionGenerator(
             chat_model=chat_model,
             spinner=spinner,
