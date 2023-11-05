@@ -17,7 +17,6 @@ from dotenv import load_dotenv
 from chat.renderers import TerminalChatRenderer
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
-from chat.web_research.page_retrievers.scraper_api_retriever import ScraperAPIPageRetriever
 from chat.web_research.page_retrievers.selenium_retriever import SeleniumPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
 from chat.web_research.web_research import WebResearchTool
