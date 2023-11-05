@@ -76,6 +76,7 @@ if __name__ == '__main__':
                 temperature=0.0,
                 model='gpt-3.5-turbo-16k-0613'
             ),
+            # Should `pip install selenium webdriver_manager` to use this
             page_retriever=SeleniumPageRetriever(),
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000),
             use_first_split_only=True
