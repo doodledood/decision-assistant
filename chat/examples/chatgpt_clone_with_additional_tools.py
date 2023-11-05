@@ -24,12 +24,15 @@ from chat.web_research.web_research import WebResearchTool
 
 class CodeExecutionToolArgs(pydantic_v1.BaseModel):
     python_code: str = pydantic_v1.Field(
-        description='The verbatim python code to execute. Ensure code always ends with `res = str(...)`, to capture the result of the code.')
+        description='The verbatim python code to execute. Ensure code always ends with `res = ...`, to capture the '
+                    'result of the code.')
 
 
 class SimpleCodeExecutionTool(BaseTool):
     name: str = 'code_executor'
-    description: str = 'Use this code executor for any capability you are missing expect for web searching. That includes math, time, data analysis, etc. Code will get executed and the result will be returned as a string.'
+    description: str = ('Use this code executor for any capability you are missing expect for web searching. That '
+                        'includes math, time, data analysis, etc. Code will get executed and the result will be '
+                        'returned as a string.')
     args_schema: Type[pydantic_v1.BaseModel] = CodeExecutionToolArgs
     progress_text: str = 'Executing code...'
     spinner: Optional[Halo] = None
