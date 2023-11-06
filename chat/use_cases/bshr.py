@@ -447,6 +447,7 @@ class BrainstormSearchHypothesizeRefineTool(BaseTool):
     ) -> Any:
         hypothesis = run_brainstorm_search_hypothesize_refine_loop(
             initial_state=BHSRState(information_need=query),
+            confirm_satisficed=True,
             web_search=self.web_search,
             chat_model=self.chat_model,
             n_search_results=self.n_results,
