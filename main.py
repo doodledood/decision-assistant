@@ -12,6 +12,9 @@ from langchain.text_splitter import TokenTextSplitter
 
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
+from chat.web_research.page_retrievers.fallback import RetrieverWithFallback
+from chat.web_research.page_retrievers.requests_retriever import SimpleRequestsPageRetriever
+from chat.web_research.page_retrievers.scraper_api_retriever import ScraperAPIPageRetriever
 
 from chat.web_research.page_retrievers.selenium_retriever import SeleniumPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
@@ -53,7 +56,11 @@ def run_decision_assistant(
         search_results_provider=GoogleSerperSearchResultsProvider(),
         page_query_analyzer=OpenAIChatPageQueryAnalyzer(
             chat_model=fast_chat_model,
-            page_retriever=SeleniumPageRetriever(),
+            page_retriever=RetrieverWithFallback([
+                SeleniumPageRetriever(headless=False),
+                ScraperAPIPageRetriever(render_js=True),
+                SimpleRequestsPageRetriever()
+            ]),
             text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000)
         )
     )

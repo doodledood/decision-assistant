@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from typing import Optional
 
 from bs4 import BeautifulSoup
 from selenium.common import StaleElementReferenceException
@@ -32,8 +33,9 @@ LOGGER.setLevel(logging.NOTSET)
 
 
 class SeleniumPageRetriever(PageRetriever):
-    def __init__(self, headless: bool = True, main_page_timeout: int = 30, iframe_timeout: int = 10,
-                 main_page_min_wait: int = 2):
+    def __init__(self, headless: bool = False, main_page_timeout: int = 30, iframe_timeout: int = 10,
+                 main_page_min_wait: int = 2, driver_implicit_wait: int = 1,
+                 driver_page_load_timeout: Optional[int] = None, user_agent: Optional[str] = None):
 
         assert main_page_timeout >= main_page_min_wait, "Timeout must be greater than or equal to minimum_wait_time."
 
@@ -41,7 +43,10 @@ class SeleniumPageRetriever(PageRetriever):
 
         self.main_page_min_wait = main_page_min_wait
         self.main_page_timeout = main_page_timeout
+        self.driver_implicit_wait = driver_implicit_wait
+        self.driver_page_load_timeout = driver_page_load_timeout or main_page_timeout
         self.iframe_timeout = iframe_timeout
+        self.user_agent = user_agent
         self.headless = headless
 
         self.configure_chrome_options()
@@ -59,6 +64,10 @@ class SeleniumPageRetriever(PageRetriever):
         self.chrome_options.add_argument("--ignore-certificate-errors")  # Ignore certificate errors
         self.chrome_options.add_argument("--incognito")  # Incognito mode
         self.chrome_options.add_argument("--log-level=0")  # To disable the logging
+
+        if self.user_agent:
+            self.chrome_options.add_argument(f"user-agent={self.user_agent}")
+
         # To solve tbsCertificate logging issue
         self.chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
@@ -136,6 +145,11 @@ class SeleniumPageRetriever(PageRetriever):
         try:
             service = Service(ChromeDriverManager().install(), log_output=os.devnull)
             driver = webdriver.Chrome(service=service, options=self.chrome_options)
+
+            # Implicitly wait for elements to be available and set timeout
+            driver.implicitly_wait(self.driver_implicit_wait)
+            driver.set_page_load_timeout(self.driver_page_load_timeout)
+
             driver.get(url)
 
             # Wait and extract the HTML
