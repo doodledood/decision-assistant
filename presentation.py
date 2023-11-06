@@ -11,7 +11,7 @@ def open_html_file_in_browser(filename: str):
 
 
 def save_html_to_file(html: str, filename: str):
-    with open(filename, 'w') as f:
+    with open(filename, 'w', encoding='utf-8') as f:
         f.write(html)
 
 
