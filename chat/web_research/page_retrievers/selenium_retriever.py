@@ -75,12 +75,10 @@ class SeleniumPageRetriever(PageRetriever):
                 lambda d: d.execute_script("return document.readyState") == "complete"
             )
 
-            # Capture the main document HTML
-            main_html = driver.page_source
-            soup = BeautifulSoup(main_html, 'html.parser')
-
             # Find all iframe elements
             iframes = driver.find_elements(By.TAG_NAME, "iframe")
+
+            iframe_contents = {}
 
             # Iterate over each iframe, switch to it, and capture its HTML
             for index, iframe in enumerate(iframes):
@@ -91,20 +89,36 @@ class SeleniumPageRetriever(PageRetriever):
                                   d.execute_script("return document.readyState") == "complete"
                     )
 
+                    # Set a temporary ID on the iframe, so we can find it later
+                    driver.execute_script("arguments[0].setAttribute('selenium-temp-id', arguments[1])",
+                                          iframe, iframe.id)
+                    iframe_id = iframe.get_attribute('selenium-temp-id')
+
                     # Capture the iframe HTML
                     iframe_html = driver.page_source
+
                     iframe_soup = BeautifulSoup(iframe_html, 'html.parser')
                     iframe_body = iframe_soup.find('body')
 
-                    # Insert the iframe body after the iframe element in the main document
-                    soup_iframe = soup.find_all('iframe')[index]
-                    soup_iframe.insert_after(iframe_body)
-
                     # Switch back to the main content after each iframe
                     driver.switch_to.default_content()
+
+                    iframe_contents[iframe_id] = iframe_body
                 except StaleElementReferenceException:
                     # If the iframe is no longer available, skip it
                     continue
+
+            # Capture the main document HTML
+            main_html = driver.page_source
+            soup = BeautifulSoup(main_html, 'html.parser')
+
+            for frame_id, iframe_body in iframe_contents.items():
+                # Insert the iframe body after the iframe element in the main document
+                soup_iframe = soup.find('iframe', {"selenium-temp-id": frame_id})
+                if soup_iframe is None:
+                    continue
+
+                soup_iframe.insert_after(iframe_body)
 
             # The soup object now contains the modified HTML
             full_html = str(soup)
