@@ -64,7 +64,7 @@ class SeleniumPageRetriever(PageRetriever):
         # Enable Performance Logging
         self.chrome_options.set_capability("goog:loggingPrefs", {'performance': 'ALL'})
 
-    def extract_html_from_driver(self, driver: WebDriver):
+    def extract_html_from_driver(self, driver: WebDriver) -> str:
         # Wait for minimum time first
         time.sleep(self.main_page_min_wait)
 
@@ -105,8 +105,8 @@ class SeleniumPageRetriever(PageRetriever):
             full_html = str(soup)
 
             return full_html
-        except (WebDriverException, NoSuchFrameException, TimeoutException):
-            return False
+        except (WebDriverException, NoSuchFrameException, TimeoutException) as e:
+            return f'An error occurred while retrieving the page: {e}'
 
     @retry(retry=retry_if_exception_type(TransientHTTPError),
            wait=wait_fixed(2) + wait_random(0, 2),
