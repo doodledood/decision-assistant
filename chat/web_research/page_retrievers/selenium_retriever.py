@@ -114,13 +114,13 @@ class SeleniumPageRetriever(PageRetriever):
                     iframe_soup = BeautifulSoup(iframe_html, 'html.parser')
                     iframe_body = iframe_soup.find('body')
 
-                    # Switch back to the main content after each iframe
-                    driver.switch_to.default_content()
-
                     iframe_contents[iframe_id] = iframe_body
                 except (StaleElementReferenceException, NoSuchFrameException, NoSuchElementException):
                     # If the iframe is no longer available, skip it
-                    continue
+                    pass
+                finally:
+                    # Switch back to the main content after each iframe
+                    driver.switch_to.default_content()
 
             # Capture the main document HTML
             main_html = driver.page_source
