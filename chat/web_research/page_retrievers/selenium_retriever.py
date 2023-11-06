@@ -105,7 +105,7 @@ class SeleniumPageRetriever(PageRetriever):
             full_html = str(soup)
 
             return full_html
-        except (WebDriverException, NoSuchFrameException, TimeoutException) as e:
+        except (WebDriverException, NoSuchFrameException) as e:
             return f'An error occurred while retrieving the page: {e}'
 
     @retry(retry=retry_if_exception_type(TransientHTTPError),
