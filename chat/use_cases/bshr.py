@@ -6,6 +6,7 @@ from functools import partial
 from pathlib import Path
 from typing import Optional, List, Dict, Type, Any
 
+import questionary
 from dotenv import load_dotenv
 from halo import Halo
 from langchain.cache import SQLiteCache
@@ -389,6 +390,7 @@ def run_brainstorm_search_hypothesize_refine_loop(
         n_search_results: int = 3,
         initial_state: Optional[BHSRState] = None,
         state_file: Optional[str] = None,
+        confirm_satisficed: bool = False,
         spinner: Optional[Halo] = None) -> str:
     while True:
         state = brainstorm_search_hypothesize_refine(
@@ -401,7 +403,19 @@ def run_brainstorm_search_hypothesize_refine_loop(
         )
 
         if state.is_satisficed:
-            break
+            if not confirm_satisficed:
+                break
+
+            has_feedback = questionary.confirm('The information need seems to have have been satisficed. Do you have '
+                                               'any feedback?').ask()
+
+            if not has_feedback:
+                break
+
+            feedback = questionary.text('What is your feedback?').ask()
+
+            state.is_satisficed = False
+            state.feedback = feedback
 
     return state.current_hypothesis
 
