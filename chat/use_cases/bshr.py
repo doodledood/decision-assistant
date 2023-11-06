@@ -246,13 +246,7 @@ def generate_hypothesis(state: BHSRState,
             Section(name='Previous Hypothesis', text=str(state.current_hypothesis)),
             Section(name='Feedback', text=str(state.feedback)),
         ])),
-        answerer=hypothesis_generator,
-        backing_store=LangChainMemoryBasedChatDataBackingStore(
-            memory=ConversationSummaryBufferMemory(
-                llm=chat_model,
-                max_token_limit=OpenAI.modelname_to_contextsize(chat_model.model_name) * 0.5
-            )
-        )
+        answerer=hypothesis_generator
     )
     output = chat_messages_to_pydantic(chat_messages=chat.get_messages(), chat_model=chat_model,
                                        output_schema=HypothesisGenerationResult)
@@ -296,13 +290,7 @@ def check_satisficing(state: BHSRState,
             Section(name='Previous Hypothesis', text=str(state.current_hypothesis)),
             Section(name='Proposed New Hypothesis', text=str(state.proposed_hypothesis))
         ])),
-        answerer=satisficing_checker,
-        backing_store=LangChainMemoryBasedChatDataBackingStore(
-            memory=ConversationSummaryBufferMemory(
-                llm=chat_model,
-                max_token_limit=OpenAI.modelname_to_contextsize(chat_model.model_name) * 0.5
-            )
-        )
+        answerer=satisficing_checker
     )
     output = chat_messages_to_pydantic(chat_messages=chat.get_messages(), chat_model=chat_model,
                                        output_schema=SatisficationCheckResult)
