@@ -12,12 +12,14 @@ from langchain.cache import SQLiteCache
 from langchain.callbacks.manager import CallbackManagerForToolRun
 from langchain.chat_models import ChatOpenAI
 from langchain.chat_models.base import BaseChatModel
+from langchain.llms.openai import OpenAI
+from langchain.memory import ConversationSummaryBufferMemory
 from langchain.text_splitter import TokenTextSplitter
 from langchain.globals import set_llm_cache
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from chat.backing_stores import InMemoryChatDataBackingStore
+from chat.backing_stores.langchain import LangChainMemoryBasedChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
 from chat.parsing_utils import chat_messages_to_pydantic
@@ -130,8 +132,15 @@ def generate_queries(state: BHSRState,
 
     user = UserChatParticipant()
     participants = [user, query_generator]
+
+    max_context_size = OpenAI.modelname_to_contextsize(chat_model.model_name)
     chat = Chat(
-        backing_store=InMemoryChatDataBackingStore(),
+        backing_store=LangChainMemoryBasedChatDataBackingStore(
+            memory=ConversationSummaryBufferMemory(
+                llm=chat_model,
+                max_token_limit=max_context_size * 0.5
+            )
+        ),
         renderer=TerminalChatRenderer(),
         initial_participants=participants,
         max_total_messages=None if interactive_user else 2
@@ -408,7 +417,11 @@ class BrainstormSearchHypothesizeRefineTool(BaseTool):
     state_file: Optional[str] = None
     spinner: Optional[Halo] = None
     name: str = 'web_research'
-    description: str = "Research the web using a Brainstorm-Search-Hypothesize-Refine approach. Use that to get a very comprehensive (but expensive) answer for a query you don't know or unsure of the answer to, for recent events, or if the user asks you to. This will evaluate answer snippets, knowledge graphs, and the top N results from google and aggregate a result for multiple queries. Very thorough research."
+    description: str = ("Research the web using a Brainstorm-Search-Hypothesize-Refine approach. Use that to get a "
+                        "very comprehensive (but expensive) answer for a query you don't know or unsure of the answer "
+                        "to, for recent events, or if the user asks you to. This will evaluate answer snippets, "
+                        "knowledge graphs, and the top N results from google and aggregate a result for multiple "
+                        "queries. Very thorough research.")
     args_schema: Type[BaseModel] = BrainstormSearchHypothesizeRefineToolArgs
     progress_text: str = 'Researching the topic (this may take a while)...'
 
