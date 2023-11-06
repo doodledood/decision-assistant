@@ -31,7 +31,7 @@ from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
 from chat.web_research.page_retrievers.selenium_retriever import SeleniumPageRetriever
 from chat.web_research.search import GoogleSerperSearchResultsProvider
 from chat.web_research.web_research import WebResearchTool
-from sequential_process import SequentialProcess, Step
+from chat.sequencial_process import SequentialProcess, Step
 
 
 class BHSRState(BaseModel):
