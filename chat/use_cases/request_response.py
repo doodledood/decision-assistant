@@ -10,7 +10,7 @@ from chat.renderers import TerminalChatRenderer
 
 def get_response(query: str, answerer: ActiveChatParticipant,
                  backing_store: Optional[ChatDataBackingStore] = None,
-                 renderer: Optional[ChatRenderer] = None) -> Tuple[Union[str, TOutputSchema], Chat]:
+                 renderer: Optional[ChatRenderer] = None) -> Tuple[str, Chat]:
     user = UserChatParticipant(name='User')
     participants = [user, answerer]
 

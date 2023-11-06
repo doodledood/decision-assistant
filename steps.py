@@ -20,18 +20,19 @@ from chat.parsing_utils import chat_messages_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from chat.renderers import TerminalChatRenderer
 from chat.structured_string import Section, StructuredString
+from chat.use_cases.request_response import get_response
 from presentation import generate_decision_report_as_html, save_html_to_file, open_html_file_in_browser
 from chat.web_research import WebSearch
 from ranking.ranking import topsis_score, normalize_label_value
 from state import DecisionAssistantState
 
 
-def fix_criterion_name(name, criteria_names):
-    for criterion_name in criteria_names:
-        if criterion_name.lower() in name.lower():
-            return criterion_name
+def fix_string_based_on_list(s, l):
+    for item in l:
+        if item.lower() in s.lower():
+            return item
 
-    return name
+    return s
 
 
 class Criterion(BaseModel):
@@ -78,9 +79,11 @@ class Alternative(BaseModel):
                     'scale of the criterion.')
 
 
-def gather_unique_pairwise_comparisons(criteria_names: List[str],
-                                       previous_comparisons: Optional[List[Tuple[Tuple[str, str], float]]] = None,
-                                       on_question_asked: Optional[Callable[[Tuple[str, str], float], None]] = None) \
+def gather_unique_pairwise_comparisons(
+        criteria_names: List[str],
+        predict_fn: Optional[Callable[[str, List[str], Dict[Tuple[str, str], str]], str]] = None,
+        previous_comparisons: Optional[List[Tuple[Tuple[str, str], float]]] = None,
+        on_question_asked: Optional[Callable[[Tuple[str, str], float], None]] = None) \
         -> Generator[Tuple[Tuple[str, str], float], None, None]:
     choices = {
         'Absolutely less important': 1 / 9,
@@ -93,6 +96,7 @@ def gather_unique_pairwise_comparisons(criteria_names: List[str],
         'A lot more important': 7,
         'Absolutely more important': 9
     }
+    value_to_choice = {v: k for k, v in choices.items()}
     ordered_choice_names = [choice[0] for choice in sorted(choices.items(), key=lambda x: x[1])]
 
     comparisons = dict(previous_comparisons)
@@ -101,10 +105,18 @@ def gather_unique_pairwise_comparisons(criteria_names: List[str],
         if (label1, label2) in comparisons:
             continue
 
+        question_text = f'({i + 1}/{len(all_combs)}) How much more important is "{label1}" when compared to "{label2}"?'
+
+        if predict_fn is not None:
+            comparisons_with_str_choice = {k: value_to_choice[v] for k, v in comparisons.items()}
+            predicted_answer = predict_fn(question_text, ordered_choice_names, comparisons_with_str_choice)
+        else:
+            predicted_answer = ordered_choice_names[len(ordered_choice_names) // 2]
+
         answer = questionary.select(
-            f'({i + 1}/{len(all_combs)}) How much more important is "{label1}" when compared to "{label2}"?',
+            question_text,
             choices=ordered_choice_names,
-            default=ordered_choice_names[len(ordered_choice_names) // 2],
+            default=predicted_answer,
         ).ask()
 
         labels = (label1, label2)
@@ -422,7 +434,8 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     state.data = {**state.data, **dict(criteria=criteria)}
 
 
-def prioritize_criteria(state: DecisionAssistantState):
+def prioritize_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
+                        state: DecisionAssistantState, spinner: Optional[Halo] = None):
     if state.data.get('criteria_weights') is not None:
         return
 
@@ -432,8 +445,74 @@ def prioritize_criteria(state: DecisionAssistantState):
 
     criteria_names = [criterion['name'] for criterion in state.data['criteria']]
 
-    for labels, value in gather_unique_pairwise_comparisons(criteria_names,
-                                                            previous_comparisons=criteria_comparisons):
+    def predict_answer(question: str, choices: List[str], previous_answers: Dict[Tuple[str, str], str]):
+        ai = LangChainBasedAIChatParticipant(
+            name='Decision-Making Pairwise Criteria Comparisons Predictor',
+            role='Decision-Making Pairwise Criteria Comparisons Predictor',
+            personal_mission='Predict the most likely option the user will choose based on previous pairwise '
+                             'comparisons between criteria.',
+            other_prompt_sections=[
+                Section(
+                    name='Steps',
+                    list=[
+                        'Retrieve the user\'s previous pairwise comparisons between criteria.',
+                        'Analyze the list of options.',
+                        'Make a prediction about the user\'s most likely choice based on the analyzed data.',
+                        'Return the predicted option.'
+                    ],
+                    list_item_prefix=None
+                ),
+                Section(
+                    name='Note',
+                    list=[
+                        'Only one option should be predicted.',
+                        'The prediction should be the best possible guess based on the user\'s previous answers.',
+                        'If you really do not know or it is impossible to guess, return the middle option.'
+                    ]
+                ),
+                Section(
+                    name='Output',
+                    text='Only the label of the best-guess option'
+                ),
+                Section(
+                    name='Output Format',
+                    text='The option label text, as it is (no dash)'
+                )
+            ],
+            tools=tools,
+            chat_model=chat_model,
+            spinner=spinner)
+        user = UserChatParticipant(name='User')
+        participants = [user, ai]
+
+        predicted_answer, _ = get_response(query=str(StructuredString(
+            sections=[
+                Section(
+                    name='Previous Pairwise Comparisons',
+                    list=[
+                        f'"{criterion_1}" vs. "{criterion_2}" -> {value}' for (criterion_1, criterion_2), value in \
+                        previous_answers.items()
+                    ]
+                ),
+                Section(
+                    name='Comparison to Predict',
+                    text=question
+                ),
+                Section(
+                    name='Choices',
+                    list=choices
+                )
+            ]
+        )), answerer=ai)
+
+        predicted_answer = fix_string_based_on_list(predicted_answer, choices)
+
+        return predicted_answer
+
+    for labels, value in gather_unique_pairwise_comparisons(
+            criteria_names,
+            predict_fn=predict_answer,
+            previous_comparisons=criteria_comparisons):
         criteria_comparisons.append((labels, value))
 
         state.data = {**state.data, **dict(
@@ -521,7 +600,7 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
         spinner=spinner
     )
     criteria_names = [criterion['name'] for criterion in state.data['criteria']]
-    output.criteria_research_queries = {fix_criterion_name(name, criteria_names): queries for name, queries in
+    output.criteria_research_queries = {fix_string_based_on_list(name, criteria_names): queries for name, queries in
                                         output.criteria_research_queries.items()}
 
     criteria_research_queries = output.model_dump()['criteria_research_queries']
