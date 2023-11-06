@@ -644,7 +644,10 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
                             'The last response should include the refined research findings for a criterion\'s '
                             'alternative in rich markdown format with all the citations and links inline.',
                             'Does not include conversational fluff. Think about it like a research report.',
-                            'It should end with the word TERMINATE at the end of the message to signal the end of the chat.'
+                            'Does not include the starting sentence: "Here is what I found about...". It should dive '
+                            'straight into the refined findings.',
+                            'It should end with the word TERMINATE at the end of the message to signal the end of the '
+                            'chat.'
                         ]
                     )
                 ],
