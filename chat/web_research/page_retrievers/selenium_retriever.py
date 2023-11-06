@@ -34,7 +34,7 @@ LOGGER.setLevel(logging.NOTSET)
 
 class SeleniumPageRetriever(PageRetriever):
     def __init__(self, headless: bool = False, main_page_timeout: int = 30, iframe_timeout: int = 10,
-                 main_page_min_wait: int = 2, driver_implicit_wait: int = 1,
+                 main_page_min_wait: int = 0, driver_implicit_wait: int = 1,
                  driver_page_load_timeout: Optional[int] = None, user_agent: Optional[str] = None):
 
         assert main_page_timeout >= main_page_min_wait, "Timeout must be greater than or equal to minimum_wait_time."
