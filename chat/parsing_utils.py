@@ -77,7 +77,7 @@ def chat_messages_to_pydantic(chat_messages: List[ChatMessage],
         renderer=NoChatRenderer(),
         initial_participants=[text_to_json_ai, json_parser],
         hide_messages=hide_message,
-        max_total_messages=1 + (n_tries - 1) * 2
+        max_total_messages=len(chat_messages) + 1 + (n_tries - 1) * 2
     )
     conductor = RoundRobinChatConductor()
 

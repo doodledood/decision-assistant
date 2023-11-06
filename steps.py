@@ -26,6 +26,14 @@ from ranking.ranking import topsis_score, normalize_label_value
 from state import DecisionAssistantState
 
 
+def fix_criterion_name(name, criteria_names):
+    for criterion_name in criteria_names:
+        if criterion_name.lower() in name.lower():
+            return criterion_name
+
+    return name
+
+
 class Criterion(BaseModel):
     name: str = Field(description='The name of the criterion. Example: "Affordability".')
     description: str = Field(
@@ -96,7 +104,7 @@ def gather_unique_pairwise_comparisons(criteria_names: List[str],
         answer = questionary.select(
             f'({i + 1}/{len(all_combs)}) How much more important is "{label1}" when compared to "{label2}"?',
             choices=ordered_choice_names,
-            default=ordered_choice_names[2]
+            default=ordered_choice_names[len(ordered_choice_names) // 2],
         ).ask()
 
         labels = (label1, label2)
@@ -162,7 +170,8 @@ def identify_goal(chat_model: ChatOpenAI, state: DecisionAssistantState,
     goal = chat_messages_to_pydantic(
         chat_messages=chat.get_messages(),
         chat_model=chat_model,
-        output_schema=GoalIdentificationResult
+        output_schema=GoalIdentificationResult,
+        spinner=spinner
     )
     goal = goal.goal
 
@@ -237,7 +246,8 @@ def identify_alternatives(chat_model: ChatOpenAI, tools: List[BaseTool],
     output = chat_messages_to_pydantic(
         chat_messages=chat.get_messages(),
         chat_model=chat_model,
-        output_schema=AlternativeListingResult
+        output_schema=AlternativeListingResult,
+        spinner=spinner
     )
     alternatives = output.alternatives
 
@@ -404,7 +414,8 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     output = chat_messages_to_pydantic(
         chat_messages=chat.get_messages(),
         chat_model=chat_model,
-        output_schema=CriteriaIdentificationResult
+        output_schema=CriteriaIdentificationResult,
+        spinner=spinner
     )
     criteria = output.model_dump()['criteria']
 
@@ -499,15 +510,20 @@ def generate_research_questions(chat_model: ChatOpenAI, tools: List[BaseTool],
                     sub_sections=[
                         Section(name=criterion['name'], text=criterion['description'], list=criterion['scale'],
                                 list_item_prefix=None) for criterion in
-                        state.data['criteria'].items()
+                        state.data['criteria']
                     ]),
         ]
     )))
     output = chat_messages_to_pydantic(
         chat_messages=chat.get_messages(),
         chat_model=chat_model,
-        output_schema=CriteriaResearchQueriesResult
+        output_schema=CriteriaResearchQueriesResult,
+        spinner=spinner
     )
+    criteria_names = [criterion['name'] for criterion in state.data['criteria']]
+    output.criteria_research_queries = {fix_criterion_name(name, criteria_names): queries for name, queries in
+                                        output.criteria_research_queries.items()}
+
     criteria_research_queries = output.model_dump()['criteria_research_queries']
 
     state.data = {**state.data, **dict(criteria_research_queries=criteria_research_queries)}
@@ -668,7 +684,8 @@ def perform_research(chat_model: ChatOpenAI, web_search: WebSearch, n_search_res
             criterion_full_research_data = chat_messages_to_pydantic(
                 chat_messages=chat.get_messages(),
                 chat_model=chat_model,
-                output_schema=AlternativeCriteriaResearchFindingsResult
+                output_schema=AlternativeCriteriaResearchFindingsResult,
+                spinner=spinner
             )
 
             research_data[alternative][criterion_name]['aggregated'] = {

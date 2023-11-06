@@ -5,7 +5,9 @@ from typing import Optional
 from dotenv import load_dotenv
 from fire import Fire
 from halo import Halo
+from langchain.cache import SQLiteCache
 from langchain.chat_models import ChatOpenAI
+from langchain.globals import set_llm_cache
 from langchain.text_splitter import TokenTextSplitter
 
 from chat.web_research import WebSearch
@@ -27,6 +29,7 @@ def run_decision_assistant(
         fast_llm_model: str = 'gpt-3.5-turbo-16k-0613',
         state_file: Optional[str] = 'output/state.json',
         report_file: str = 'output/decision_report.html',
+        cache_file: Optional[str] = 'output/llm_cache.db',
         n_search_results: int = 3,
         fully_autonomous_research: bool = True
 ):
@@ -40,6 +43,11 @@ def run_decision_assistant(
 
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model)
     fast_chat_model = ChatOpenAI(temperature=llm_temperature, model=fast_llm_model)
+
+    if cache_file is not None:
+        llm_cache = SQLiteCache(database_path=cache_file)
+        set_llm_cache(llm_cache)
+
     web_search = WebSearch(
         chat_model=chat_model,
         search_results_provider=GoogleSerperSearchResultsProvider(),

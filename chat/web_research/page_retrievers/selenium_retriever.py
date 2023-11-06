@@ -58,6 +58,8 @@ class SeleniumPageRetriever(PageRetriever):
         self.chrome_options.add_argument("--ignore-certificate-errors")  # Ignore certificate errors
         self.chrome_options.add_argument("--incognito")  # Incognito mode
         self.chrome_options.add_argument("--log-level=0")  # To disable the logging
+        # To solve tbsCertificate logging issue
+        self.chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
         # Enable Performance Logging
         self.chrome_options.set_capability("goog:loggingPrefs", {'performance': 'ALL'})
