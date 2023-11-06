@@ -105,4 +105,4 @@ if __name__ == '__main__':
     )
 
     chat_conductor = RoundRobinChatConductor()
-    chat_conductor.initiate_chat_with_result(chat=chat, initial_message='Hello! What tools do you have access to?')
+    chat_conductor.initiate_chat_with_result(chat=chat)

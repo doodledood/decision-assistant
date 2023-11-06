@@ -98,7 +98,7 @@ def run_decision_assistant(
             ),
             Step(
                 name='Criteria Prioritization',
-                func=partial(prioritize_criteria, chat_model, default_participant_tools, spinner=spinner),
+                func=partial(prioritize_criteria, fast_chat_model, default_participant_tools, spinner=spinner),
                 on_step_start=lambda _: spinner.succeed('Started prioritizing criteria.'),
                 on_step_completed=lambda _: spinner.succeed('Prioritized criteria.')
             ),

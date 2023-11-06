@@ -2,12 +2,10 @@ import json
 import logging
 import os
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 from bs4 import BeautifulSoup
-from selenium.common import StaleElementReferenceException
-from selenium.webdriver.chrome.webdriver import WebDriver
-from selenium.webdriver.remote.remote_connection import LOGGER
+from selenium.webdriver.common.service import Service
 from tenacity import retry, retry_if_exception_type, wait_fixed, stop_after_attempt, wait_random
 
 from . import PageRetriever
@@ -22,6 +20,9 @@ try:
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.common.exceptions import TimeoutException, WebDriverException, NoSuchFrameException
     from webdriver_manager.chrome import ChromeDriverManager
+    from selenium.common import StaleElementReferenceException, NoSuchElementException
+    from selenium.webdriver.chrome.webdriver import WebDriver
+    from selenium.webdriver.remote.remote_connection import LOGGER
 except ModuleNotFoundError as e:
     raise ImportError(
         "Selenium or webdriver_manager is not installed. "
@@ -34,12 +35,10 @@ LOGGER.setLevel(logging.NOTSET)
 
 class SeleniumPageRetriever(PageRetriever):
     def __init__(self, headless: bool = False, main_page_timeout: int = 30, iframe_timeout: int = 10,
-                 main_page_min_wait: int = 0, driver_implicit_wait: int = 1,
+                 main_page_min_wait: int = 2, driver_implicit_wait: int = 1,
                  driver_page_load_timeout: Optional[int] = None, user_agent: Optional[str] = None):
 
         assert main_page_timeout >= main_page_min_wait, "Timeout must be greater than or equal to minimum_wait_time."
-
-        self.chrome_options = Options()
 
         self.main_page_min_wait = main_page_min_wait
         self.main_page_timeout = main_page_timeout
@@ -49,30 +48,36 @@ class SeleniumPageRetriever(PageRetriever):
         self.user_agent = user_agent
         self.headless = headless
 
-        self.configure_chrome_options()
+    def create_driver(self) -> Tuple[WebDriver, Service]:
+        chrome_options = Options()
 
-    def configure_chrome_options(self):
         if self.headless:
-            self.chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--headless")
 
-        self.chrome_options.add_argument("--no-sandbox")  # Bypass OS security model
-        self.chrome_options.add_argument("--disable-gpu")  # Applicable to windows os only
-        self.chrome_options.add_argument("start-maximized")  # Open the browser in maximized mode
-        self.chrome_options.add_argument("disable-infobars")  # Disabling infobars
-        self.chrome_options.add_argument("--disable-extensions")  # Disabling extensions
-        self.chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
-        self.chrome_options.add_argument("--ignore-certificate-errors")  # Ignore certificate errors
-        self.chrome_options.add_argument("--incognito")  # Incognito mode
-        self.chrome_options.add_argument("--log-level=0")  # To disable the logging
+        chrome_options.add_argument("--no-sandbox")  # Bypass OS security model
+        chrome_options.add_argument("--disable-gpu")  # Applicable to windows os only
+        chrome_options.add_argument("start-maximized")  # Open the browser in maximized mode
+        chrome_options.add_argument("disable-infobars")  # Disabling infobars
+        chrome_options.add_argument("--disable-extensions")  # Disabling extensions
+        chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
+        chrome_options.add_argument("--ignore-certificate-errors")  # Ignore certificate errors
+        chrome_options.add_argument("--incognito")  # Incognito mode
+        chrome_options.add_argument("--log-level=0")  # To disable the logging
 
         if self.user_agent:
-            self.chrome_options.add_argument(f"user-agent={self.user_agent}")
+            chrome_options.add_argument(f"user-agent={self.user_agent}")
 
         # To solve tbsCertificate logging issue
-        self.chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
         # Enable Performance Logging
-        self.chrome_options.set_capability("goog:loggingPrefs", {'performance': 'ALL'})
+        chrome_options.set_capability("goog:loggingPrefs", {'performance': 'ALL'})
+        chrome_options.set_capability("pageLoadStrategy", "normal")
+
+        service = Service(ChromeDriverManager().install(), log_output=os.devnull)
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+
+        return driver, service
 
     def extract_html_from_driver(self, driver: WebDriver) -> str:
         # Wait for minimum time first
@@ -90,7 +95,7 @@ class SeleniumPageRetriever(PageRetriever):
             iframe_contents = {}
 
             # Iterate over each iframe, switch to it, and capture its HTML
-            for index, iframe in enumerate(iframes):
+            for iframe in iframes:
                 try:
                     # Wait for the iframe to be available and for its document to be fully loaded
                     WebDriverWait(driver, self.iframe_timeout).until(
@@ -113,7 +118,7 @@ class SeleniumPageRetriever(PageRetriever):
                     driver.switch_to.default_content()
 
                     iframe_contents[iframe_id] = iframe_body
-                except StaleElementReferenceException:
+                except (StaleElementReferenceException, NoSuchFrameException, NoSuchElementException):
                     # If the iframe is no longer available, skip it
                     continue
 
@@ -143,8 +148,7 @@ class SeleniumPageRetriever(PageRetriever):
         driver = None
         service = None
         try:
-            service = Service(ChromeDriverManager().install(), log_output=os.devnull)
-            driver = webdriver.Chrome(service=service, options=self.chrome_options)
+            driver, service = self.create_driver()
 
             # Implicitly wait for elements to be available and set timeout
             driver.implicitly_wait(self.driver_implicit_wait)

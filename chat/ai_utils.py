@@ -1,4 +1,5 @@
 import json
+from json import JSONDecodeError
 from typing import List, Optional, Dict, Any, TypeVar, Type
 
 from halo import Halo
@@ -50,8 +51,14 @@ def execute_chat_model_messages(
             #     args = json_string_to_pydantic(args, tool.args_schema)
             #
             args = fix_invalid_json(args)
-            args = json.loads(args)
-            result = tool.run(args)
+
+            try:
+                args = json.loads(args)
+                result = tool.run(args)
+            except JSONDecodeError as e:
+                result = f'Error decoding args for function: {e}'
+            except Exception as e:
+                result = f'Error executing function: {e}'
 
             all_messages.append(FunctionMessage(
                 name=function_name,

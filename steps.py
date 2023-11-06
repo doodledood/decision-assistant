@@ -18,7 +18,7 @@ from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor, LangChainBasedAIChatConductor
 from chat.parsing_utils import chat_messages_to_pydantic
 from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
-from chat.renderers import TerminalChatRenderer
+from chat.renderers import TerminalChatRenderer, NoChatRenderer
 from chat.structured_string import Section, StructuredString
 from chat.use_cases.request_response import get_response
 from presentation import generate_decision_report_as_html, save_html_to_file, open_html_file_in_browser
@@ -27,12 +27,12 @@ from ranking.ranking import topsis_score, normalize_label_value
 from state import DecisionAssistantState
 
 
-def fix_string_based_on_list(s, l):
+def fix_string_based_on_list(s: str, l: List[str]) -> Optional[str]:
     for item in l:
         if item.lower() in s.lower():
             return item
 
-    return s
+    return None
 
 
 class Criterion(BaseModel):
@@ -476,7 +476,7 @@ def prioritize_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                 ),
                 Section(
                     name='Output Format',
-                    text='The option label text, as it is (no dash)'
+                    text='"...\nPREDICTION: CHOICE" Where CHOICE is a verbatim label from the choices given only.'
                 )
             ],
             tools=tools,
@@ -490,8 +490,8 @@ def prioritize_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                 Section(
                     name='Previous Pairwise Comparisons',
                     list=[
-                        f'"{criterion_1}" vs. "{criterion_2}" -> {value}' for (criterion_1, criterion_2), value in \
-                        previous_answers.items()
+                        f'How much more important is "{criterion_1}" when compared to "{criterion_2}"? -> {value}' for
+                        (criterion_1, criterion_2), value in previous_answers.items()
                     ]
                 ),
                 Section(
@@ -503,9 +503,17 @@ def prioritize_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
                     list=choices
                 )
             ]
-        )), answerer=ai)
+        )), answerer=ai, renderer=NoChatRenderer())
 
+        parts = predicted_answer.split('PREDICTION:', 2)
+        if len(parts) != 2:
+            return choices[len(choices) // 2]
+
+        predicted_answer = parts[1].strip()
         predicted_answer = fix_string_based_on_list(predicted_answer, choices)
+
+        if predicted_answer is None:
+            return choices[len(choices) // 2]
 
         return predicted_answer
 

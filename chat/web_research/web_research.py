@@ -197,7 +197,7 @@ class WebSearch:
 
 
 class WebSearchToolArgs(BaseModel):
-    query: str = Field(description='The query to search the web for.')
+    query: str = Field(description='The query to search the web for (or what to look for in the page in case urls are provided).')
     urls: Optional[List[str]] = Field(
         description='A list of urls to search for the query in. If provided, the query will be searched in these urls. If not provided, the query will be searched in the top search results from a search engine. Provide urls only when the user mentions a URL (if applicable)')
 
