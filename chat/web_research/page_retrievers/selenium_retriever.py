@@ -4,6 +4,7 @@ import os
 import time
 
 from bs4 import BeautifulSoup
+from selenium.common import StaleElementReferenceException
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.remote.remote_connection import LOGGER
 from tenacity import retry, retry_if_exception_type, wait_fixed, stop_after_attempt, wait_random
@@ -83,23 +84,27 @@ class SeleniumPageRetriever(PageRetriever):
 
             # Iterate over each iframe, switch to it, and capture its HTML
             for index, iframe in enumerate(iframes):
-                # Wait for the iframe to be available and for its document to be fully loaded
-                WebDriverWait(driver, self.iframe_timeout).until(
-                    lambda d: EC.frame_to_be_available_and_switch_to_it(iframe)(d) and
-                              d.execute_script("return document.readyState") == "complete"
-                )
+                try:
+                    # Wait for the iframe to be available and for its document to be fully loaded
+                    WebDriverWait(driver, self.iframe_timeout).until(
+                        lambda d: EC.frame_to_be_available_and_switch_to_it(iframe)(d) and
+                                  d.execute_script("return document.readyState") == "complete"
+                    )
 
-                # Capture the iframe HTML
-                iframe_html = driver.page_source
-                iframe_soup = BeautifulSoup(iframe_html, 'html.parser')
-                iframe_body = iframe_soup.find('body')
+                    # Capture the iframe HTML
+                    iframe_html = driver.page_source
+                    iframe_soup = BeautifulSoup(iframe_html, 'html.parser')
+                    iframe_body = iframe_soup.find('body')
 
-                # Insert the iframe body after the iframe element in the main document
-                soup_iframe = soup.find_all('iframe')[index]
-                soup_iframe.insert_after(iframe_body)
+                    # Insert the iframe body after the iframe element in the main document
+                    soup_iframe = soup.find_all('iframe')[index]
+                    soup_iframe.insert_after(iframe_body)
 
-                # Switch back to the main content after each iframe
-                driver.switch_to.default_content()
+                    # Switch back to the main content after each iframe
+                    driver.switch_to.default_content()
+                except StaleElementReferenceException:
+                    # If the iframe is no longer available, skip it
+                    continue
 
             # The soup object now contains the modified HTML
             full_html = str(soup)
