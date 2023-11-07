@@ -388,13 +388,13 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
     participants = [user, criteria_brainstormer, criteria_critic]
 
     try:
-        max_context_size = OpenAI.modelname_to_contextsize(chat_model.model_name)
         memory = ConversationSummaryBufferMemory(
             llm=chat_model,
-            max_token_limit=max_context_size
+            max_token_limit=OpenAI.modelname_to_contextsize(chat_model.model_name)
         )
+        backing_store = LangChainMemoryBasedChatDataBackingStore(memory=memory)
     except ValueError:
-        memory = InMemoryChatDataBackingStore()
+        backing_store = InMemoryChatDataBackingStore()
 
     chat = Chat(
         goal='Identify clear well-defined criteria and their respective scales for the decision.',
@@ -409,7 +409,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
             '5. If the user is satisfied with the criteria, the criteria identification process is complete. The '
             'Criteria Brainstormer should present the final list of criteria and their respective scales to the '
             'user.\n'),
-        backing_store=LangChainMemoryBasedChatDataBackingStore(memory=memory),
+        backing_store=backing_store,
         renderer=TerminalChatRenderer(),
         initial_participants=participants
     )

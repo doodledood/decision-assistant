@@ -136,16 +136,16 @@ def generate_queries(state: BHSRState,
     participants = [user, query_generator]
 
     try:
-        max_context_size = OpenAI.modelname_to_contextsize(chat_model.model_name)
         memory = ConversationSummaryBufferMemory(
             llm=chat_model,
-            max_token_limit=max_context_size
+            max_token_limit=OpenAI.modelname_to_contextsize(chat_model.model_name)
         )
+        backing_store = LangChainMemoryBasedChatDataBackingStore(memory=memory)
     except ValueError:
-        memory = InMemoryChatDataBackingStore()
+        backing_store = InMemoryChatDataBackingStore()
 
     chat = Chat(
-        backing_store=LangChainMemoryBasedChatDataBackingStore(memory=memory),
+        backing_store=backing_store,
         renderer=TerminalChatRenderer(),
         initial_participants=participants,
         max_total_messages=None if interactive_user else 2

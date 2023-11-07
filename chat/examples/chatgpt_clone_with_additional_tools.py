@@ -87,7 +87,7 @@ if __name__ == '__main__':
         page_query_analyzer=OpenAIChatPageQueryAnalyzer(
             chat_model=chat_model_for_page_analysis,
             # Should `pip install selenium webdriver_manager` to use this
-            page_retriever=SeleniumPageRetriever(headless=False),
+            page_retriever=SeleniumPageRetriever(headless=True),
             text_splitter=TokenTextSplitter(chunk_size=max_context_size, chunk_overlap=max_context_size // 5),
             use_first_split_only=True
         )
