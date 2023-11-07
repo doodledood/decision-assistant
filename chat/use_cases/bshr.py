@@ -100,7 +100,7 @@ def generate_queries(state: BHSRState,
         name='Search Query Generator',
         role='Search Query Generator',
         personal_mission='You will be given a specific query or problem by the user and you are to generate a list of '
-                         f'AT MOST {max_queries} questions that will be used to search the internet. Make sure you '
+                         f'AT MOST {max_queries} search queries that will be used to search the internet. Make sure you '
                          f'generate comprehensive, counterfactual, and maximally orthogonal search queries. '
                          'Employ everything you know about '
                          'information foraging and information literacy to generate the best possible questions. '
