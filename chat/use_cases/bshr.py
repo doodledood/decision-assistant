@@ -502,6 +502,7 @@ if __name__ == '__main__':
     spinner = Halo(spinner='dots')
 
     hypothesis = run_brainstorm_search_hypothesize_refine_loop(
+        confirm_satisficed=True,
         web_search=web_search,
         chat_model=chat_model,
         n_search_results=n_search_results,
