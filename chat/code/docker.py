@@ -10,8 +10,12 @@ class DockerCodeExecutor(CodeExecutor):
         self.client = client
         self.image_tag = image_tag
         self.base_image = base_image
+        self.previously_built_image = None
 
     def build_image(self):
+        if self.previously_built_image is None:
+            return self.previously_built_image
+
         # Helper function to construct Dockerfile
         dockerfile = f'''
         FROM {self.base_image}
@@ -35,6 +39,8 @@ class DockerCodeExecutor(CodeExecutor):
         # Clean up the temporary build directory
         os.remove(dockerfile_path)
         os.rmdir(build_dir)
+
+        self.previously_built_image = image
 
         return image
 
