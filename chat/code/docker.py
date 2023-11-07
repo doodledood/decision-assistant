@@ -1,6 +1,6 @@
 import os
 
-import docker
+from docker.errors import ContainerError
 
 from .base import CodeExecutor
 
@@ -53,5 +53,6 @@ class DockerCodeExecutor(CodeExecutor):
                 detach=False
             )
             return container.decode('utf-8')
-        except docker.errors.ContainerError as e:
+
+        except ContainerError as e:
             return e.stderr.decode('utf-8')
