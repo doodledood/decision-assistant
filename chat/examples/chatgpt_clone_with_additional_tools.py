@@ -33,7 +33,7 @@ class SimpleCodeExecutionTool(BaseTool):
     name: str = 'code_executor'
     description: str = ('Use this code executor for any capability you are missing expect for web searching. That '
                         'includes math, time, data analysis, etc. Code will get executed and the result will be '
-                        'returned as a string.')
+                        'returned as a string. You do not have access to any external libraries, expect for `requests`.')
     args_schema: Type[pydantic_v1.BaseModel] = CodeExecutionToolArgs
     progress_text: str = 'Executing code...'
     spinner: Optional[Halo] = None
@@ -52,7 +52,11 @@ class SimpleCodeExecutionTool(BaseTool):
         local_vars = {}
 
         try:
-            exec(python_code, None, local_vars)
+            for line in python_code.splitlines(keepends=False):
+                if not line:
+                    continue
+
+                exec(python_code, None, local_vars)
         except:
             return f'Error executing code: {traceback.format_exc()}'
 

@@ -45,7 +45,7 @@ class GoogleSerperSearchResultsProvider(SearchResultsProvider):
 
         payload = json.dumps({
             "q": query,
-            "num": n_results,
+            "num": n_results + 5,  # Request extra results to account for non-organic results
         })
         headers = {
             'X-API-KEY': self.api_key,
