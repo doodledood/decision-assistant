@@ -20,6 +20,7 @@ from langchain.globals import set_llm_cache
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.backing_stores.langchain import LangChainMemoryBasedChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
@@ -134,14 +135,17 @@ def generate_queries(state: BHSRState,
     user = UserChatParticipant()
     participants = [user, query_generator]
 
-    max_context_size = OpenAI.modelname_to_contextsize(chat_model.model_name)
+    try:
+        max_context_size = OpenAI.modelname_to_contextsize(chat_model.model_name)
+        memory = ConversationSummaryBufferMemory(
+            llm=chat_model,
+            max_token_limit=max_context_size
+        )
+    except ValueError:
+        memory = InMemoryChatDataBackingStore()
+
     chat = Chat(
-        backing_store=LangChainMemoryBasedChatDataBackingStore(
-            memory=ConversationSummaryBufferMemory(
-                llm=chat_model,
-                max_token_limit=max_context_size * 0.5
-            )
-        ),
+        backing_store=LangChainMemoryBasedChatDataBackingStore(memory=memory),
         renderer=TerminalChatRenderer(),
         initial_participants=participants,
         max_total_messages=None if interactive_user else 2
@@ -472,18 +476,25 @@ if __name__ == '__main__':
 
     chat_model = ChatOpenAI(
         temperature=0.0,
-        model='gpt-4-0613'
+        model='gpt-4-1106-preview'
     )
+    chat_model_for_analysis = ChatOpenAI(
+        temperature=0.0,
+        model='gpt-3.5-turbo-1106',
+    )
+
+    try:
+        max_context_size = OpenAI.modelname_to_contextsize(chat_model_for_analysis.model_name)
+    except ValueError:
+        max_context_size = 12000
+
     web_search = WebSearch(
         chat_model=chat_model,
         search_results_provider=GoogleSerperSearchResultsProvider(),
         page_query_analyzer=OpenAIChatPageQueryAnalyzer(
-            chat_model=ChatOpenAI(
-                temperature=0.0,
-                model='gpt-3.5-turbo-16k-0613',
-            ),
+            chat_model=chat_model_for_analysis,
             page_retriever=SeleniumPageRetriever(),
-            text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000),
+            text_splitter=TokenTextSplitter(chunk_size=max_context_size, chunk_overlap=max_context_size // 5),
             use_first_split_only=True
         )
     )

@@ -15,7 +15,7 @@ if __name__ == '__main__':
     load_dotenv()
     chat_model = ChatOpenAI(
         temperature=0.0,
-        model='gpt-4-0613'
+        model='gpt-4-1106-preview'
     )
 
     spinner = Halo(spinner='dots')

@@ -1,4 +1,5 @@
 from halo import Halo
+from langchain.llms.openai import OpenAI
 from langchain.memory import ConversationBufferMemory, ConversationTokenBufferMemory, ConversationSummaryBufferMemory
 
 from chat.backing_stores import InMemoryChatDataBackingStore
@@ -15,7 +16,7 @@ if __name__ == '__main__':
     load_dotenv()
     chat_model = ChatOpenAI(
         temperature=0.0,
-        model='gpt-4-0613'
+        model='gpt-4-1106-preview'
     )
 
     spinner = Halo(spinner='dots')
@@ -26,7 +27,15 @@ if __name__ == '__main__':
     user = UserChatParticipant(name='User')
     participants = [user, ai]
 
-    memory = ConversationSummaryBufferMemory(llm=chat_model, max_token_limit=100)
+    try:
+        max_context_size = OpenAI.modelname_to_contextsize(chat_model.model_name)
+        memory = ConversationSummaryBufferMemory(
+            llm=chat_model,
+            max_token_limit=max_context_size
+        )
+    except ValueError:
+        memory = InMemoryChatDataBackingStore()
+
     chat = Chat(
         backing_store=LangChainMemoryBasedChatDataBackingStore(memory=memory),
         renderer=TerminalChatRenderer(),

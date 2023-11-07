@@ -8,7 +8,7 @@ from .base import PageRetriever
 class SimpleRequestsPageRetriever(PageRetriever):
     @retry(retry=retry_if_exception_type(TransientHTTPError),
            wait=wait_fixed(2) + wait_random(0, 2),
-           stop=stop_after_attempt(5))
+           stop=stop_after_attempt(3))
     def retrieve_html(self, url: str, **kwargs) -> str:
         r = requests.get(url, **kwargs)
         if r.status_code < 300:

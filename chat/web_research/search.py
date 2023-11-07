@@ -37,7 +37,7 @@ class GoogleSerperSearchResultsProvider(SearchResultsProvider):
 
     @retry(retry=retry_if_exception_type(TransientHTTPError),
            wait=wait_fixed(2) + wait_random(0, 2),
-           stop=stop_after_attempt(5))
+           stop=stop_after_attempt(3))
     def search(self, query: str, n_results: int = 3) -> SearchResults:
         assert 100 >= n_results > 0, 'n_results must be greater than 0 and less than or equal to 100'
 

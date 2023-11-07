@@ -3,6 +3,7 @@ from typing import Type, Any, Optional
 
 from halo import Halo
 from langchain.callbacks.manager import CallbackManagerForToolRun
+from langchain.llms.openai import OpenAI
 from langchain.text_splitter import TokenTextSplitter
 from langchain.tools import BaseTool
 import pydantic.v1 as pydantic_v1
@@ -67,20 +68,27 @@ if __name__ == '__main__':
     load_dotenv()
     chat_model = ChatOpenAI(
         temperature=0.0,
-        model='gpt-4-0613'
+        model='gpt-4-1106-preview'
     )
+
+    chat_model_for_page_analysis = ChatOpenAI(
+        temperature=0.0,
+        model='gpt-3.5-turbo-16k-0613'
+    )
+
+    try:
+        max_context_size = OpenAI.modelname_to_contextsize(chat_model_for_page_analysis.model_name)
+    except ValueError:
+        max_context_size = 12000
 
     web_search = WebSearch(
         chat_model=chat_model,
         search_results_provider=GoogleSerperSearchResultsProvider(),
         page_query_analyzer=OpenAIChatPageQueryAnalyzer(
-            chat_model=ChatOpenAI(
-                temperature=0.0,
-                model='gpt-3.5-turbo-16k-0613'
-            ),
+            chat_model=chat_model_for_page_analysis,
             # Should `pip install selenium webdriver_manager` to use this
-            page_retriever=SeleniumPageRetriever(),
-            text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000),
+            page_retriever=SeleniumPageRetriever(headless=False),
+            text_splitter=TokenTextSplitter(chunk_size=max_context_size, chunk_overlap=max_context_size // 5),
             use_first_split_only=True
         )
     )

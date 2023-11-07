@@ -34,7 +34,7 @@ LOGGER.setLevel(logging.NOTSET)
 
 
 class SeleniumPageRetriever(PageRetriever):
-    def __init__(self, headless: bool = False, main_page_timeout: int = 30, iframe_timeout: int = 10,
+    def __init__(self, headless: bool = True, main_page_timeout: int = 10, iframe_timeout: int = 10,
                  main_page_min_wait: int = 2, driver_implicit_wait: int = 1,
                  driver_page_load_timeout: Optional[int] = None, user_agent: Optional[str] = None):
 
@@ -143,7 +143,7 @@ class SeleniumPageRetriever(PageRetriever):
 
     @retry(retry=retry_if_exception_type(TransientHTTPError),
            wait=wait_fixed(2) + wait_random(0, 2),
-           stop=stop_after_attempt(5))
+           stop=stop_after_attempt(3))
     def retrieve_html(self, url: str) -> str:
         driver = None
         service = None

@@ -13,6 +13,7 @@ from chat.parsing_utils import string_output_to_pydantic
 from chat.participants import UserChatParticipant, LangChainBasedAIChatParticipant
 from chat.renderers import NoChatRenderer
 from chat.structured_string import Section, StructuredString
+from .errors import NonTransientHTTPError, TransientHTTPError
 from .page_retrievers import PageRetriever
 from bs4 import BeautifulSoup, Comment, NavigableString
 
@@ -69,7 +70,13 @@ class OpenAIChatPageQueryAnalyzer(PageQueryAnalyzer):
         self.use_first_split_only = use_first_split_only
 
     def analyze(self, url: str, title: str, query: str, spinner: Optional[Halo] = None) -> PageQueryAnalysisResult:
-        html = self.page_retriever.retrieve_html(url)
+        try:
+            html = self.page_retriever.retrieve_html(url)
+        except (NonTransientHTTPError, TransientHTTPError) as e:
+            return PageQueryAnalysisResult(
+                answer=f'The query could not be answered because an error occurred while retrieving the page: {e}'
+            )
+
         cleaned_html = clean_html(html)
 
         docs = self.text_splitter.create_documents([cleaned_html])

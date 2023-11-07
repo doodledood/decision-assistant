@@ -8,6 +8,7 @@ from halo import Halo
 from langchain.cache import SQLiteCache
 from langchain.chat_models import ChatOpenAI
 from langchain.globals import set_llm_cache
+from langchain.llms.openai import OpenAI
 from langchain.text_splitter import TokenTextSplitter
 
 from chat.web_research import WebSearch
@@ -28,7 +29,7 @@ from steps import identify_goal, identify_alternatives, identify_criteria, prior
 def run_decision_assistant(
         goal: Optional[str] = None,
         llm_temperature: float = 0.0,
-        llm_model: str = 'gpt-4-0613',
+        llm_model: str = 'gpt-4-1106-preview',
         fast_llm_model: str = 'gpt-3.5-turbo-16k-0613',
         state_file: Optional[str] = 'output/state.json',
         report_file: str = 'output/decision_report.html',
@@ -45,23 +46,28 @@ def run_decision_assistant(
     spinner = Halo(spinner='dots')
 
     chat_model = ChatOpenAI(temperature=llm_temperature, model=llm_model)
-    fast_chat_model = ChatOpenAI(temperature=llm_temperature, model=fast_llm_model)
+    chat_model_for_analysis = ChatOpenAI(temperature=llm_temperature, model=fast_llm_model)
 
     if cache_file is not None:
         llm_cache = SQLiteCache(database_path=cache_file)
         set_llm_cache(llm_cache)
 
+    try:
+        max_context_size = OpenAI.modelname_to_contextsize(chat_model_for_analysis.model_name)
+    except ValueError:
+        max_context_size = 12000
+
     web_search = WebSearch(
         chat_model=chat_model,
         search_results_provider=GoogleSerperSearchResultsProvider(),
         page_query_analyzer=OpenAIChatPageQueryAnalyzer(
-            chat_model=fast_chat_model,
+            chat_model=chat_model_for_analysis,
             page_retriever=RetrieverWithFallback([
-                SeleniumPageRetriever(headless=False),
+                SeleniumPageRetriever(headless=True),
                 ScraperAPIPageRetriever(render_js=True),
                 SimpleRequestsPageRetriever()
             ]),
-            text_splitter=TokenTextSplitter(chunk_size=12000, chunk_overlap=2000)
+            text_splitter=TokenTextSplitter(chunk_size=max_context_size, chunk_overlap=max_context_size // 5)
         )
     )
     default_participant_tools = [
@@ -98,7 +104,7 @@ def run_decision_assistant(
             ),
             Step(
                 name='Criteria Prioritization',
-                func=partial(prioritize_criteria, fast_chat_model, default_participant_tools, spinner=spinner),
+                func=partial(prioritize_criteria, chat_model_for_analysis, default_participant_tools, spinner=spinner),
                 on_step_start=lambda _: spinner.succeed('Started prioritizing criteria.'),
                 on_step_completed=lambda _: spinner.succeed('Prioritized criteria.')
             ),

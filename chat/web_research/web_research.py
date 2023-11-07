@@ -62,7 +62,10 @@ class WebSearch:
             if spinner is not None:
                 spinner.start(f'Getting search results for "{query}"...')
 
-            search_results = self.search_results_provider.search(query=query, n_results=n_results)
+            try:
+                search_results = self.search_results_provider.search(query=query, n_results=n_results)
+            except (TransientHTTPError, NonTransientHTTPError) as e:
+                return False, f'Failed to get search results for "{query}" because of an error: {e}'
 
             if spinner is not None:
                 spinner.succeed(f'Got search results for "{query}".')
