@@ -6,7 +6,7 @@ from langchain.schema import SystemMessage, HumanMessage, BaseMessage
 from langchain.tools import BaseTool
 
 from chat.ai_utils import execute_chat_model_messages
-from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition
+from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition, ChatConductor
 from chat.composition_generators import ManageParticipantsOutputSchema
 from chat.parsing_utils import string_output_to_pydantic
 from chat.participants.langchain import LangChainBasedAIChatParticipant
@@ -39,7 +39,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         # Ask the AI to select the next speaker.
         messages = [
             SystemMessage(content=self.create_compose_chat_participants_system_prompt(chat=chat)),
-            HumanMessage(content=self.create_compose_chat_participants_first_human_prompt(chat=chat))
+            HumanMessage(
+                content=self.create_compose_chat_participants_first_human_prompt(chat=chat))
         ]
 
         result = self.execute_messages(messages=messages)
@@ -91,7 +92,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
         return GeneratedChatComposition(
             participants=participants,
-            participants_interaction_schema=output.updated_speaker_interaction_schema
+            participants_interaction_schema=output.updated_speaker_interaction_schema,
+            termination_condition=output.updated_termination_condition
         )
 
     def create_compose_chat_participants_system_prompt(self, chat: 'Chat') -> str:
@@ -144,6 +146,13 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                         'If the chat goal has some output (like an answer), make sure to have the last step be the '
                         'presentation of the final answer by one of the participants as a final message to the chat.'
                     ]),
+            Section(name='Updating The Termination Condition',
+                    list=[
+                        'Update the termination condition to accommodate changes in participants.',
+                        'The termination condition should be a simple, concise, and very focused on the goal.',
+                        'The chat should terminate when the goal is achieved, or when it is clear that the goal '
+                        'cannot be achieved.'
+                    ]),
             Section(name='Input', list=[
                 'Goal for the conversation.',
                 'Previous messages from the conversation.',
@@ -168,12 +177,16 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
         active_participants = chat.get_active_participants()
 
+        participants_interaction_schema = None
+        if hasattr(conductor, 'participants_interaction_schema'):
+            participants_interaction_schema = conductor.participants_interaction_schema
+
         prompt = StructuredString(sections=[
             Section(name='Chat Goal', text=chat.goal or 'No explicit chat goal provided.'),
             Section(name='Currently Active Participants',
                     list=[f'{participant.name} ({participant.role})' for participant in active_participants]),
             Section(name='Current Speaker Interaction Schema',
-                    text=chat.speaker_interaction_schema or 'Not provided. Use your best judgement.'),
+                    text=participants_interaction_schema or 'Not provided. Use your best judgement.'),
             Section(name='Chat Messages',
                     text='No messages yet.' if len(messages_list) == 0 else None,
                     list=messages_list if len(messages_list) > 0 else []

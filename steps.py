@@ -399,7 +399,7 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
 
     chat = Chat(
         goal='Identify clear well-defined criteria and their respective scales for the decision.',
-        speaker_interaction_schema=(
+        participants_interaction_schema=(
             '1. The Criteria Brainstormer suggests an initial set of criteria (including description and scales) '
             'based on the user input.\n'
             '2. The Criteria Critic critiques the criteria suggested and suggests improvements.\n'

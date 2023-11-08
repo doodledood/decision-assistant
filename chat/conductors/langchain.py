@@ -6,7 +6,7 @@ from langchain.schema import SystemMessage, HumanMessage, AIMessage, BaseMessage
 from langchain.tools import BaseTool
 
 from chat.ai_utils import execute_chat_model_messages
-from chat.base import ChatConductor, Chat, ActiveChatParticipant, ChatMessage
+from chat.base import ChatConductor, Chat, ActiveChatParticipant, ChatMessage, ChatCompositionGenerator
 from chat.errors import ChatParticipantNotJoinedToChatError
 from chat.structured_string import StructuredString, Section
 
@@ -16,6 +16,8 @@ class LangChainBasedAIChatConductor(ChatConductor):
     chat_model_args: Dict[str, Any]
     tools: Optional[List[BaseTool]] = None
     retriever: Optional[BaseRetriever] = None
+    composition_generator: Optional[ChatCompositionGenerator] = None
+    participants_interaction_schema: Optional[str] = None
     termination_condition: str = f'''Terminate the chat on the following conditions:
     - When the goal of the chat has been achieved
     - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
@@ -23,6 +25,8 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
     def __init__(self,
                  chat_model: BaseChatModel,
+                 composition_generator: Optional[ChatCompositionGenerator] = None,
+                 participants_interaction_schema: Optional[str] = None,
                  termination_condition: Optional[str] = None,
                  retriever: Optional[BaseRetriever] = None,
                  spinner: Optional[Halo] = None,
@@ -34,6 +38,8 @@ class LangChainBasedAIChatConductor(ChatConductor):
         self.chat_model_args = chat_model_args or {}
         self.tools = tools
         self.retriever = retriever
+        self.composition_generator = composition_generator
+        self.participants_interaction_schema = participants_interaction_schema
         self.termination_condition = termination_condition
         self.spinner = spinner
 
@@ -98,7 +104,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
             Section(name='Currently Active Participants',
                     list=[f'{participant.name} ({participant.role})' for participant in participants]),
             Section(name='Current Speaker Interaction Schema',
-                    text=chat.speaker_interaction_schema or 'Not provided. Use your best judgement.'),
+                    text=chat.participants_interaction_schema or 'Not provided. Use your best judgement.'),
             Section(name='Chat Messages',
                     text='No messages yet.' if len(messages_list) == 0 else None,
                     list=messages_list if len(messages_list) > 0 else []
@@ -108,6 +114,19 @@ class LangChainBasedAIChatConductor(ChatConductor):
         return str(prompt)
 
     def select_next_speaker(self, chat: Chat) -> Optional[ActiveChatParticipant]:
+        # If a composition generator is provided, generate a new composition for the chat before starting.
+        if self.composition_generator is not None:
+            new_composition = self.composition_generator.generate_composition_for_chat(chat=chat)
+            for participant in new_composition.participants:
+                if chat.has_active_participant_with_name(participant.name) or chat.has_non_active_participant_with_name(
+                        participant.name):
+                    continue
+
+                chat.add_participant(participant)
+
+            self.participants_interaction_schema = new_composition.participants_interaction_schema
+            self.termination_condition = new_composition.termination_condition
+
         participants = chat.get_active_participants()
         if len(participants) <= 1:
             return None

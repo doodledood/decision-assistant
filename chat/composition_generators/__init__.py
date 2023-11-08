@@ -15,4 +15,6 @@ class ManageParticipantsOutputSchema(BaseModel):
     participants_to_remove: List[str] = Field(description='List of participants to be removed.')
     participants_to_add: List[ParticipantToAddSchema] = Field(description='List of participants to be added.')
     updated_speaker_interaction_schema: Optional[str] = Field(
-        description='An updated version of the original interaction schema.')
+        description='An updated version of the original interaction schema to better reflect how to achieve the goal.')
+    updated_termination_condition: Optional[str] = Field(
+        description='An updated version of the termination condition to better reflect the achievement of the goal.')

@@ -35,7 +35,7 @@ if __name__ == '__main__':
         renderer=TerminalChatRenderer(),
         initial_participants=participants,
         goal='Make the user laugh by pranking the boring AI.',
-        speaker_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to '
+        participants_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to '
                                    f'prank him big time. Rob can and should talk to the user to get them in on the '
                                    f'prank, however the majority of the prank should be done by Rob. By prank, '
                                    f'I mean the AI should be confused and not know what to do, or laughs at the prank '

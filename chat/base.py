@@ -165,6 +165,7 @@ class ChatRenderer(abc.ABC):
 class GeneratedChatComposition:
     participants: List[ChatParticipant]
     participants_interaction_schema: str
+    termination_condition: str
 
 
 class ChatCompositionGenerator(abc.ABC):
@@ -176,8 +177,6 @@ class ChatCompositionGenerator(abc.ABC):
 class Chat:
     backing_store: ChatDataBackingStore
     renderer: ChatRenderer
-    composition_generator: Optional[ChatCompositionGenerator] = None
-    speaker_interaction_schema: Optional[str] = None
     goal: str
     max_total_messages: Optional[int] = None
     hide_messages: bool = False
@@ -187,35 +186,21 @@ class Chat:
             backing_store: ChatDataBackingStore,
             renderer: ChatRenderer,
             initial_participants: Optional[List[ChatParticipant]] = None,
-            composition_generator: Optional[ChatCompositionGenerator] = None,
             goal: str = 'This is a regular chatroom, the goal is to just have a conversation.',
-            speaker_interaction_schema: Optional[str] = None,
             max_total_messages: Optional[int] = None,
             hide_messages: bool = False
     ):
-        assert max_total_messages is None or max_total_messages > 0, 'Max total messages must be None or greater than 0.'
+        assert max_total_messages is None or max_total_messages > 0, ('Max total messages must be None or greater than '
+                                                                      '0.')
 
         self.backing_store = backing_store
         self.renderer = renderer
-        self.composition_generator = composition_generator
         self.goal = goal
-        self.speaker_interaction_schema = speaker_interaction_schema
         self.hide_messages = hide_messages
         self.max_total_messages = max_total_messages
 
         for i, participant in enumerate(initial_participants or []):
             self.add_participant(participant)
-
-        if composition_generator is not None:
-            new_composition = composition_generator.generate_composition_for_chat(chat=self)
-            for participant in new_composition.participants:
-                if self.has_active_participant_with_name(participant.name) or self.has_non_active_participant_with_name(
-                        participant.name):
-                    continue
-
-                self.add_participant(participant)
-
-            self.speaker_interaction_schema = new_composition.participants_interaction_schema
 
     def add_participant(self, participant: ChatParticipant):
         if self.has_active_participant_with_name(participant.name) or self.has_non_active_participant_with_name(
