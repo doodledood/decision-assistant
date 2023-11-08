@@ -119,6 +119,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                 'and a Plan Critic participants to have this synergy. You can skip critics for the most trivial tasks.',
                 'You may not necessarily have the option to change this composition later, so make sure you summon '
                 'the right participants.',
+                'Roles should be succinct titles like "Writer", "Developer", etc.'
             ]),
             Section(name='Removing Participants', list=[
                 'Remove participants only if they cannot contribute to the goal or fit into the interaction schema.',

@@ -7,7 +7,7 @@ from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import TOutputSchema, Chat, ChatMessage
 from chat.conductors import RoundRobinChatConductor
 from chat.errors import MessageCouldNotBeParsedError
-from chat.participants import LangChainBasedAIChatParticipant
+from chat.participants.langchain import LangChainBasedAIChatParticipant
 from chat.participants.output_parser import JSONOutputParserChatParticipant
 from chat.renderers import NoChatRenderer
 from chat.structured_string import Section
