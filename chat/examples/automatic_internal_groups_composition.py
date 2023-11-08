@@ -33,8 +33,9 @@ if __name__ == '__main__':
         chat_conductor=LangChainBasedAIChatConductor(
             chat_model=chat_model,
             spinner=spinner,
-            termination_condition='If the user\'s financial strategy is already good, terminate the conversation. If '
-                                  'not, terminate after collaborating on how to improve it.'
+            termination_condition='Terminate when the team has come up with good solutions and suggestions for '
+                                  'improvement of the plan or request of the user. Also terminate if user input is '
+                                  'needed before a proper answer can be crafted.'
         ),
         spinner=spinner
     )
