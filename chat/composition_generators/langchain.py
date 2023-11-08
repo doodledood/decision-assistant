@@ -32,10 +32,10 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         self.spinner = spinner
         self.n_output_parsing_tries = n_output_parsing_tries
 
-    def generate_composition(self,
-                             chat: Chat,
-                             participants_interaction_schema: Optional[str] = None,
-                             termination_condition: Optional[str] = None) -> GeneratedChatComposition:
+    def generate_composition_for_chat(self,
+                                      chat: Chat,
+                                      participants_interaction_schema: Optional[str] = None,
+                                      termination_condition: Optional[str] = None) -> GeneratedChatComposition:
         if self.spinner is not None:
             self.spinner.start(text='The Chat Composition Generator is creating a new chat composition...')
 
