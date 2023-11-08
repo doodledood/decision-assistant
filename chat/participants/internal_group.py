@@ -41,6 +41,10 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
         self.inner_chat.clear_messages()
         self.inner_chat.goal = self.mission
 
+        # Make sure the chat & conductor are initialized before starting the chat, as it may be a dynamic chat with
+        # no participants yet.
+        self.inner_chat_conductor.initialize_chat(chat=self.inner_chat)
+
         prev_spinner_text = None
         if self.spinner is not None:
             prev_spinner_text = self.spinner.text

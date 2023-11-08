@@ -67,6 +67,9 @@ class ChatConductor(abc.ABC):
 
         return last_message.content
 
+    def initialize_chat(self, chat: 'Chat'):
+        pass
+
     def initiate_chat_with_result(
             self,
             chat: 'Chat',

@@ -22,6 +22,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
     - When the goal of the chat has been achieved
     - If one of the participants asks you to terminate it or has finished their sentence with "TERMINATE".'''
     spinner: Optional[Halo] = None
+    composition_initialized: bool = False
 
     def __init__(self,
                  chat_model: BaseChatModel,
@@ -113,14 +114,9 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
         return str(prompt)
 
-    def initiate_chat_with_result(
-            self,
-            chat: 'Chat',
-            initial_message: Optional[str] = None,
-            from_participant: Optional[ChatParticipant] = None
-    ) -> str:
+    def initialize_chat(self, chat: 'Chat'):
         # If a composition generator is provided, generate a new composition for the chat before starting.
-        if self.composition_generator is not None:
+        if self.composition_generator is not None and not self.composition_initialized:
             new_composition = self.composition_generator.generate_composition_for_chat(
                 chat=chat,
                 participants_interaction_schema=self.participants_interaction_schema,
@@ -143,6 +139,16 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
             self.participants_interaction_schema = new_composition.participants_interaction_schema
             self.termination_condition = new_composition.termination_condition
+
+            self.composition_initialized = True
+
+    def initiate_chat_with_result(
+            self,
+            chat: 'Chat',
+            initial_message: Optional[str] = None,
+            from_participant: Optional[ChatParticipant] = None
+    ) -> str:
+        self.initialize_chat(chat=chat)
 
         return super().initiate_chat_with_result(
             chat=chat,
