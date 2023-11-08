@@ -172,7 +172,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                         'Participants to Remove: List of participants to be removed (if any).',
                         'Participants to Add: List of participants to be added, with their name, role, and personal '
                         'mission.',
-                        'Updated Interaction Schema: An updated version of the original interaction schema.'
+                        'Updated Interaction Schema: An updated version of the original interaction schema.',
+                        'Updated Termination Condition: An updated version of the original termination condition.'
                     ])
         ])
 
