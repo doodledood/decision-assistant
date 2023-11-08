@@ -55,8 +55,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
         participants_to_add_names = [f'{participant.name} ({participant.role})' for participant in
                                      output.participants_to_add]
-        participants_to_remove_names = [f'{participant.name} ({participant.role})' for participant in
-                                        output.participants_to_remove]
+        participants_to_remove_names = [participant_name for participant_name in output.participants_to_remove]
 
         if self.spinner is not None:
             if len(output.participants_to_remove) == 0 and len(output.participants_to_add) == 0:

@@ -78,7 +78,7 @@ if __name__ == '__main__':
 
     chat_model_for_page_analysis = ChatOpenAI(
         temperature=0.0,
-        model='gpt-3.5-turbo-16k-0613'
+        model='gpt-3.5-turbo-1106'
     )
 
     try:
