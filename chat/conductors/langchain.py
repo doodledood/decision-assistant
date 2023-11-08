@@ -116,7 +116,11 @@ class LangChainBasedAIChatConductor(ChatConductor):
     def select_next_speaker(self, chat: Chat) -> Optional[ActiveChatParticipant]:
         # If a composition generator is provided, generate a new composition for the chat before starting.
         if self.composition_generator is not None:
-            new_composition = self.composition_generator.generate_composition_for_chat(chat=chat)
+            new_composition = self.composition_generator.generate_composition_for_chat(
+                chat=chat,
+                participants_interaction_schema=self.participants_interaction_schema,
+                termination_condition=self.termination_condition
+            )
             for participant in new_composition.participants:
                 if chat.has_active_participant_with_name(participant.name) or chat.has_non_active_participant_with_name(
                         participant.name):

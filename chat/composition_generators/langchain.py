@@ -32,7 +32,9 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         self.spinner = spinner
         self.n_output_parsing_tries = n_output_parsing_tries
 
-    def generate_composition_for_chat(self, chat: Chat) -> GeneratedChatComposition:
+    def generate_composition_for_chat(self, chat: Chat,
+                                      participants_interaction_schema: Optional[str] = None,
+                                      termination_condition: Optional[str] = None) -> GeneratedChatComposition:
         if self.spinner is not None:
             self.spinner.start(text='The Chat Composition Generator is creating a new chat composition...')
 
@@ -40,7 +42,10 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         messages = [
             SystemMessage(content=self.create_compose_chat_participants_system_prompt(chat=chat)),
             HumanMessage(
-                content=self.create_compose_chat_participants_first_human_prompt(chat=chat))
+                content=self.create_compose_chat_participants_first_human_prompt(
+                    chat=chat,
+                    participants_interaction_schema=participants_interaction_schema,
+                    termination_condition=termination_condition))
         ]
 
         result = self.execute_messages(messages=messages)
@@ -171,15 +176,13 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
         return str(system_message)
 
-    def create_compose_chat_participants_first_human_prompt(self, chat: Chat) -> str:
+    def create_compose_chat_participants_first_human_prompt(self, chat: Chat,
+                                                            participants_interaction_schema: Optional[str] = None,
+                                                            termination_condition: Optional[str] = None) -> str:
         messages = chat.get_messages()
         messages_list = [f'- {message.sender_name}: {message.content}' for message in messages]
 
         active_participants = chat.get_active_participants()
-
-        participants_interaction_schema = None
-        if hasattr(conductor, 'participants_interaction_schema'):
-            participants_interaction_schema = conductor.participants_interaction_schema
 
         prompt = StructuredString(sections=[
             Section(name='Chat Goal', text=chat.goal or 'No explicit chat goal provided.'),
@@ -187,6 +190,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                     list=[f'{participant.name} ({participant.role})' for participant in active_participants]),
             Section(name='Current Speaker Interaction Schema',
                     text=participants_interaction_schema or 'Not provided. Use your best judgement.'),
+            Section(name='Current Termination Condition',
+                    text=termination_condition or 'Not provided. Use your best judgement.'),
             Section(name='Chat Messages',
                     text='No messages yet.' if len(messages_list) == 0 else None,
                     list=messages_list if len(messages_list) > 0 else []

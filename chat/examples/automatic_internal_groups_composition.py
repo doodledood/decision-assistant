@@ -25,17 +25,14 @@ if __name__ == '__main__':
             backing_store=InMemoryChatDataBackingStore(),
             renderer=TerminalChatRenderer(),
             goal='Ensure the user\'s financial strategy maximizes wealth over the long term without too much risk.',
-            composition_generator=LangChainBasedAIChatCompositionGenerator(
-                chat_model=chat_model,
-                spinner=spinner,
-            )
         ),
         chat_conductor=LangChainBasedAIChatConductor(
             chat_model=chat_model,
             spinner=spinner,
-            termination_condition='Terminate when the team has come up with good solutions and suggestions for '
-                                  'improvement of the plan or request of the user. Also terminate if user input is '
-                                  'needed before a proper answer can be crafted.'
+            composition_generator=LangChainBasedAIChatCompositionGenerator(
+                chat_model=chat_model,
+                spinner=spinner
+            )
         ),
         spinner=spinner
     )

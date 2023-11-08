@@ -170,7 +170,10 @@ class GeneratedChatComposition:
 
 class ChatCompositionGenerator(abc.ABC):
     @abc.abstractmethod
-    def generate_composition_for_chat(self, chat: 'Chat') -> GeneratedChatComposition:
+    def generate_composition_for_chat(self,
+                                      chat: 'Chat',
+                                      participants_interaction_schema: Optional[str] = None,
+                                      termination_condition: Optional[str] = None) -> GeneratedChatComposition:
         raise NotImplementedError()
 
 

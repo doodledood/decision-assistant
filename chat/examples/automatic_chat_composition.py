@@ -21,7 +21,12 @@ if __name__ == '__main__':
     user = UserChatParticipant(name='User')
     chat_conductor = LangChainBasedAIChatConductor(
         chat_model=chat_model,
-        spinner=spinner
+        spinner=spinner,
+        # Pass in a composition generator to the conductor
+        composition_generator=LangChainBasedAIChatCompositionGenerator(
+            chat_model=chat_model,
+            spinner=spinner,
+        )
     )
     chat = Chat(
         backing_store=InMemoryChatDataBackingStore(),
@@ -30,11 +35,6 @@ if __name__ == '__main__':
         goal='Come up with a plan for the user to invest their money. The goal is to maximize wealth over the '
              'long-term, while minimizing risk.',
         initial_participants=[user],
-        # Pass in a composition generator to the chat
-        composition_generator=LangChainBasedAIChatCompositionGenerator(
-            chat_model=chat_model,
-            spinner=spinner,
-        )
     )
 
     result = chat_conductor.initiate_chat_with_result(chat=chat)
