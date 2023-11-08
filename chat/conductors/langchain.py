@@ -59,7 +59,6 @@ class LangChainBasedAIChatConductor(ChatConductor):
             Section(name='Rules', list=[
                 'You can only select one of the participants in the group chat.'
             ]),
-            Section(name='Termination Condition', text=self.termination_condition),
             Section(name='Process', list=[
                 'Look at the last message in the conversation and determine who should speak next based on the '
                 'SPEAKER INTERACTION SCHEMA, if provided.',
@@ -103,8 +102,9 @@ class LangChainBasedAIChatConductor(ChatConductor):
             Section(name='Chat Goal', text=chat.goal or 'No explicit chat goal provided.'),
             Section(name='Currently Active Participants',
                     list=[f'{participant.name} ({participant.role})' for participant in participants]),
-            Section(name='Current Speaker Interaction Schema',
-                    text=chat.participants_interaction_schema or 'Not provided. Use your best judgement.'),
+            Section(name='Speaker Interaction Schema',
+                    text=self.participants_interaction_schema or 'Not provided. Use your best judgement.'),
+            Section(name='Termination Condition', text=self.termination_condition),
             Section(name='Chat Messages',
                     text='No messages yet.' if len(messages_list) == 0 else None,
                     list=messages_list if len(messages_list) > 0 else []
