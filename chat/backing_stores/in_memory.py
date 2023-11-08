@@ -77,4 +77,15 @@ class InMemoryChatDataBackingStore(ChatDataBackingStore):
         self.participants.pop(participant.name)
 
     def has_active_participant_with_name(self, participant_name: str) -> bool:
-        return participant_name in self.participants
+        if participant_name in self.participants:
+            participant = self.participants[participant_name]
+            return isinstance(participant, ActiveChatParticipant)
+
+        return False
+
+    def has_non_active_participant_with_name(self, participant_name: str) -> bool:
+        if participant_name in self.participants:
+            participant = self.participants[participant_name]
+            return not isinstance(participant, ActiveChatParticipant)
+
+        return False

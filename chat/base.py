@@ -4,7 +4,8 @@ from typing import Optional, List, TypeVar
 
 from pydantic import BaseModel
 
-from chat.errors import NotEnoughActiveParticipantsInChatError, ChatParticipantNotJoinedToChatError
+from chat.errors import NotEnoughActiveParticipantsInChatError, ChatParticipantNotJoinedToChatError, \
+    ChatParticipantAlreadyJoinedToChatError
 
 TOutputSchema = TypeVar("TOutputSchema", bound=BaseModel)
 
@@ -146,6 +147,10 @@ class ChatDataBackingStore(abc.ABC):
     def has_active_participant_with_name(self, participant_name: str) -> bool:
         raise NotImplementedError()
 
+    @abc.abstractmethod
+    def has_non_active_participant_with_name(self, participant_name: str) -> bool:
+        raise NotImplementedError()
+
 
 class ChatRenderer(abc.ABC):
     def render_new_chat_message(self, chat: 'Chat', message: ChatMessage):
@@ -200,7 +205,8 @@ class Chat:
         if composition_generator is not None:
             new_composition = composition_generator.generate_composition_for_chat(chat=self)
             for participant in new_composition.participants:
-                if self.has_active_participant_with_name(participant.name):
+                if self.has_active_participant_with_name(participant.name) or self.has_non_active_participant_with_name(
+                        participant.name):
                     continue
 
                 self.add_participant(participant)
@@ -208,6 +214,10 @@ class Chat:
             self.speaker_interaction_schema = new_composition.participants_interaction_schema
 
     def add_participant(self, participant: ChatParticipant):
+        if self.has_active_participant_with_name(participant.name) or self.has_non_active_participant_with_name(
+                participant.name):
+            raise ChatParticipantAlreadyJoinedToChatError(participant.name)
+
         self.backing_store.add_participant(participant)
 
         all_participants = self.backing_store.get_active_participants() + self.backing_store.get_non_active_participants()
@@ -257,6 +267,9 @@ class Chat:
 
     def has_active_participant_with_name(self, participant_name: str) -> bool:
         return self.backing_store.has_active_participant_with_name(participant_name=participant_name)
+
+    def has_non_active_participant_with_name(self, participant_name: str) -> bool:
+        return self.backing_store.has_non_active_participant_with_name(participant_name=participant_name)
 
     def end_chat(self):
         active_participants = self.backing_store.get_active_participants()
