@@ -53,6 +53,11 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             hide_message=False
         )
 
+        participants_to_add_names = [f'{participant.name} ({participant.role})' for participant in
+                                     output.participants_to_add]
+        participants_to_remove_names = [f'{participant.name} ({participant.role})' for participant in
+                                        output.participants_to_remove]
+
         if self.spinner is not None:
             if len(output.participants_to_remove) == 0 and len(output.participants_to_add) == 0:
                 self.spinner.succeed(
@@ -60,16 +65,16 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             elif len(output.participants_to_remove) > 0 and len(output.participants_to_add) == 0:
                 self.spinner.succeed(
                     text=f'The Chat Composition Generator has decided to remove the following participants: '
-                         f'{", ".join(output.participants_to_remove)}')
+                         f'{", ".join(participants_to_remove_names)}')
             elif len(output.participants_to_remove) == 0 and len(output.participants_to_add) > 0:
                 self.spinner.succeed(
                     text=f'The Chat Composition Generator has decided to add the following participants: '
-                         f'{", ".join([participant.name for participant in output.participants_to_add])}')
+                         f'{", ".join(participants_to_add_names)}')
             else:
                 self.spinner.succeed(
                     text=f'The Chat Composition Generator has decided to remove the following participants: '
-                         f'{", ".join(output.participants_to_remove)} and add the following participants: '
-                         f'{", ".join([participant.name for participant in output.participants_to_add])}')
+                         f'{", ".join(participants_to_remove_names)} and add the following participants: '
+                         f'{", ".join(participants_to_add_names)}')
 
         participants = [p for p in chat.get_active_participants() if p.name not in output.participants_to_remove]
 
