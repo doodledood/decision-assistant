@@ -126,12 +126,20 @@ class LangChainBasedAIChatConductor(ChatConductor):
                 participants_interaction_schema=self.participants_interaction_schema,
                 termination_condition=self.termination_condition
             )
+
+            # Sync participants with the new composition.
+            current_active_participants = chat.get_active_participants()
+            new_participants_names = {p.name for p in new_composition.participants}
+
             for participant in new_composition.participants:
-                if chat.has_active_participant_with_name(participant.name) or chat.has_non_active_participant_with_name(
-                        participant.name):
+                # Add missing participants.
+                if not chat.has_active_participant_with_name(participant.name):
+                    chat.add_participant(participant)
                     continue
 
-                chat.add_participant(participant)
+                # Remove other participants not mentioned in the new composition.
+                if participant.name not in new_participants_names:
+                    chat.remove_participant(participant)
 
             self.participants_interaction_schema = new_composition.participants_interaction_schema
             self.termination_condition = new_composition.termination_condition
