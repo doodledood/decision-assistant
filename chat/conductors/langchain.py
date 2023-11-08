@@ -6,7 +6,7 @@ from langchain.schema import SystemMessage, HumanMessage, AIMessage, BaseMessage
 from langchain.tools import BaseTool
 
 from chat.ai_utils import execute_chat_model_messages
-from chat.base import ChatConductor, Chat, ActiveChatParticipant, ChatMessage, ChatCompositionGenerator
+from chat.base import ChatConductor, Chat, ActiveChatParticipant, ChatMessage, ChatCompositionGenerator, ChatParticipant
 from chat.errors import ChatParticipantNotJoinedToChatError
 from chat.structured_string import StructuredString, Section
 
@@ -113,7 +113,12 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
         return str(prompt)
 
-    def select_next_speaker(self, chat: Chat) -> Optional[ActiveChatParticipant]:
+    def initiate_chat_with_result(
+            self,
+            chat: 'Chat',
+            initial_message: Optional[str] = None,
+            from_participant: Optional[ChatParticipant] = None
+    ) -> str:
         # If a composition generator is provided, generate a new composition for the chat before starting.
         if self.composition_generator is not None:
             new_composition = self.composition_generator.generate_composition_for_chat(
@@ -131,6 +136,13 @@ class LangChainBasedAIChatConductor(ChatConductor):
             self.participants_interaction_schema = new_composition.participants_interaction_schema
             self.termination_condition = new_composition.termination_condition
 
+        return super().initiate_chat_with_result(
+            chat=chat,
+            initial_message=initial_message,
+            from_participant=from_participant
+        )
+
+    def select_next_speaker(self, chat: Chat) -> Optional[ActiveChatParticipant]:
         participants = chat.get_active_participants()
         if len(participants) <= 1:
             return None
