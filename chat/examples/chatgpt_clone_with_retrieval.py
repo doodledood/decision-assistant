@@ -5,10 +5,11 @@ from langchain.vectorstores.chroma import Chroma
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
-from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from langchain.chat_models import ChatOpenAI
 from dotenv import load_dotenv
 
+from chat.participants.langchain import LangChainBasedAIChatParticipant
+from chat.participants.user import UserChatParticipant
 from chat.renderers import TerminalChatRenderer
 
 if __name__ == '__main__':
