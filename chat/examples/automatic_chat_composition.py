@@ -4,10 +4,10 @@ from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.composition_generators.langchain import LangChainBasedAIChatCompositionGenerator
 from chat.conductors import LangChainBasedAIChatConductor
-from chat.participants import UserChatParticipant
 from langchain.chat_models import ChatOpenAI
 from dotenv import load_dotenv
 
+from chat.participants.user import UserChatParticipant
 from chat.renderers import TerminalChatRenderer
 
 if __name__ == '__main__':

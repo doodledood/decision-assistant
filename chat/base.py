@@ -120,6 +120,10 @@ class ChatDataBackingStore(abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
+    def clear_messages(self):
+        raise NotImplementedError()
+
+    @abc.abstractmethod
     def get_active_participants(self) -> List[ActiveChatParticipant]:
         raise NotImplementedError()
 
@@ -252,6 +256,9 @@ class Chat:
 
     def get_messages(self) -> List[ChatMessage]:
         return self.backing_store.get_messages()
+
+    def clear_messages(self):
+        self.backing_store.clear_messages()
 
     def get_active_participants(self) -> List[ActiveChatParticipant]:
         return self.backing_store.get_active_participants()

@@ -17,7 +17,8 @@ from chat.backing_stores.langchain import LangChainMemoryBasedChatDataBackingSto
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor, LangChainBasedAIChatConductor
 from chat.parsing_utils import chat_messages_to_pydantic
-from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
+from chat.participants.langchain import LangChainBasedAIChatParticipant
+from chat.participants.user import UserChatParticipant
 from chat.renderers import TerminalChatRenderer, NoChatRenderer
 from chat.structured_string import Section, StructuredString
 from chat.use_cases.request_response import get_response

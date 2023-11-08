@@ -10,12 +10,14 @@ from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
 from chat.parsing_utils import string_output_to_pydantic
-from chat.participants import UserChatParticipant, LangChainBasedAIChatParticipant
 from chat.renderers import NoChatRenderer
 from chat.structured_string import Section, StructuredString
 from .errors import NonTransientHTTPError, TransientHTTPError
 from .page_retrievers import PageRetriever
 from bs4 import BeautifulSoup, Comment, NavigableString
+
+from ..participants.langchain import LangChainBasedAIChatParticipant
+from ..participants.user import UserChatParticipant
 
 
 def clean_html(content):

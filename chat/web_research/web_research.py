@@ -11,7 +11,8 @@ from tenacity import RetryError
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
-from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
+from chat.participants.langchain import LangChainBasedAIChatParticipant
+from chat.participants.user import UserChatParticipant
 from chat.renderers import NoChatRenderer
 from chat.web_research.errors import TransientHTTPError, NonTransientHTTPError
 from chat.web_research.page_analyzer import PageQueryAnalyzer

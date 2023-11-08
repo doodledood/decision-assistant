@@ -9,7 +9,7 @@ from chat.ai_utils import execute_chat_model_messages
 from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition
 from chat.composition_generators import ManageParticipantsOutputSchema
 from chat.parsing_utils import string_output_to_pydantic
-from chat.participants import LangChainBasedAIChatParticipant
+from chat.participants.langchain import LangChainBasedAIChatParticipant
 from chat.structured_string import StructuredString, Section
 
 

@@ -31,6 +31,10 @@ class InMemoryChatDataBackingStore(ChatDataBackingStore):
 
         return message
 
+    def clear_messages(self):
+        self.messages = []
+        self.last_message_id = None
+
     def get_active_participants(self) -> List[ActiveChatParticipant]:
         participants = list(self.participants.values())
         participants = [participant for participant in participants if isinstance(participant, ActiveChatParticipant)]

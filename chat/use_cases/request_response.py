@@ -1,11 +1,10 @@
-from typing import Optional, Union, Tuple
+from typing import Optional, Tuple
 
 from chat.backing_stores import InMemoryChatDataBackingStore
-from chat.base import ActiveChatParticipant, Chat, TOutputSchema, ChatDataBackingStore, ChatRenderer
+from chat.base import ActiveChatParticipant, Chat, ChatDataBackingStore, ChatRenderer
 from chat.conductors import RoundRobinChatConductor
-from chat.parsing_utils import chat_messages_to_pydantic
-from chat.participants import UserChatParticipant
-from chat.renderers import TerminalChatRenderer
+from chat.participants.user import UserChatParticipant
+from chat.renderers import NoChatRenderer
 
 
 def get_response(query: str, answerer: ActiveChatParticipant,
@@ -16,7 +15,7 @@ def get_response(query: str, answerer: ActiveChatParticipant,
 
     chat = Chat(
         backing_store=backing_store or InMemoryChatDataBackingStore(),
-        renderer=renderer or TerminalChatRenderer(),
+        renderer=renderer or NoChatRenderer(),
         initial_participants=participants,
         max_total_messages=2
     )

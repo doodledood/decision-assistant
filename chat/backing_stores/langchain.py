@@ -81,3 +81,8 @@ class LangChainMemoryBasedChatDataBackingStore(InMemoryChatDataBackingStore):
         })
 
         return message
+
+    def clear_messages(self):
+        super().clear_messages()
+
+        self.memory.clear()

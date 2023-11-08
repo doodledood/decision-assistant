@@ -11,10 +11,11 @@ import pydantic.v1 as pydantic_v1
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
 from chat.conductors import RoundRobinChatConductor
-from chat.participants import LangChainBasedAIChatParticipant, UserChatParticipant
 from langchain.chat_models import ChatOpenAI
 from dotenv import load_dotenv
 
+from chat.participants.langchain import LangChainBasedAIChatParticipant
+from chat.participants.user import UserChatParticipant
 from chat.renderers import TerminalChatRenderer
 from chat.web_research import WebSearch
 from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
