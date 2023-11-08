@@ -162,7 +162,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             Section(name='Input', list=[
                 'Goal for the conversation.',
                 'Previous messages from the conversation.',
-                'Speaker interaction schema.'
+                'Current speaker interaction schema.',
+                'Current termination condition'
             ]),
             Section(name='Output',
                     text='The output can be compressed, as it will not be used by a human, but by an AI. It should '
