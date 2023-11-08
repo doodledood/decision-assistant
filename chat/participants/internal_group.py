@@ -13,17 +13,25 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
     spinner: Optional[Halo] = None
 
     def __init__(self,
-                 name: str,
-                 role: str,
+                 group_name: str,
                  chat: Chat,
                  chat_conductor: ChatConductor,
                  spinner: Optional[Halo] = None,
                  **kwargs):
-        super().__init__(name=name, role=role, **kwargs)
-
         self.inner_chat = chat
         self.inner_chat_conductor = chat_conductor
         self.spinner = spinner
+
+        active_participants = self.inner_chat.get_active_participants()
+
+        name, role = group_name, group_name
+        if len(active_participants) > 0:
+            leader = active_participants[0]
+
+            role = f'{group_name}\'s {leader.role}'
+            name = leader.name
+
+        super().__init__(name=name, role=role, **kwargs)
 
     def respond_to_chat(self, chat: 'Chat') -> str:
         # Make sure the inner chat is empty
@@ -41,10 +49,10 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
         leader = self.inner_chat.get_active_participants()[0]
 
         request_for_group, _ = get_response(
-            query='Please translate the request for yourself in the external conversation into a succinct request for '
-                  'your internal group (as their team leader). This is the external conversation:'
-                  f'\n```{conversation_str}```\n\nThe group should understand exactly what to discuss and what to '
-                  'decide on based on this.',
+            query='Please translate the request for yourself in the external conversation into a collaboration '
+                  'request for your internal group. This is the external conversation:'
+                  f'\n```{conversation_str}```\n\nThe group should understand exactly what to discuss, what to '
+                  'decide on, and how to respond back based on this. ',
             answerer=leader)
 
         group_response = self.inner_chat_conductor.initiate_chat_with_result(
@@ -68,11 +76,12 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
                 Section(name='Internal Group Conversation',
                         text=group_response_conversation_str),
                 Section(name='Task',
-                        text='You are a part of the original conversation. You (the group\'s leader) and your group '
-                             'have collaborated on a response for the EXTERNAL CONVERSATION. Please transform the '
-                             'INTERNAL GROUP CONVERSATION into a PROPER response for this conversation. '
-                             'The response you give will be the response you will give to the external conversation, '
-                             'verbatim: it has to fit the context of the external conversation.')
+                        text='You are a part of the EXTERNAL CONVERSATION and need to respond back. '
+                             'You and your group have collaborated on a response back for the EXTERNAL CONVERSATION. '
+                             'Please transform the INTERNAL GROUP CONVERSATION into a proper,'
+                             'in-context response back (in your name) for the EXTERNAL CONVERSATION; it should be '
+                             'mainly based on the conclusion of the internal conversation. Your response'
+                             'will be sent to the EXTERNAL CONVERSATION verbatim.')
             ])), answerer=leader)
 
         return leader_response_back

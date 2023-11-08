@@ -20,8 +20,7 @@ if __name__ == '__main__':
 
     spinner = Halo(spinner='dots')
     comedy_team = InternalGroupBasedChatParticipant(
-        name='Bob',
-        role='Comedy Team\'s Chief Comedian',
+        group_name='Comedy Team',
         chat=Chat(
             backing_store=InMemoryChatDataBackingStore(),
             renderer=TerminalChatRenderer(),
