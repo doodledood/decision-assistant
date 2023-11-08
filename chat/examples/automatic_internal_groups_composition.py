@@ -21,10 +21,10 @@ if __name__ == '__main__':
     spinner = Halo(spinner='dots')
     comedy_team = InternalGroupBasedChatParticipant(
         group_name='Financial Team',
+        mission='Ensure the user\'s financial strategy maximizes wealth over the long term without too much risk.',
         chat=Chat(
             backing_store=InMemoryChatDataBackingStore(),
-            renderer=TerminalChatRenderer(),
-            goal='Ensure the user\'s financial strategy maximizes wealth over the long term without too much risk.',
+            renderer=TerminalChatRenderer()
         ),
         chat_conductor=LangChainBasedAIChatConductor(
             chat_model=chat_model,

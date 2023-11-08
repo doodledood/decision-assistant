@@ -21,6 +21,7 @@ if __name__ == '__main__':
     spinner = Halo(spinner='dots')
     comedy_team = InternalGroupBasedChatParticipant(
         group_name='Comedy Team',
+        mission='Collaborate on funny humour-filled responses based on the original request for the user',
         chat=Chat(
             backing_store=InMemoryChatDataBackingStore(),
             renderer=TerminalChatRenderer(),
@@ -39,8 +40,7 @@ if __name__ == '__main__':
                                      'funny (yet realistic) response to the user. Short responses are preferred',
                     chat_model=chat_model, spinner=spinner),
 
-            ],
-            goal='Collaborate on funny humour-filled responses based on the original request for the user'
+            ]
         ),
         chat_conductor=LangChainBasedAIChatConductor(
             chat_model=chat_model,

@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 
 from halo import Halo
 from langchain.chat_models.base import BaseChatModel
@@ -6,10 +6,14 @@ from langchain.schema import SystemMessage, HumanMessage, BaseMessage
 from langchain.tools import BaseTool
 
 from chat.ai_utils import execute_chat_model_messages
+from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition, ChatConductor
 from chat.composition_generators import ManageParticipantsOutputSchema
+from chat.conductors import LangChainBasedAIChatConductor
 from chat.parsing_utils import string_output_to_pydantic
+from chat.participants.internal_group import InternalGroupBasedChatParticipant
 from chat.participants.langchain import LangChainBasedAIChatParticipant
+from chat.renderers import TerminalChatRenderer
 from chat.structured_string import StructuredString, Section
 
 
@@ -35,7 +39,15 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
     def generate_composition_for_chat(self,
                                       chat: Chat,
                                       participants_interaction_schema: Optional[str] = None,
-                                      termination_condition: Optional[str] = None) -> GeneratedChatComposition:
+                                      termination_condition: Optional[str] = None,
+                                      create_internal_chat: Optional[
+                                          Callable[[], Chat]] = None) -> GeneratedChatComposition:
+        if create_internal_chat is None:
+            create_internal_chat = lambda: Chat(
+                backing_store=InMemoryChatDataBackingStore(),
+                renderer=TerminalChatRenderer()
+            )
+
         if self.spinner is not None:
             self.spinner.start(text='The Chat Composition Generator is creating a new chat composition...')
 
@@ -85,16 +97,38 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         participants = [p for p in chat.get_active_participants() if p.name not in output.participants_to_remove]
 
         for participant in output.participants_to_add:
-            participants.append(LangChainBasedAIChatParticipant(
-                name=participant.name,
-                role=participant.role,
-                personal_mission=participant.personal_mission,
-                symbol=participant.symbol,
-                chat_model=self.chat_model,
-                tools=self.tools,
-                spinner=self.spinner,
-                chat_model_args=self.chat_model_args
-            ))
+            if participant.team is None:
+                chat_participant = LangChainBasedAIChatParticipant(
+                    name=participant.name,
+                    role=participant.role,
+                    personal_mission=participant.mission,
+                    symbol=participant.symbol,
+                    chat_model=self.chat_model,
+                    tools=self.tools,
+                    spinner=self.spinner,
+                    chat_model_args=self.chat_model_args
+                )
+            else:
+                chat_participant = InternalGroupBasedChatParticipant(
+                    group_name=participant.name,
+                    mission=participant.mission,
+                    chat=create_internal_chat(),
+                    chat_conductor=LangChainBasedAIChatConductor(
+                        chat_model=self.chat_model,
+                        chat_model_args=self.chat_model_args,
+                        spinner=self.spinner,
+                        composition_generator=LangChainBasedAIChatCompositionGenerator(
+                            chat_model=self.chat_model,
+                            tools=self.tools,
+                            chat_model_args=self.chat_model_args,
+                            spinner=self.spinner,
+                            n_output_parsing_tries=self.n_output_parsing_tries
+                        )
+                    ),
+                    spinner=self.spinner
+                )
+
+            participants.append(chat_participant)
 
         return GeneratedChatComposition(
             participants=participants,
@@ -132,11 +166,31 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                 'You may not necessarily have the option to change this composition later, so make sure you summon '
                 'the right participants.',
                 'Roles should be succinct titles like "Writer", "Developer", etc.'
+            ], sub_sections=[
+                Section(name='Team-based Participants', list=[
+                    'For very difficult tasks, you may need to summon a team of participants to work together to '
+                    'achieve the goal.',
+                    'You can summon a team the same way you do individual participants but include a team when '
+                    'describing them.',
+                    'This team attribute will be used to summon an entire group of internal participants that will '
+                    'make up the team. Do not worry about the team\'s composition at this point.',
+                    'By specifying a team parameter, you are saying that the participant is the front face of the '
+                    'team and their representative in the chat. If you do not specify a team, the participant will '
+                    'be a solo specialist participant.',
+                    'When summoning a team, role is not important, you can just leave that blank or use the name of '
+                    'the team as the role. Assume an entire sub-team will be in place of a participant and will have '
+                    'their own separate group chat whenever they need to respond.'
+                ])
             ]),
             Section(name='Removing Participants', list=[
                 'Remove participants only if they cannot contribute to the goal or fit into the interaction schema.',
                 'Ignore past performance. Focus on the participant\'s potential contribution to the goal and their '
                 'fit into the interaction schema.'
+            ]),
+            Section(name='Order of Participants', list=[
+                'The order of participants is important. It should be the order in which they should be summoned.',
+                'The first participant will be regarded to as the leader of the group at times, so make sure to '
+                'choose the right one to put first.',
             ]),
             Section(name='Updating The Speaker Interaction Schema',
                     list=[

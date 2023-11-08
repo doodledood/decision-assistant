@@ -10,16 +10,19 @@ from chat.use_cases.request_response import get_response
 class InternalGroupBasedChatParticipant(ActiveChatParticipant):
     inner_chat_conductor: ChatConductor
     inner_chat: Chat
+    mission: str
     spinner: Optional[Halo] = None
 
     def __init__(self,
                  group_name: str,
                  chat: Chat,
+                 mission: str,
                  chat_conductor: ChatConductor,
                  spinner: Optional[Halo] = None,
                  **kwargs):
         self.inner_chat = chat
         self.inner_chat_conductor = chat_conductor
+        self.mission = mission
         self.spinner = spinner
 
         active_participants = self.inner_chat.get_active_participants()
@@ -36,6 +39,7 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
     def respond_to_chat(self, chat: 'Chat') -> str:
         # Make sure the inner chat is empty
         self.inner_chat.clear_messages()
+        self.inner_chat.goal = self.mission
 
         prev_spinner_text = None
         if self.spinner is not None:
