@@ -1,13 +1,16 @@
 import os
+from typing import Optional
 
+import docker
 from docker.errors import ContainerError
 
 from .base import CodeExecutor
 
 
 class DockerCodeExecutor(CodeExecutor):
-    def __init__(self, client, image_tag='python-executor:latest', base_image='python:3.11-slim'):
-        self.client = client
+    def __init__(self, client: Optional[docker.DockerClient] = None, image_tag: str = 'python-executor:latest',
+                 base_image: str = 'python:3.11-slim'):
+        self.client = client or docker.from_env()
         self.image_tag = image_tag
         self.base_image = base_image
         self.previously_built_image = None
