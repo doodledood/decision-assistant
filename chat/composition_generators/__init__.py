@@ -5,8 +5,9 @@ from pydantic import BaseModel, Field
 
 class ParticipantToAddSchema(BaseModel):
     name: str = Field(description='Name of the participant to add.')
-    role: str = Field(description='Role of the participant to add.')
-    personal_mission: str = Field(description='Personal mission of the participant to add.')
+    role: str = Field(description='Role of the participant to add. Title like "CEO" or "CTO", for example')
+    personal_mission: str = Field(description='Personal mission of the participant to add. Should be a detailed '
+                                              'mission statement.')
     symbol: str = Field(description='A unicode symbol of the participant to add (for presentation in chat).')
 
 
