@@ -25,9 +25,13 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
         self.mission = mission
         self.spinner = spinner
 
+        # Make sure the inner chat is aligned
+        self.inner_chat.name = group_name
+        self.inner_chat.goal = self.mission
+
         super().__init__(name=group_name, **kwargs)
 
-    def initialize_sub_chat(self):
+    def initialize(self):
         # Make sure the chat & conductor are initialized, as it may be a dynamic chat with
         # no participants yet.
         self.inner_chat_conductor.initialize_chat(chat=self.inner_chat)
@@ -35,7 +39,6 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
     def respond_to_chat(self, chat: 'Chat') -> str:
         # Make sure the inner chat is empty
         self.inner_chat.clear_messages()
-        self.inner_chat.goal = self.mission
 
         prev_spinner_text = None
         if self.spinner is not None:

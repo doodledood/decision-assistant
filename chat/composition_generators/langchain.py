@@ -152,7 +152,6 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                     ),
                     spinner=self.spinner
                 )
-                chat_participant.initialize_sub_chat()
 
             participants.append(chat_participant)
 
@@ -192,14 +191,14 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                     text='Evaluate the chat conversation based on the INPUT. '
                          'Make decisions about adding or removing participants based on their potential contribution '
                          'towards achieving the goal. Update the interaction schema and the termination condition '
-                         'to reflect changes in participants.'),
+                         'to reflect changes in participants and the goal.'),
             Section(name='Process', list=[
                 'Think about the ideal composition of participants that can contribute to the goal in a step-by-step '
                 'manner by looking at all the inputs.',
                 'Assess if the current participants are sufficient for ideally contributing to the goal.',
-                'If insufficient, summon additional participants as needed.',
+                'If insufficient, summon additional participants (or teams) as needed.',
                 'If some participants are unnecessary, remove them.',
-                'Update the interaction schema to accommodate changes in participants.'
+                'Update the interaction schema and termination condition to accommodate changes in participants.',
             ], list_item_prefix=None),
             Section(name='Participants Composition', sub_sections=[
                 Section(name='Adding Participants', list=adding_participants, sub_sections=[
@@ -289,7 +288,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             Section(name='Current Termination Condition',
                     text=termination_condition or 'Not provided. Use your best judgement.'),
             Section(name='Composition Suggestion',
-                    text=composition_suggestion or 'Not provided. Use your best judgement.'),
+                    text=composition_suggestion or 'Not provided. Use the goal and other inputs to come up with a '
+                                                   'good composition.'),
             Section(name='Chat Messages',
                     text='No messages yet.' if len(messages_list) == 0 else None,
                     list=messages_list if len(messages_list) > 0 else []

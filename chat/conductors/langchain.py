@@ -144,6 +144,8 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
             self.composition_initialized = True
 
+        super().initialize_chat(chat=chat, **kwargs)
+
     def select_next_speaker(self, chat: Chat) -> Optional[ActiveChatParticipant]:
         participants = chat.get_active_participants()
         if len(participants) <= 1:

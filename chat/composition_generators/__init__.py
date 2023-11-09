@@ -11,7 +11,8 @@ class IndividualParticipantToAddSchema(BaseModel):
     role: str = Field(description='Role of the participant to add. Title like "CEO" or "CTO", for example.')
     mission: str = Field(description='Personal mission of the participant to add. Should be a detailed '
                                      'mission statement.')
-    symbol: str = Field(description='A unicode symbol of the participant to add (for presentation in chat).')
+    symbol: str = Field(description='A unicode symbol of the participant to add (for presentation in chat). This '
+                                    'needs to reflect the role.')
 
     def __str__(self):
         return f'{self.symbol} {self.name} ({self.role})'

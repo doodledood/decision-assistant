@@ -31,6 +31,9 @@ class ChatParticipant(abc.ABC):
     def on_participant_left_chat(self, chat: 'Chat', participant: 'ChatParticipant'):
         pass
 
+    def initialize(self):
+        pass
+
     def __str__(self):
         return self.name
 
@@ -82,7 +85,12 @@ class ChatConductor(abc.ABC):
         return last_message.content
 
     def initialize_chat(self, chat: 'Chat', **kwargs):
-        pass
+        # Make sure all participants are initialized.
+        for participant in chat.get_active_participants():
+            participant.initialize()
+
+        for participant in chat.get_non_active_participants():
+            participant.initialize()
 
     def initiate_chat_with_result(
             self,

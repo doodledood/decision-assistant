@@ -9,13 +9,13 @@ class TerminalChatRenderer(ChatRenderer):
         sender = chat.get_active_participant_by_name(message.sender_name)
         if sender is None:
             symbol = '❓'
+
+            print(f'{symbol} {message.sender_name}: {message.content}')
         else:
             if sender.messages_hidden:
                 return
 
-            symbol = sender.symbol
-
-        if chat.name is None:
-            print(f'{symbol} {message.sender_name}: {message.content}')
-        else:
-            print(f'{chat.name} > {symbol} {message.sender_name}: {message.content}')
+            if chat.name is None:
+                print(f'{str(sender)}: {message.content}')
+            else:
+                print(f'{chat.name} > {str(sender)}: {message.content}')
