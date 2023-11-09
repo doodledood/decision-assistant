@@ -43,6 +43,7 @@ if __name__ == '__main__':
 
     result = chat_conductor.initiate_chat_with_result(
         chat=chat,
+        # Only relevant when passing in a composition generator
         composition_suggestion='DevCompany: Includes a CEO, Product Team, Marketing Team, and a Development '
                                'Department. The Development Department includes a Director, QA Team and Development '
                                'Team.')
