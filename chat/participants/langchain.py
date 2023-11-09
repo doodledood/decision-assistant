@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from halo import Halo
@@ -51,7 +52,11 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         self.personal_mission = personal_mission
 
     def create_system_message(self, chat: 'Chat', relevant_docs: List[Document]):
+        now = datetime.now()
+        pretty_datetime = now.strftime('%m-%d-%Y %H:%M:%S')
+
         base_sections = [
+            Section(name='Current Time', text=pretty_datetime),
             Section(name='Name', text=self.name),
             Section(name='Role', text=self.role),
             Section(name='Personal Mission', text=self.personal_mission),
@@ -90,16 +95,18 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                             'messages sent by all other participants.',
                         ]),
                         Section(name='Previous Messages', list=[
-                            'Messages are prefixed by the sender\'s name (could also be everyone). For context only; '
-                            'it\'s not actually part of the message they sent. Example: "John: Hello, how are you?"',
+                            'Messages are prefixed by a timestamp and the sender\'s name (could also be everyone). ',
+                            'The prefix is for context only; it\'s not actually part of the message they sent. '
+                            'Example: "[TIMESTAMP] John: Hello, how are you?"',
                             'Some messages could have been sent by participants who are no longer a part of this '
                             'conversation. Use their contents for context only; do not talk to them.',
+                            'In your response only include the message without the prefix.'
                         ]),
                         Section(name='Well-Formatted Chat Response Examples', list=[
                             '"Hello, how are you?"'
                         ]),
                         Section(name='Badly-Formatted Chat Response Examples', list=[
-                            '"John: Hello, how are you?"'
+                            '"[TIMESTAMP] John: Hello, how are you?"'
                         ]),
                     ]),
                     *self.other_prompt_sections,
@@ -112,11 +119,13 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
             List[BaseMessage]:
         messages = []
         for message in chat_messages:
+            pretty_datetime = message.timestamp.strftime('%m-%d-%Y %H:%M:%S')
+
             if self.ignore_group_chat_environment:
                 content = \
-                    f'{message.sender_name}: {message.content}'
+                    f'[{pretty_datetime}] {message.sender_name}: {message.content}'
             else:
-                content = message.content
+                content = f'[{pretty_datetime}] {message.content}'
 
             if message.sender_name == self.name:
                 messages.append(AIMessage(content=content))
@@ -171,7 +180,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         )
 
     def __str__(self):
-        return f'{self.name} ({self.role})'
+        return f'{self.symbol} {self.name} ({self.role})'
 
     def detailed_str(self, level: int = 0):
         prefix = '    ' * level

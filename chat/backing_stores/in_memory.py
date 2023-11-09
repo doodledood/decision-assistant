@@ -1,3 +1,4 @@
+import datetime
 from typing import List, Dict, Optional
 
 from chat.base import ChatDataBackingStore, ChatMessage, ChatParticipant, ActiveChatParticipant
@@ -18,13 +19,14 @@ class InMemoryChatDataBackingStore(ChatDataBackingStore):
     def get_messages(self) -> List[ChatMessage]:
         return self.messages
 
-    def add_message(self, sender_name: str, content: str) -> ChatMessage:
+    def add_message(self, sender_name: str, content: str, timestamp: Optional[datetime] = None) -> ChatMessage:
         self.last_message_id = self.last_message_id + 1 if self.last_message_id is not None else 1
 
         message = ChatMessage(
             id=self.last_message_id,
             sender_name=sender_name,
-            content=content
+            content=content,
+            timestamp=timestamp or datetime.datetime.now()
         )
 
         self.messages.append(message)

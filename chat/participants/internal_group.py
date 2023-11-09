@@ -12,16 +12,19 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
     inner_chat: Chat
     mission: str
     spinner: Optional[Halo] = None
+    clear_inner_chat_before_responding: bool = False
 
     def __init__(self,
                  group_name: str,
                  chat: Chat,
                  mission: str,
                  chat_conductor: ChatConductor,
+                 clear_inner_chat_before_responding: bool = False,
                  spinner: Optional[Halo] = None,
                  **kwargs):
         self.inner_chat = chat
         self.inner_chat_conductor = chat_conductor
+        self.clear_inner_chat_before_responding = clear_inner_chat_before_responding
         self.mission = mission
         self.spinner = spinner
 
@@ -37,8 +40,8 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
         self.inner_chat_conductor.initialize_chat(chat=self.inner_chat)
 
     def respond_to_chat(self, chat: 'Chat') -> str:
-        # Make sure the inner chat is empty
-        self.inner_chat.clear_messages()
+        if self.clear_inner_chat_before_responding:
+            self.inner_chat.clear_messages()
 
         prev_spinner_text = None
         if self.spinner is not None:

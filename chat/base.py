@@ -1,8 +1,9 @@
 import abc
 import dataclasses
+from datetime import datetime
 from typing import Optional, List, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from chat.errors import NotEnoughActiveParticipantsInChatError, ChatParticipantNotJoinedToChatError, \
     ChatParticipantAlreadyJoinedToChatError
@@ -68,6 +69,7 @@ class ChatMessage(BaseModel):
     id: int
     sender_name: str
     content: str
+    timestamp: datetime = Field(default_factory=datetime.now)
 
 
 class ChatConductor(abc.ABC):
@@ -162,7 +164,7 @@ class ChatDataBackingStore(abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def add_message(self, sender_name: str, content: str) -> ChatMessage:
+    def add_message(self, sender_name: str, content: str, timestamp: Optional[datetime] = None) -> ChatMessage:
         raise NotImplementedError()
 
     @abc.abstractmethod
