@@ -150,7 +150,10 @@ class LangChainBasedAIChatConductor(ChatConductor):
             return None
 
         if self.spinner is not None:
-            self.spinner.start(text='The Chat Conductor is selecting the next speaker...')
+            if chat.name is None:
+                self.spinner.start(text='The Chat Conductor is selecting the next speaker...')
+            else:
+                self.spinner.start(text=f'The Chat Conductor ({chat.name}) is selecting the next speaker...')
 
         # Ask the AI to select the next speaker.
         messages = [
@@ -172,7 +175,13 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
         if next_speaker_name == 'TERMINATE':
             if self.spinner is not None:
-                self.spinner.stop_and_persist(symbol='👥', text='The Chat Conductor has decided to terminate the chat.')
+                if chat.name is None:
+                    self.spinner.stop_and_persist(symbol='👥',
+                                                  text='The Chat Conductor has decided to terminate the chat.')
+                else:
+                    self.spinner.stop_and_persist(symbol='👥',
+                                                  text=f'The Chat Conductor ({chat.name}) has decided to terminate the '
+                                                       f'chat.')
 
             return None
 
@@ -181,8 +190,12 @@ class LangChainBasedAIChatConductor(ChatConductor):
             raise ChatParticipantNotJoinedToChatError(next_speaker_name)
 
         if self.spinner is not None:
-            self.spinner.succeed(text=f'The Chat Conductor has selected "{str(next_speaker)}" '
-                                      f'as the next speaker.')
+            if chat.name is None:
+                self.spinner.succeed(text=f'The Chat Conductor has selected "{str(next_speaker)}" '
+                                          f'as the next speaker.')
+            else:
+                self.spinner.succeed(text=f'The Chat Conductor ({chat.name}) has selected "{str(next_speaker)}" '
+                                          f'as the next speaker.')
 
         return next_speaker
 

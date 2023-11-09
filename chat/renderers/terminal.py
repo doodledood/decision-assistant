@@ -15,4 +15,7 @@ class TerminalChatRenderer(ChatRenderer):
 
             symbol = sender.symbol
 
-        print(f'{symbol} {message.sender_name}: {message.content}')
+        if chat.name is None:
+            print(f'{symbol} {message.sender_name}: {message.content}')
+        else:
+            print(f'{chat.name} > {symbol} {message.sender_name}: {message.content}')

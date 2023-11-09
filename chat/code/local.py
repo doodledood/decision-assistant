@@ -1,30 +1,29 @@
-import os
-import subprocess
+import io
+import sys
+import traceback
 
 from .base import CodeExecutor
 
 
 class LocalCodeExecutor(CodeExecutor):
-    def __init__(self, workspace_dir: str):
-        self.workspace_dir = workspace_dir
-
     def execute(self, code: str) -> str:
-        # Save the code to a temporary file in the workspace directory
-        os.makedirs(self.workspace_dir, exist_ok=True)
-        file_path = os.path.join(self.workspace_dir, 'script.py')
+        captured_output = io.StringIO()
+        saved_stdout = sys.stdout
+        sys.stdout = captured_output
 
-        with open(file_path, 'w') as file:
-            file.write(code)
+        local_vars = {}
 
-        # Execute the code and capture the output
-        result = subprocess.run(
-            ['python', file_path],
-            capture_output=True,
-            text=True
-        )
+        try:
+            for line in code.splitlines(keepends=False):
+                if not line:
+                    continue
 
-        # Clean up the temporary file
-        os.remove(file_path)
+                exec(code, None, local_vars)
+        except:
+            return f'Error executing code: {traceback.format_exc()}'
+        finally:
+            sys.stdout = saved_stdout
 
-        # Return the result, including stdout and stderr
-        return result.stdout if result.returncode == 0 else result.stderr
+        res = captured_output.getvalue()
+
+        return res

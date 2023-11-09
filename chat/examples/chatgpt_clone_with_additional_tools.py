@@ -10,6 +10,9 @@ import pydantic.v1 as pydantic_v1
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
+from chat.code import CodeExecutor
+from chat.code.docker import DockerCodeExecutor
+from chat.code.local import LocalCodeExecutor
 from chat.conductors import RoundRobinChatConductor
 from langchain.chat_models import ChatOpenAI
 from dotenv import load_dotenv
@@ -26,11 +29,12 @@ from chat.web_research.web_research import WebResearchTool
 
 class CodeExecutionToolArgs(pydantic_v1.BaseModel):
     python_code: str = pydantic_v1.Field(
-        description='The verbatim python code to execute. Ensure code always ends with `res = ...`, to capture the '
-                    'result of the code.')
+        description='The verbatim python code to execute. Ensure code prints something or else the result will not be '
+                    'captured. You do not have access to any external libraries. Use vanilla python 3 ONLY.')
 
 
 class SimpleCodeExecutionTool(BaseTool):
+    executor: CodeExecutor
     name: str = 'code_executor'
     description: str = ('Use this code executor for any capability you are missing expect for web searching. That '
                         'includes math, time, data analysis, etc. Code will get executed and the result will be '
@@ -50,21 +54,7 @@ class SimpleCodeExecutionTool(BaseTool):
                                           text='Will execute the following code:\n```\n' + python_code + '\n```')
             self.spinner.start(self.progress_text)
 
-        local_vars = {}
-
-        try:
-            for line in python_code.splitlines(keepends=False):
-                if not line:
-                    continue
-
-                exec(python_code, None, local_vars)
-        except:
-            return f'Error executing code: {traceback.format_exc()}'
-
-        if 'res' not in local_vars:
-            return 'Code did not include a `res = ...` statement, unable to read result. Retry again please.'
-
-        res = local_vars['res']
+        res = self.executor.execute(code=python_code)
 
         return res
 
@@ -103,7 +93,7 @@ if __name__ == '__main__':
         name='Assistant',
         chat_model=chat_model,
         tools=[
-            SimpleCodeExecutionTool(spinner=spinner),
+            SimpleCodeExecutionTool(executor=DockerCodeExecutor(spinner=spinner), spinner=spinner),
             WebResearchTool(web_search=web_search, n_results=3, spinner=spinner)
         ],
         spinner=spinner)

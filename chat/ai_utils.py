@@ -47,9 +47,6 @@ def execute_chat_model_messages(
 
                 spinner.start(progress_text)
 
-            # if tool.args_schema is not None and tool.args_schema != str:
-            #     args = json_string_to_pydantic(args, tool.args_schema)
-            #
             args = fix_invalid_json(args)
 
             try:
@@ -62,7 +59,7 @@ def execute_chat_model_messages(
 
             all_messages.append(FunctionMessage(
                 name=function_name,
-                content=str(result) or 'None'
+                content=f'The function execution returned:\n```{str(result).strip()}```' or 'None'
             ))
 
             last_message = chat_model.predict_messages(all_messages, **chat_model_args)

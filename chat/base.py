@@ -220,6 +220,7 @@ class Chat:
     backing_store: ChatDataBackingStore
     renderer: ChatRenderer
     goal: str
+    name: Optional[str] = None
     max_total_messages: Optional[int] = None
     hide_messages: bool = False
 
@@ -228,6 +229,7 @@ class Chat:
             backing_store: ChatDataBackingStore,
             renderer: ChatRenderer,
             initial_participants: Optional[List[ChatParticipant]] = None,
+            name: Optional[str] = None,
             goal: str = 'This is a regular chatroom, the goal is to just have a conversation.',
             max_total_messages: Optional[int] = None,
             hide_messages: bool = False

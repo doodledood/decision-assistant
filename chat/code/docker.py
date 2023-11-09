@@ -1,67 +1,82 @@
 import os
+import tempfile
 from typing import Optional
 
 import docker
 from docker.errors import ContainerError
+from halo import Halo
 
 from .base import CodeExecutor
 
 
 class DockerCodeExecutor(CodeExecutor):
-    def __init__(self, client: Optional[docker.DockerClient] = None, image_tag: str = 'python-executor:latest',
-                 base_image: str = 'python:3.11-slim'):
+    def __init__(self, client: Optional[docker.DockerClient] = None,
+                 image_tag: str = 'python-executor:latest',
+                 base_image: str = 'python:3.11-slim',
+                 spinner: Optional[Halo] = None):
         self.client = client or docker.from_env()
         self.image_tag = image_tag
         self.base_image = base_image
-        self.previously_built_image = None
+        self.spinner = spinner
 
-    def build_image(self):
-        if self.previously_built_image is None:
-            return self.previously_built_image
+    def build_image_with_code(self, python_code: str):
+        spinner_text = None
+        if self.spinner is not None:
+            spinner_text = self.spinner.text
+            self.spinner.start('Building Docker image...')
 
         # Helper function to construct Dockerfile
         dockerfile = f'''
         FROM {self.base_image}
-        WORKDIR /app
+        
+        RUN apt-get update
+        RUN pip install requests --trusted-host pypi.org --trusted-host files.pythonhosted.org
+        
+        COPY script.py /code/script.py
+        
+        WORKDIR /code
         '''
 
         # Create a temporary build directory
-        build_dir = 'tmp_build_dir'
-        os.makedirs(build_dir, exist_ok=True)
-        dockerfile_path = os.path.join(build_dir, 'Dockerfile')
+        with tempfile.TemporaryDirectory() as build_dir:
+            dockerfile_path = os.path.join(build_dir, 'Dockerfile')
 
-        # Write the Dockerfile to the build directory
-        with open(dockerfile_path, 'w') as f:
-            f.write(dockerfile)
+            # Write the Dockerfile to the build directory
+            with open(dockerfile_path, 'w') as f:
+                f.write(dockerfile)
 
-        # Build the image
-        image, build_log = self.client.images.build(path=build_dir, tag=self.image_tag, rm=True)
+            # Write script file
+            with open(os.path.join(build_dir, 'script.py'), 'w') as f:
+                f.write(python_code)
 
-        # Optionally, handle build_log to check for errors or for logging
+            # Build the image
+            image, build_log = self.client.images.build(path=build_dir, tag=self.image_tag, rm=True)
 
-        # Clean up the temporary build directory
-        os.remove(dockerfile_path)
-        os.rmdir(build_dir)
+        if self.spinner is not None:
+            self.spinner.stop_and_persist(symbol='🐳', text='Docker image built.')
 
-        self.previously_built_image = image
+            if spinner_text is not None:
+                self.spinner.start(spinner_text)
 
         return image
 
     def execute(self, code: str) -> str:
-        # Ensure the image is built before execution
-        self.build_image()
+        try:
+            # Ensure the image is built before execution
+            self.build_image_with_code(code)
+        except Exception as e:
+            return f'Failed to build Docker image (did not run code yet): {e}'
 
         # Run the code inside the container
         try:
             container = self.client.containers.run(
                 image=self.image_tag,
-                command=["python", "-c", code],
+                command=["python", "script.py"],
                 remove=True,
                 stdout=True,
                 stderr=True,
                 detach=False
             )
             return container.decode('utf-8')
-
         except ContainerError as e:
             return e.stderr.decode('utf-8')

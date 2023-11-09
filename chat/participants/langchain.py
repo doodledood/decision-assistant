@@ -76,6 +76,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                 sections=[
                     *base_sections,
                     Section(name='Chat', sub_sections=[
+                        Section(name='Name', text=chat.name or 'No name provided. Just a general chat.'),
                         Section(name='Goal', text=chat.goal or 'No explicit chat goal provided.'),
                         Section(name='Participants', text='\n'.join(
                             [f'- {str(p)}{" -> This is you." if p.name == self.name else ""}' \
