@@ -68,4 +68,3 @@ if __name__ == '__main__':
     result = chat_conductor.initiate_chat_with_result(chat=chat)
     print(result)
 
-    chat_conductor.initiate_chat_with_result(chat=chat)
