@@ -7,7 +7,7 @@ from langchain.tools import BaseTool
 
 from chat.ai_utils import execute_chat_model_messages
 from chat.backing_stores import InMemoryChatDataBackingStore
-from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition, ChatConductor
+from chat.base import ChatCompositionGenerator, Chat, GeneratedChatComposition
 from chat.composition_generators import ManageParticipantsOutputSchema
 from chat.conductors import LangChainBasedAIChatConductor
 from chat.parsing_utils import string_output_to_pydantic
@@ -146,14 +146,13 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
         adding_participants = [
             'Add participants based on their potential contribution to the goal.',
-            'Generate a name, role, and personal mission for each new participant such that they can contribute '
-            'to the goal the best they can, each in their complementary own way.',
-            'Always try to add or complete comprehensive teams of competent specialist participants that have '
-            'orthogonal and complementary skills, roles, and missions. You can also add teams instead of individual '
-            'participants for a hierarchical structure when complexity needs to be reduced.',
-            'Adding a team means interacting with their lead participant, who will be the front face of the team (do '
-            'not worry about who that is though; by adding a team you harness the power of the entire team).'
-            'Roles for individuals should be succinct titles like "Writer", "Developer", etc.'
+            'You can either add individual participants or entire teams.'
+            'If you add an individual participant, generate a name, role (succinct title like "Writer", "Developer", '
+            'etc.), and personal mission for each new participant such that they can contribute to the goal the best '
+            'they can, each in their complementary own way.',
+            'If you add a team, generate a name, and a mission for the team, in the same way.',
+            'Always try to add or complete a comprehensive composition of participants that have '
+            'orthogonal and complementary skills, roles, and missions (whether they are teams or individuals).',
             'You may not necessarily have the option to change this composition later, so make sure you summon '
             'the right participants.'
         ]
@@ -184,18 +183,10 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             Section(name='Participants Composition', sub_sections=[
                 Section(name='Adding Participants', list=adding_participants, sub_sections=[
                     Section(name='Team-based Participants', list=[
-                        'For very difficult tasks, you may need to summon a team of participants to work together to '
-                        'achieve the goal.',
-                        'You can summon a team the same way you do individual participants but include a team when '
-                        'describing them.',
-                        'This team attribute will be used to summon an entire group of internal participants that will '
-                        'make up the team. Do not worry about the team\'s composition at this point.',
-                        'By specifying a team parameter, you are saying that the participant is the front face of the '
-                        'team and their representative in the chat. If you do not specify a team, the participant will '
-                        'be a solo specialist participant.',
-                        'When summoning a team, role is not important, you can just leave that blank or use the name of'
-                        'the team as the role. Assume an entire sub-team will be in place of a participant and will '
-                        'have their own separate group chat whenever they need to respond.'
+                        'For very difficult tasks, you may need to summon a team (as a participant) instead of an '
+                        'individual to work together to achieve a sub-goal, similar to actual companies of people.',
+                        'This team will contain a group of internal individual (or even sub-teams) participants. Do '
+                        'not worry about the team\'s composition at this point.'
                     ])
                 ]),
                 Section(name='Removing Participants', list=[
