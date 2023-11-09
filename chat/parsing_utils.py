@@ -38,8 +38,8 @@ def chat_messages_to_pydantic(chat_messages: List[ChatMessage],
                               hide_message: bool = True) -> TOutputSchema:
     text_to_json_ai = LangChainBasedAIChatParticipant(
         chat_model=chat_model,
-        name='Chat Messages to JSON Converter',
-        role='Chat Messages to JSON Converter',
+        name='Jason',
+        role='JSON Converter',
         personal_mission='Your only purpose is to convert the previous chat messages (usually the last one)'
                          'to a valid and logical JSON that follows the JSON SCHEMA provided. Your message should '
                          'include only correct JSON. No fluff.',
