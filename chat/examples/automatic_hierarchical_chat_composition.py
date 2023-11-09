@@ -1,9 +1,14 @@
+from typing import List, Optional
+
 from halo import Halo
 from langchain.cache import SQLiteCache
 from langchain.globals import set_llm_cache
+from langchain.llms.openai import OpenAI
+from langchain.memory import ConversationSummaryBufferMemory
 
 from chat.backing_stores import InMemoryChatDataBackingStore
-from chat.base import Chat
+from chat.backing_stores.langchain import LangChainMemoryBasedChatDataBackingStore
+from chat.base import Chat, ChatDataBackingStore, ChatParticipant
 from chat.composition_generators.langchain import LangChainBasedAIChatCompositionGenerator
 from chat.conductors import LangChainBasedAIChatConductor
 from langchain.chat_models import ChatOpenAI
@@ -22,6 +27,25 @@ if __name__ == '__main__':
         model='gpt-4-1106-preview'
     )
 
+
+    def create_default_backing_store() -> ChatDataBackingStore:
+        try:
+            return LangChainMemoryBasedChatDataBackingStore(
+                memory=ConversationSummaryBufferMemory(
+                    llm=chat_model,
+                    max_token_limit=OpenAI.modelname_to_contextsize(chat_model.model_name)
+                ))
+        except ValueError:
+            return InMemoryChatDataBackingStore()
+
+
+    def create_chat(**kwargs) -> Chat:
+        return Chat(
+            backing_store=create_default_backing_store(),
+            renderer=TerminalChatRenderer(),
+            **kwargs
+        )
+
     spinner = Halo(spinner='dots')
     user = UserChatParticipant(name='User')
     chat_conductor = LangChainBasedAIChatConductor(
@@ -31,11 +55,12 @@ if __name__ == '__main__':
         composition_generator=LangChainBasedAIChatCompositionGenerator(
             chat_model=chat_model,
             spinner=spinner,
+            generate_composition_extra_args=dict(
+                create_internal_chat=create_chat
+            )
         )
     )
-    chat = Chat(
-        backing_store=InMemoryChatDataBackingStore(),
-        renderer=TerminalChatRenderer(),
+    chat = create_chat(
         # Set up a proper goal so the composition generator can use it to generate the composition that will best fit
         goal='The goal is to create the best website for the user.',
         initial_participants=[user],

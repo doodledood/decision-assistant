@@ -46,9 +46,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                                       chat: Chat,
                                       composition_suggestion: Optional[str] = None,
                                       participants_interaction_schema: Optional[str] = None,
-                                      termination_condition: Optional[str] = None,
-                                      create_internal_chat: Optional[
-                                          Callable[[str], Chat]] = None) -> GeneratedChatComposition:
+                                      termination_condition: Optional[str] = None) -> GeneratedChatComposition:
         if composition_suggestion is None:
             composition_suggestion = self.generate_composition_extra_args.get('composition_suggestion', None)
 
@@ -59,13 +57,15 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         if termination_condition is None:
             termination_condition = self.generate_composition_extra_args.get('termination_condition', None)
 
+        create_internal_chat = self.generate_composition_extra_args.get('create_internal_chat', None)
         if create_internal_chat is None:
-            create_internal_chat = lambda name, goal: Chat(
-                name=name,
-                goal=goal,
-                backing_store=InMemoryChatDataBackingStore(),
-                renderer=TerminalChatRenderer()
-            )
+            def create_internal_chat(**kwargs):
+                return Chat(
+                    name=kwargs.get('name', None),
+                    goal=kwargs.get('goal', None),
+                    backing_store=InMemoryChatDataBackingStore(),
+                    renderer=TerminalChatRenderer()
+                )
 
         if self.spinner is not None:
             self.spinner.start(text='The Chat Composition Generator is creating a new chat composition...')
@@ -132,8 +132,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                     group_name=participant.name,
                     mission=participant.mission,
                     chat=create_internal_chat(
-                        participant.name if chat.name is None else f'{chat.name} > {participant.name}',
-                        participant.mission
+                        name=participant.name if chat.name is None else f'{chat.name} > {participant.name}',
+                        goal=participant.mission
                     ),
                     chat_conductor=LangChainBasedAIChatConductor(
                         chat_model=self.chat_model,
