@@ -20,7 +20,7 @@ from chat.structured_string import StructuredString, Section
 class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
-    tools: Optional[List[BaseTool]] = None,
+    generator_tools: Optional[List[BaseTool]] = None,
     spinner: Optional[Halo] = None
     n_output_parsing_tries: int = 3
     prefer_critics: bool = False
@@ -28,7 +28,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
     def __init__(self,
                  chat_model: BaseChatModel,
-                 tools: Optional[List[BaseTool]] = None,
+                 generator_tools: Optional[List[BaseTool]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  n_output_parsing_tries: int = 3,
@@ -36,7 +36,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                  generate_composition_extra_args: Optional[Dict[str, Any]] = None):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
-        self.tools = tools
+        self.generator_tools = generator_tools
         self.spinner = spinner
         self.n_output_parsing_tries = n_output_parsing_tries
         self.prefer_critics = prefer_critics
@@ -127,7 +127,6 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                     personal_mission=participant.mission,
                     symbol=participant.symbol,
                     chat_model=self.chat_model,
-                    tools=self.tools,
                     spinner=self.spinner,
                     chat_model_args=self.chat_model_args
                 )
@@ -145,7 +144,6 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                         spinner=self.spinner,
                         composition_generator=LangChainBasedAIChatCompositionGenerator(
                             chat_model=self.chat_model,
-                            tools=self.tools,
                             chat_model_args=self.chat_model_args,
                             spinner=self.spinner,
                             n_output_parsing_tries=self.n_output_parsing_tries,
@@ -316,7 +314,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         return execute_chat_model_messages(
             messages=messages,
             chat_model=self.chat_model,
-            tools=self.tools,
+            tools=self.generator_tools,
             spinner=self.spinner,
             chat_model_args=self.chat_model_args
         )
