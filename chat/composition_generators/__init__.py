@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class IndividualParticipantToAddSchema(BaseModel):
     type: Literal['individual']
     name: str = Field(
-        description='Name of the participant to add.')
+        description='Name of the participant to add. Be original and select a name that fits the role and mission.')
     role: str = Field(description='Role of the participant to add. Title like "CEO" or "CTO", for example.')
     mission: str = Field(description='Personal mission of the participant to add. Should be a detailed '
                                      'mission statement.')

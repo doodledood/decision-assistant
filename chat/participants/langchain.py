@@ -78,7 +78,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                     Section(name='Chat', sub_sections=[
                         Section(name='Goal', text=chat.goal or 'No explicit chat goal provided.'),
                         Section(name='Participants', text='\n'.join(
-                            [f'- Name: "{p.name}", Role: "{p.role}"{" -> This is you." if p.name == self.name else ""}' \
+                            [f'- {str(p)}{" -> This is you." if p.name == self.name else ""}' \
                              for p in active_participants])),
                         Section(name='Rules', list=[
                             'You have to respond in your own name as your defined role and personal mission.',

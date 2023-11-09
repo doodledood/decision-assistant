@@ -90,8 +90,8 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
         active_participants = self.inner_chat.get_active_participants()
 
         if len(active_participants) > 0:
-            leader = active_participants[0]
+            names = [str(p) for p in active_participants]
 
-            return f'{leader.name} ({self.name})'
+            return f'{self.name} (Includes: {", ".join(names)})'
 
         return self.name
