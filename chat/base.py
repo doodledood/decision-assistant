@@ -307,4 +307,4 @@ class Chat:
 
     @property
     def active_participants_str(self):
-        return '\n'.join([str(participant) for participant in self.get_active_participants()])
+        return '\n'.join([participant.detailed_str() for participant in self.get_active_participants()])
