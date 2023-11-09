@@ -35,7 +35,7 @@ class ChatParticipant(abc.ABC):
         return self.name
 
     def detailed_str(self, level: int = 0):
-        prefix = '  ' * level
+        prefix = '    ' * level
         return f'{prefix}Name: {self.name}'
 
 
@@ -57,8 +57,8 @@ class ActiveChatParticipant(ChatParticipant):
         return f'{self.symbol} {self.name}'
 
     def detailed_str(self, level: int = 0):
-        prefix = '  ' * level
-        return f'{prefix}Name: "{self.name}", Symbol: "{self.symbol}"'
+        prefix = '    ' * level
+        return f'{prefix}- {self.name}\n{prefix}  Symbol: {self.symbol}'
 
 
 class ChatMessage(BaseModel):
@@ -310,4 +310,4 @@ class Chat:
 
     @property
     def active_participants_str(self):
-        return '\n'.join([participant.detailed_str() for participant in self.get_active_participants()])
+        return '\n\n'.join([participant.detailed_str() for participant in self.get_active_participants()])

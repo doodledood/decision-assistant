@@ -174,6 +174,6 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         return f'{self.name} ({self.role})'
 
     def detailed_str(self, level: int = 0):
-        prefix = '  ' * level
-        return (f'{prefix}Name: "{self.name}", Role: "{self.role}", Symbol: "{self.symbol}", Personal Mission: '
-                f'"{self.personal_mission}"')
+        prefix = '    ' * level
+        return (f'{prefix}- Name: {self.name}\n{prefix}  Role: {self.role}\n{prefix}  Symbol: {self.symbol}\n'
+                f'{prefix}  Personal Mission: "{self.personal_mission}"')

@@ -41,10 +41,13 @@ if __name__ == '__main__':
         initial_participants=[user],
     )
 
-    result = chat_conductor.initiate_chat_with_result(
+    chat_conductor.initialize_chat(
         chat=chat,
         # Only relevant when passing in a composition generator
         composition_suggestion='DevCompany: Includes a CEO, Product Team, Marketing Team, and a Development '
                                'Department. The Development Department includes a Director, QA Team and Development '
                                'Team.')
+    print(f'\nGenerated composition:\n=================\n{chat.active_participants_str}\n=================\n\n')
+
+    result = chat_conductor.initiate_chat_with_result(chat=chat)
     print(result)

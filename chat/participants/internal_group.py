@@ -97,8 +97,9 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
         return self.name
 
     def detailed_str(self, level: int = 0):
-        prefix = '  ' * level
+        prefix = '    ' * level
 
         participants = self.inner_chat.get_active_participants()
-        members_str = '\n'.join([p.detailed_str(level=level + 1) for p in participants])
-        return f'{prefix}Name: "{self.name}", Symbol: "{self.symbol}", Mission: "{self.mission}"\n{members_str}'
+        members_str = '\n\n'.join([p.detailed_str(level=level + 1) for p in participants])
+        return (f'{prefix}- Name: {self.name}\n{prefix}  Symbol: {self.symbol}\n{prefix}  Mission: "{self.mission}"'
+                f'\n{members_str}')
