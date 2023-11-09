@@ -145,7 +145,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
 
     def respond_to_chat(self, chat: Chat) -> str:
         if self.spinner is not None:
-            self.spinner.start(text=f'{self.name} is thinking...')
+            self.spinner.start(text=f'{str(self)} is thinking...')
 
         chat_messages = chat.get_messages()
 
