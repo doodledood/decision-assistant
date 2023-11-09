@@ -12,6 +12,7 @@ from chat.structured_string import Section, StructuredString
 
 class LangChainBasedAIChatParticipant(ActiveChatParticipant):
     personal_mission: str
+    role: str
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
     other_prompt_sections: List[Section]
@@ -37,8 +38,9 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                  ignore_group_chat_environment: bool = False,
                  **kwargs
                  ):
-        super().__init__(name=name, symbol=symbol, role=role, **kwargs)
+        super().__init__(name=name, symbol=symbol, **kwargs)
 
+        self.role = role
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.other_prompt_sections = other_prompt_sections or []
@@ -166,3 +168,6 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
             spinner=self.spinner,
             chat_model_args=self.chat_model_args
         )
+
+    def __str__(self):
+        return f'{self.name} ({self.role})'

@@ -13,9 +13,8 @@ class JSONOutputParserChatParticipant(ActiveChatParticipant):
     def __init__(self,
                  output_schema: Type[TOutputSchema],
                  name: str = 'JSON Output Parser',
-                 role: str = 'JSON Output Parser'
                  ):
-        super().__init__(name=name, role=role)
+        super().__init__(name=name)
 
         self.output_schema = output_schema
 

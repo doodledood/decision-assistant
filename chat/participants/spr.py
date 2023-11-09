@@ -7,12 +7,10 @@ from chat.structured_string import Section
 class SPRWriterChatParticipant(LangChainBasedAIChatParticipant):
     def __init__(self,
                  name: str = 'SPR Writer',
-                 role: str = 'SPR Writer',
                  other_prompt_sections: Optional[List[Section]] = None,
                  **kwargs):
         super().__init__(
             name=name,
-            role=role,
             personal_mission='You are a Sparse Priming Representation (SPR) writer. An SPR is a particular kind of '
                              'use of language for advanced NLP, NLU, and NLG tasks, particularly useful for the '
                              'latest generation of Large Language Models (LLMs). You will be given information by the '

@@ -37,10 +37,13 @@ if __name__ == '__main__':
         backing_store=InMemoryChatDataBackingStore(),
         renderer=TerminalChatRenderer(),
         # Set up a proper goal so the composition generator can use it to generate the composition that will best fit
-        goal='Come up with a plan for the user to invest their money. The goal is to maximize wealth over the '
-             'long-term, while minimizing risk.',
+        goal='The goal is to create the best website for the user.',
         initial_participants=[user],
     )
 
-    result = chat_conductor.initiate_chat_with_result(chat=chat)
+    result = chat_conductor.initiate_chat_with_result(
+        chat=chat,
+        composition_suggestion='DevCompany: Includes a CEO, Product Team, Marketing Team, and a Development '
+                               'Department. The Development Department includes a Director, QA Team and Development '
+                               'Team.')
     print(result)

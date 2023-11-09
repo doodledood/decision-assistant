@@ -102,7 +102,7 @@ class LangChainBasedAIChatConductor(ChatConductor):
         prompt = StructuredString(sections=[
             Section(name='Chat Goal', text=chat.goal or 'No explicit chat goal provided.'),
             Section(name='Currently Active Participants',
-                    list=[f'{participant.name} ({participant.role})' for participant in participants]),
+                    list=[f'{str(participant)}' for participant in participants]),
             Section(name='Speaker Interaction Schema',
                     text=self.participants_interaction_schema or 'Not provided. Use your best judgement.'),
             Section(name='Termination Condition', text=self.termination_condition),
@@ -114,11 +114,13 @@ class LangChainBasedAIChatConductor(ChatConductor):
 
         return str(prompt)
 
-    def initialize_chat(self, chat: 'Chat'):
+    def initialize_chat(self, chat: 'Chat', **kwargs):
         # If a composition generator is provided, generate a new composition for the chat before starting.
         if self.composition_generator is not None and not self.composition_initialized:
+            composition_suggestion = kwargs.get('composition_suggestion', None)
             new_composition = self.composition_generator.generate_composition_for_chat(
                 chat=chat,
+                composition_suggestion=composition_suggestion,
                 participants_interaction_schema=self.participants_interaction_schema,
                 termination_condition=self.termination_condition
             )
@@ -141,20 +143,6 @@ class LangChainBasedAIChatConductor(ChatConductor):
             self.termination_condition = new_composition.termination_condition
 
             self.composition_initialized = True
-
-    def initiate_chat_with_result(
-            self,
-            chat: 'Chat',
-            initial_message: Optional[str] = None,
-            from_participant: Optional[ChatParticipant] = None
-    ) -> str:
-        self.initialize_chat(chat=chat)
-
-        return super().initiate_chat_with_result(
-            chat=chat,
-            initial_message=initial_message,
-            from_participant=from_participant
-        )
 
     def select_next_speaker(self, chat: Chat) -> Optional[ActiveChatParticipant]:
         participants = chat.get_active_participants()
@@ -193,7 +181,8 @@ class LangChainBasedAIChatConductor(ChatConductor):
             raise ChatParticipantNotJoinedToChatError(next_speaker_name)
 
         if self.spinner is not None:
-            self.spinner.succeed(text=f'The Chat Conductor has selected "{next_speaker_name}" as the next speaker.')
+            self.spinner.succeed(text=f'The Chat Conductor has selected "{str(next_speaker)}" '
+                                      f'as the next speaker.')
 
         return next_speaker
 

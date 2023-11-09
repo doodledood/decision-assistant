@@ -19,6 +19,9 @@ class ChatParticipant(abc.ABC):
     def on_new_chat_message(self, chat: 'Chat', message: 'ChatMessage'):
         pass
 
+    def on_chat_started(self, chat: 'Chat'):
+        pass
+
     def on_chat_ended(self, chat: 'Chat'):
         pass
 
@@ -32,19 +35,20 @@ class ChatParticipant(abc.ABC):
 class ActiveChatParticipant(ChatParticipant):
     name: str
     symbol: str
-    role: str
     messages_hidden: bool
 
-    def __init__(self, name: str, symbol: str = '👤', role: str = 'Chat Participant', messages_hidden: bool = False):
+    def __init__(self, name: str, symbol: str = '👤', messages_hidden: bool = False):
         super().__init__(name=name)
 
         self.symbol = symbol
-        self.role = role
         self.messages_hidden = messages_hidden
 
     @abc.abstractmethod
     def respond_to_chat(self, chat: 'Chat') -> str:
         raise NotImplementedError()
+
+    def __str__(self):
+        return self.name
 
 
 class ChatMessage(BaseModel):
@@ -67,18 +71,23 @@ class ChatConductor(abc.ABC):
 
         return last_message.content
 
-    def initialize_chat(self, chat: 'Chat'):
+    def initialize_chat(self, chat: 'Chat', **kwargs):
         pass
 
     def initiate_chat_with_result(
             self,
             chat: 'Chat',
             initial_message: Optional[str] = None,
-            from_participant: Optional[ChatParticipant] = None
+            from_participant: Optional[ChatParticipant] = None,
+            **kwargs
     ) -> str:
+        self.initialize_chat(chat=chat, **kwargs)
+
         active_participants = chat.get_active_participants()
         if len(active_participants) <= 1:
             raise NotEnoughActiveParticipantsInChatError(len(active_participants))
+
+        self.start_chat(chat=chat)
 
         if initial_message is not None:
             if from_participant is None:
@@ -108,9 +117,25 @@ class ChatConductor(abc.ABC):
 
             next_speaker = self.select_next_speaker(chat=chat)
 
-        chat.end_chat()
+        self.end_chat(chat=chat)
 
         return self.get_chat_result(chat=chat)
+
+    def start_chat(self, chat: 'Chat'):
+        active_participants = chat.backing_store.get_active_participants()
+        non_active_participants = chat.backing_store.get_non_active_participants()
+        all_participants = active_participants + non_active_participants
+
+        for participant in all_participants:
+            participant.on_chat_started(chat=chat)
+
+    def end_chat(self, chat: 'Chat'):
+        active_participants = chat.backing_store.get_active_participants()
+        non_active_participants = chat.backing_store.get_non_active_participants()
+        all_participants = active_participants + non_active_participants
+
+        for participant in all_participants:
+            participant.on_chat_ended(chat=chat)
 
 
 class ChatDataBackingStore(abc.ABC):
@@ -175,6 +200,7 @@ class ChatCompositionGenerator(abc.ABC):
     @abc.abstractmethod
     def generate_composition_for_chat(self,
                                       chat: 'Chat',
+                                      composition_suggestion: Optional[str] = None,
                                       participants_interaction_schema: Optional[str] = None,
                                       termination_condition: Optional[str] = None) -> GeneratedChatComposition:
         raise NotImplementedError()
@@ -268,11 +294,3 @@ class Chat:
 
     def has_non_active_participant_with_name(self, participant_name: str) -> bool:
         return self.backing_store.has_non_active_participant_with_name(participant_name=participant_name)
-
-    def end_chat(self):
-        active_participants = self.backing_store.get_active_participants()
-        non_active_participants = self.backing_store.get_non_active_participants()
-        all_participants = active_participants + non_active_participants
-
-        for participant in all_participants:
-            participant.on_chat_ended(chat=self)

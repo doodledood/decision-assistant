@@ -1,4 +1,6 @@
 from halo import Halo
+from langchain.cache import SQLiteCache
+from langchain.globals import set_llm_cache
 
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.base import Chat
@@ -13,6 +15,9 @@ from chat.renderers import TerminalChatRenderer
 
 if __name__ == '__main__':
     load_dotenv()
+
+    set_llm_cache(SQLiteCache(database_path='../../output/llm_cache.db'))
+
     chat_model = ChatOpenAI(
         temperature=0.0,
         model='gpt-4-1106-preview'

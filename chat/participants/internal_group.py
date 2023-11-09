@@ -25,25 +25,17 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
         self.mission = mission
         self.spinner = spinner
 
-        active_participants = self.inner_chat.get_active_participants()
+        super().__init__(name=group_name, **kwargs)
 
-        name, role = group_name, group_name
-        if len(active_participants) > 0:
-            leader = active_participants[0]
-
-            role = f'{group_name}\'s {leader.role}'
-            name = leader.name
-
-        super().__init__(name=name, role=role, **kwargs)
+    def on_chat_started(self, chat: 'Chat'):
+        # Make sure the chat & conductor are initialized before starting the chat, as it may be a dynamic chat with
+        # no participants yet.
+        self.inner_chat_conductor.initialize_chat(chat=self.inner_chat)
 
     def respond_to_chat(self, chat: 'Chat') -> str:
         # Make sure the inner chat is empty
         self.inner_chat.clear_messages()
         self.inner_chat.goal = self.mission
-
-        # Make sure the chat & conductor are initialized before starting the chat, as it may be a dynamic chat with
-        # no participants yet.
-        self.inner_chat_conductor.initialize_chat(chat=self.inner_chat)
 
         prev_spinner_text = None
         if self.spinner is not None:
@@ -93,3 +85,13 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
             ])), answerer=leader)
 
         return leader_response_back
+
+    def __str__(self):
+        active_participants = self.inner_chat.get_active_participants()
+
+        if len(active_participants) > 0:
+            leader = active_participants[0]
+
+            return f'{leader.name} ({self.name})'
+
+        return self.name
