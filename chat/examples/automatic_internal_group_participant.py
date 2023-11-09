@@ -51,6 +51,9 @@ if __name__ == '__main__':
     )
 
     chat_conductor = LangChainBasedAIChatConductor(
+        participants_interaction_schema='The user should take the lead and go back and forth with the financial team,'
+                                        ' collaborating on the financial strategy. The user should be the one to '
+                                        'initiate the chat.',
         chat_model=chat_model,
         spinner=spinner
     )
