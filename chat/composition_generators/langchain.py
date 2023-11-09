@@ -24,6 +24,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
     spinner: Optional[Halo] = None
     n_output_parsing_tries: int = 3
     prefer_critics: bool = False
+    generate_composition_extra_args: Optional[Dict[str, Any]] = None
 
     def __init__(self,
                  chat_model: BaseChatModel,
@@ -31,13 +32,15 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  n_output_parsing_tries: int = 3,
-                 prefer_critics: bool = False):
+                 prefer_critics: bool = False,
+                 generate_composition_extra_args: Optional[Dict[str, Any]] = None):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.tools = tools
         self.spinner = spinner
         self.n_output_parsing_tries = n_output_parsing_tries
         self.prefer_critics = prefer_critics
+        self.generate_composition_extra_args = generate_composition_extra_args or {}
 
     def generate_composition_for_chat(self,
                                       chat: Chat,
@@ -46,6 +49,16 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                                       termination_condition: Optional[str] = None,
                                       create_internal_chat: Optional[
                                           Callable[[str], Chat]] = None) -> GeneratedChatComposition:
+        if composition_suggestion is None:
+            composition_suggestion = self.generate_composition_extra_args.get('composition_suggestion', None)
+
+        if participants_interaction_schema is None:
+            participants_interaction_schema = self.generate_composition_extra_args.get(
+                'participants_interaction_schema', None)
+
+        if termination_condition is None:
+            termination_condition = self.generate_composition_extra_args.get('termination_condition', None)
+
         if create_internal_chat is None:
             create_internal_chat = lambda goal: Chat(
                 goal=goal,
@@ -127,7 +140,10 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                             tools=self.tools,
                             chat_model_args=self.chat_model_args,
                             spinner=self.spinner,
-                            n_output_parsing_tries=self.n_output_parsing_tries
+                            n_output_parsing_tries=self.n_output_parsing_tries,
+                            generate_composition_extra_args=dict(
+                                composition_suggestion=participant.composition_suggestion
+                            )
                         )
                     ),
                     spinner=self.spinner
