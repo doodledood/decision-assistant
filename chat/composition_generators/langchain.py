@@ -217,6 +217,11 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                         'You can use play on words, stereotypes, or any other way you want to be original.',
                         'For example: "CEO" -> "Maximilian Power", "CTO" -> "Nova Innovatus"'
                     ]),
+                    Section(name='Naming Team-based Participants', list=[
+                        'In contrast to individual participants, you should name teams based only on their mission '
+                        'and composition. Do not be creative here.',
+                        'For example: "Development Team", "Marketing Team"'
+                    ])
                 ]),
                 Section(name='Removing Participants', list=[
                     'Remove participants only if they cannot contribute to the goal or fit into the interaction schema.',
