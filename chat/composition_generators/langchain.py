@@ -96,20 +96,24 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         participants_to_remove_names = [participant_name for participant_name in output.participants_to_remove]
 
         if self.spinner is not None:
+            name = 'The Chat Composition Generator'
+            if chat.name is not None:
+                name = f'{name} ({chat.name})'
+
             if len(output.participants_to_remove) == 0 and len(output.participants_to_add) == 0:
                 self.spinner.succeed(
-                    text='The Chat Composition Generator has decided to keep the current chat composition.')
+                    text=f'{name} has decided to keep the current chat composition.')
             elif len(output.participants_to_remove) > 0 and len(output.participants_to_add) == 0:
                 self.spinner.succeed(
-                    text=f'The Chat Composition Generator has decided to remove the following participants: '
+                    text=f'{name} has decided to remove the following participants: '
                          f'{", ".join(participants_to_remove_names)}')
             elif len(output.participants_to_remove) == 0 and len(output.participants_to_add) > 0:
                 self.spinner.succeed(
-                    text=f'The Chat Composition Generator has decided to add the following participants: '
+                    text=f'{name} has decided to add the following participants: '
                          f'{", ".join(participants_to_add_names)}')
             else:
                 self.spinner.succeed(
-                    text=f'The Chat Composition Generator has decided to remove the following participants: '
+                    text=f'{name} has decided to remove the following participants: '
                          f'{", ".join(participants_to_remove_names)} and add the following participants: '
                          f'{", ".join(participants_to_add_names)}')
 
