@@ -31,9 +31,15 @@ class ChatParticipant(abc.ABC):
     def on_participant_left_chat(self, chat: 'Chat', participant: 'ChatParticipant'):
         pass
 
+    def __str__(self):
+        return self.name
+
+    def detailed_str(self, level: int = 0):
+        prefix = '  ' * level
+        return f'{prefix}Name: {self.name}'
+
 
 class ActiveChatParticipant(ChatParticipant):
-    name: str
     symbol: str
     messages_hidden: bool
 
@@ -48,7 +54,11 @@ class ActiveChatParticipant(ChatParticipant):
         raise NotImplementedError()
 
     def __str__(self):
-        return self.name
+        return f'{self.symbol} {self.name}'
+
+    def detailed_str(self, level: int = 0):
+        prefix = '  ' * level
+        return f'{prefix}Name: "{self.name}", Symbol: "{self.symbol}"'
 
 
 class ChatMessage(BaseModel):
@@ -294,3 +304,7 @@ class Chat:
 
     def has_non_active_participant_with_name(self, participant_name: str) -> bool:
         return self.backing_store.has_non_active_participant_with_name(participant_name=participant_name)
+
+    @property
+    def active_participants_str(self):
+        return '\n'.join([str(participant) for participant in self.get_active_participants()])
