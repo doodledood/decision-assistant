@@ -60,7 +60,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             termination_condition = self.generate_composition_extra_args.get('termination_condition', None)
 
         if create_internal_chat is None:
-            create_internal_chat = lambda goal: Chat(
+            create_internal_chat = lambda name, goal: Chat(
+                name=name,
                 goal=goal,
                 backing_store=InMemoryChatDataBackingStore(),
                 renderer=TerminalChatRenderer()
@@ -130,7 +131,10 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                 chat_participant = InternalGroupBasedChatParticipant(
                     group_name=participant.name,
                     mission=participant.mission,
-                    chat=create_internal_chat(participant.mission),
+                    chat=create_internal_chat(
+                        participant.name if chat.name is None else f'{chat.name} > {participant.name}',
+                        participant.mission
+                    ),
                     chat_conductor=LangChainBasedAIChatConductor(
                         chat_model=self.chat_model,
                         chat_model_args=self.chat_model_args,

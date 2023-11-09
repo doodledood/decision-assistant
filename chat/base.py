@@ -240,6 +240,7 @@ class Chat:
         self.backing_store = backing_store
         self.renderer = renderer
         self.goal = goal
+        self.name = name
         self.hide_messages = hide_messages
         self.max_total_messages = max_total_messages
 
