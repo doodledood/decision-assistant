@@ -2,6 +2,9 @@ from chat.base import ChatRenderer, Chat, ChatMessage
 
 
 class TerminalChatRenderer(ChatRenderer):
+    def __init__(self, print_timestamps: bool = False):
+        self.print_timestamps = print_timestamps
+
     def render_new_chat_message(self, chat: Chat, message: ChatMessage):
         if chat.hide_messages:
             return
@@ -12,12 +15,21 @@ class TerminalChatRenderer(ChatRenderer):
         if sender is None:
             symbol = '❓'
 
-            print(f'[{pretty_timestamp_with_date}] {symbol} {message.sender_name}: {message.content}')
+            if self.print_timestamps:
+                print(f'[{pretty_timestamp_with_date}] {symbol} {message.sender_name}: {message.content}')
+            else:
+                print(f'{symbol} {message.sender_name}: {message.content}')
         else:
             if sender.messages_hidden:
                 return
 
             if chat.name is None:
-                print(f'[{pretty_timestamp_with_date}] {str(sender)}: {message.content}')
+                if self.print_timestamps:
+                    print(f'[{pretty_timestamp_with_date}] {str(sender)}: {message.content}')
+                else:
+                    print(f'{str(sender)}: {message.content}')
             else:
-                print(f'[{pretty_timestamp_with_date}] {chat.name} > {str(sender)}: {message.content}')
+                if self.print_timestamps:
+                    print(f'[{pretty_timestamp_with_date}] {chat.name} > {str(sender)}: {message.content}')
+                else:
+                    print(f'{chat.name} > {str(sender)}: {message.content}')

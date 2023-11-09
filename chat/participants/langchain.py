@@ -87,8 +87,6 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                             [f'- {str(p)}{" -> This is you." if p.name == self.name else ""}' \
                              for p in active_participants])),
                         Section(name='Rules', list=[
-                            'Your response should be the message you want to send to the group chat as your own name, '
-                            'role, and personal mission.'
                             'You do not have to respond directly to the one who sent you a message. You can respond '
                             'to anyone in the group chat.',
                             'You cannot have private conversations with other participants. Everyone can see all '
@@ -102,12 +100,20 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                             'conversation. Use their contents for context only; do not talk to them.',
                             'In your response only include the message without the prefix.'
                         ]),
-                        Section(name='Well-Formatted Chat Response Examples', list=[
-                            '"Hello, how are you?"'
-                        ]),
-                        Section(name='Badly-Formatted Chat Response Examples', list=[
-                            '"[TIMESTAMP] John: Hello, how are you?"'
-                        ]),
+                        Section(name='Response Message Format', list=[
+                            'Your response should be the message you want to send to the group chat as your own name, '
+                            'role, and personal mission.',
+                            'Must not include any prefix (e.g., timestamp, sender name, etc.).',
+                            'Response must be a message as will be shown in the chat (timestamp and sender name are '
+                            'system-generated for you).'
+                        ], sub_sections=[
+                            Section(name='Well-Formatted Chat Response Examples', list=[
+                                '"Hello, how are you?"'
+                            ]),
+                            Section(name='Badly-Formatted Chat Response Examples', list=[
+                                '"[TIMESTAMP] John: Hello, how are you?"'
+                            ])
+                        ])
                     ]),
                     *self.other_prompt_sections,
                 ]
