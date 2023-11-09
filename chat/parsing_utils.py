@@ -40,6 +40,7 @@ def chat_messages_to_pydantic(chat_messages: List[ChatMessage],
         chat_model=chat_model,
         name='Jason',
         role='JSON Converter',
+        symbol='📄'
         personal_mission='Your only purpose is to convert the previous chat messages (usually the last one)'
                          'to a valid and logical JSON that follows the JSON SCHEMA provided. Your message should '
                          'include only correct JSON. No fluff.',
