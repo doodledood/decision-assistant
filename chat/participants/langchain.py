@@ -82,15 +82,15 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                             [f'- {str(p)}{" -> This is you." if p.name == self.name else ""}' \
                              for p in active_participants])),
                         Section(name='Rules', list=[
-                            'You have to respond in your own name as your defined role and personal mission.',
+                            'Your response should be the message you want to send to the group chat as your own name, '
+                            'role, and personal mission.'
                             'You do not have to respond directly to the one who sent you a message. You can respond '
                             'to anyone in the group chat.',
                             'You cannot have private conversations with other participants. Everyone can see all '
                             'messages sent by all other participants.',
                         ]),
-                        Section(name='Messages', list=[
-                            'Include all participants messages, including your own',
-                            'They are prefixed by the sender\'s name (could also be everyone). For context only; '
+                        Section(name='Previous Messages', list=[
+                            'Messages are prefixed by the sender\'s name (could also be everyone). For context only; '
                             'it\'s not actually part of the message they sent. Example: "John: Hello, how are you?"',
                             'Some messages could have been sent by participants who are no longer a part of this '
                             'conversation. Use their contents for context only; do not talk to them.',
