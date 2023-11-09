@@ -211,7 +211,12 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                         'individual to work together to achieve a sub-goal, similar to actual companies of people.',
                         'This team will contain a group of internal individual (or even sub-teams) participants. Do '
                         'not worry about the team\'s composition at this point.'
-                    ])
+                    ]),
+                    Section(name='Naming Individual Participants', list=[
+                        'Generate a creative name that fits the role and mission.',
+                        'You can use play on words, stereotypes, or any other way you want to be original.',
+                        'For example: "CEO" -> "Maximilian Power", "CTO" -> "Nova Innovatus"'
+                    ]),
                 ]),
                 Section(name='Removing Participants', list=[
                     'Remove participants only if they cannot contribute to the goal or fit into the interaction schema.',
