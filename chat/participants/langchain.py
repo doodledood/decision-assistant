@@ -68,6 +68,20 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                         Section(name=f'Document {i + 1}', text=f'```{doc.page_content}```') for i, doc in
                         enumerate(relevant_docs)
                     ]),
+            Section(name='Response Message Format', list=[
+                'Your response should be the message you want to send to the group chat as your own name, '
+                'role, and personal mission.',
+                'Must not include any prefix (e.g., timestamp, sender name, etc.).',
+                'Response must be a message as will be shown in the chat (timestamp and sender name are '
+                'system-generated for you).'
+            ], sub_sections=[
+                Section(name='Well-Formatted Chat Response Examples', list=[
+                    '"Hello, how are you?"'
+                ]),
+                Section(name='Badly-Formatted Chat Response Examples', list=[
+                    '"[TIMESTAMP] John: Hello, how are you?"'
+                ])
+            ])
         ]
 
         active_participants = chat.get_active_participants()
@@ -92,27 +106,13 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                             'You cannot have private conversations with other participants. Everyone can see all '
                             'messages sent by all other participants.',
                         ]),
-                        Section(name='Previous Messages', list=[
+                        Section(name='Previous Chat Messages', list=[
                             'Messages are prefixed by a timestamp and the sender\'s name (could also be everyone). ',
                             'The prefix is for context only; it\'s not actually part of the message they sent. '
                             'Example: "[TIMESTAMP] John: Hello, how are you?"',
                             'Some messages could have been sent by participants who are no longer a part of this '
                             'conversation. Use their contents for context only; do not talk to them.',
                             'In your response only include the message without the prefix.'
-                        ]),
-                        Section(name='Response Message Format', list=[
-                            'Your response should be the message you want to send to the group chat as your own name, '
-                            'role, and personal mission.',
-                            'Must not include any prefix (e.g., timestamp, sender name, etc.).',
-                            'Response must be a message as will be shown in the chat (timestamp and sender name are '
-                            'system-generated for you).'
-                        ], sub_sections=[
-                            Section(name='Well-Formatted Chat Response Examples', list=[
-                                '"Hello, how are you?"'
-                            ]),
-                            Section(name='Badly-Formatted Chat Response Examples', list=[
-                                '"[TIMESTAMP] John: Hello, how are you?"'
-                            ])
                         ])
                     ]),
                     *self.other_prompt_sections,
