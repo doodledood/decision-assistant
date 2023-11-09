@@ -148,6 +148,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                     ),
                     spinner=self.spinner
                 )
+                chat_participant.initialize_sub_chat()
 
             participants.append(chat_participant)
 

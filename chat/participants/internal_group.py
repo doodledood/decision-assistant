@@ -27,8 +27,8 @@ class InternalGroupBasedChatParticipant(ActiveChatParticipant):
 
         super().__init__(name=group_name, **kwargs)
 
-    def on_chat_started(self, chat: 'Chat'):
-        # Make sure the chat & conductor are initialized before starting the chat, as it may be a dynamic chat with
+    def initialize_sub_chat(self):
+        # Make sure the chat & conductor are initialized, as it may be a dynamic chat with
         # no participants yet.
         self.inner_chat_conductor.initialize_chat(chat=self.inner_chat)
 
