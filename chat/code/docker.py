@@ -18,7 +18,7 @@ class DockerCodeExecutor(CodeExecutor):
         self.client = client or docker.from_env()
         self.image_tag = image_tag
         self.base_image = base_image
-        self.default_dependencies = default_dependencies or {'requests'}
+        self.default_dependencies = default_dependencies or {'requests', 'pytest'}
         self.spinner = spinner
 
     def build_image_with_code(self, python_code: str, dependencies: Optional[Set[str]] = None):
