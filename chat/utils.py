@@ -4,9 +4,12 @@ from typing import Type
 from pydantic import BaseModel
 
 
-def fix_invalid_json(json_string):
+def fix_invalid_json(json_string: str, only_cut: bool = False) -> str:
     # Cut anything before the first { and after the last }
     json_string = json_string[json_string.find('{'):json_string.rfind('}') + 1]
+
+    if only_cut:
+        return json_string
 
     # Regular expression patterns
     unquoted_key_pattern = r'(?<!")(\b\w+\b)(\s*:)(?!")'

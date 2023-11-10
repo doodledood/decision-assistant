@@ -49,13 +49,17 @@ def execute_chat_model_messages(
 
                 spinner.start(progress_text)
 
-            args = fix_invalid_json(args)
-
             try:
                 args = json.loads(args)
                 result = tool.run(args)
             except JSONDecodeError as e:
-                result = f'Error decoding args for function: {e}'
+                # Try to fix the JSON manually before giving up
+                try:
+                    args = fix_invalid_json(args)
+                    args = json.loads(args)
+                    result = tool.run(args)
+                except JSONDecodeError as e:
+                    result = f'Error decoding args for function: {e}'
             except Exception as e:
                 result = f'Error executing function: {e}'
 
