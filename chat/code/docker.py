@@ -21,12 +21,7 @@ class DockerCodeExecutor(CodeExecutor):
         self.default_dependencies = default_dependencies or {'requests', 'pytest'}
         self.spinner = spinner
 
-    def build_image_with_code(self, python_code: str, dependencies: Optional[Set[str]] = None):
-        spinner_text = None
-        if self.spinner is not None:
-            spinner_text = self.spinner.text
-            self.spinner.start('Building Docker image...')
-
+    def create_dockerfile(self, python_code: str, dependencies: Optional[Set[str]] = None):
         run_install_template = ('RUN pip install {package} --trusted-host pypi.org --trusted-host '
                                 'files.pythonhosted.org')
         run_commands = [run_install_template.format(package=package) for package in dependencies or []]
@@ -35,15 +30,23 @@ class DockerCodeExecutor(CodeExecutor):
         # Helper function to construct Dockerfile
         dockerfile = f'''
         FROM {self.base_image}
-        
-        RUN apt-get update
-        
+
         {run_commands_str}
-        
+
         COPY script.py /code/script.py
-        
+
         WORKDIR /code
         '''
+
+        return dockerfile
+
+    def build_image_with_code(self, python_code: str, dependencies: Optional[Set[str]] = None):
+        spinner_text = None
+        if self.spinner is not None:
+            spinner_text = self.spinner.text
+            self.spinner.start('Building Docker image...')
+
+        dockerfile = self.create_dockerfile(python_code=python_code, dependencies=dependencies)
 
         # Create a temporary build directory
         with tempfile.TemporaryDirectory() as build_dir:
