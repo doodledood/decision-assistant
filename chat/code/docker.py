@@ -1,6 +1,6 @@
 import os
 import tempfile
-from typing import Optional
+from typing import Optional, Set
 
 import docker
 from docker.errors import ContainerError
@@ -13,24 +13,32 @@ class DockerCodeExecutor(CodeExecutor):
     def __init__(self, client: Optional[docker.DockerClient] = None,
                  image_tag: str = 'python-executor:latest',
                  base_image: str = 'python:3.11-slim',
+                 default_dependencies: Optional[Set[str]] = None,
                  spinner: Optional[Halo] = None):
         self.client = client or docker.from_env()
         self.image_tag = image_tag
         self.base_image = base_image
+        self.default_dependencies = default_dependencies or {'requests'}
         self.spinner = spinner
 
-    def build_image_with_code(self, python_code: str):
+    def build_image_with_code(self, python_code: str, dependencies: Optional[Set[str]] = None):
         spinner_text = None
         if self.spinner is not None:
             spinner_text = self.spinner.text
             self.spinner.start('Building Docker image...')
+
+        run_install_template = ('RUN pip install {package} --trusted-host pypi.org --trusted-host '
+                                'files.pythonhosted.org')
+        run_commands = [run_install_template.format(package=package) for package in dependencies or []]
+        run_commands_str = '\n'.join(run_commands)
 
         # Helper function to construct Dockerfile
         dockerfile = f'''
         FROM {self.base_image}
         
         RUN apt-get update
-        RUN pip install requests --trusted-host pypi.org --trusted-host files.pythonhosted.org
+        
+        {run_commands_str}
         
         COPY script.py /code/script.py
         
@@ -63,7 +71,7 @@ class DockerCodeExecutor(CodeExecutor):
     def execute(self, code: str) -> str:
         try:
             # Ensure the image is built before execution
-            self.build_image_with_code(code)
+            self.build_image_with_code(code, dependencies=self.default_dependencies)
         except Exception as e:
             return f'Failed to build Docker image (did not run code yet): {e}'
 
