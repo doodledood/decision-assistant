@@ -22,9 +22,8 @@ class DockerCodeExecutor(CodeExecutor):
         self.spinner = spinner
 
     def create_dockerfile(self, python_code: str, dependencies: Optional[Set[str]] = None):
-        run_install_template = ('RUN pip install {package} --trusted-host pypi.org --trusted-host '
-                                'files.pythonhosted.org')
-        run_commands = [run_install_template.format(package=package) for package in dependencies or []]
+        run_commands = [f'RUN pip install {package} --trusted-host pypi.org --trusted-host files.pythonhosted.org' for
+                        package in dependencies or []]
         run_commands_str = '\n'.join(run_commands)
 
         # Helper function to construct Dockerfile
