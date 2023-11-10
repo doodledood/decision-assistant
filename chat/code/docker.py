@@ -43,7 +43,7 @@ class DockerCodeExecutor(CodeExecutor):
         spinner_text = None
         if self.spinner is not None:
             spinner_text = self.spinner.text
-            self.spinner.start('Building Docker image...')
+            self.spinner.start('🐳 Building Docker image...')
 
         dockerfile = self.create_dockerfile(python_code=python_code, dependencies=dependencies)
 
@@ -70,12 +70,15 @@ class DockerCodeExecutor(CodeExecutor):
 
         return image
 
-    def execute(self, code: str) -> str:
+    def execute(self, code: str, dependencies: Optional[Set[str]] = None) -> str:
         try:
             # Ensure the image is built before execution
-            self.build_image_with_code(code, dependencies=self.default_dependencies)
+            self.build_image_with_code(code, dependencies=dependencies or self.default_dependencies)
         except Exception as e:
             return f'Failed to build Docker image (did not run code yet): {e}'
+
+        if self.spinner is not None:
+            self.spinner.start('🐳 Running code inside Docker container...')
 
         # Run the code inside the container
         try:
@@ -90,3 +93,6 @@ class DockerCodeExecutor(CodeExecutor):
             return container.decode('utf-8')
         except ContainerError as e:
             return e.stderr.decode('utf-8')
+        finally:
+            if self.spinner is not None:
+                self.spinner.stop_and_persist(symbol='🐳', text='Code finished executing.')
