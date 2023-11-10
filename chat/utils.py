@@ -8,16 +8,25 @@ def fix_invalid_json(json_string):
     # Cut anything before the first { and after the last }
     json_string = json_string[json_string.find('{'):json_string.rfind('}') + 1]
 
-    # Use regular expression to find all string fields in the JSON
-    pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
+    # Regular expression patterns
+    unquoted_key_pattern = r'(?<!")(\b\w+\b)(\s*:)(?!")'
+    unquoted_value_pattern = r'(:\s*)([^",\]\[}{]+)(?=[,}\]])'
+
+    # Fix unquoted keys
+    json_string = re.sub(unquoted_key_pattern, r'"\1"\2', json_string)
+
+    # Fix unquoted values by capturing until the next comma, closing brace, or bracket
+    json_string = re.sub(unquoted_value_pattern, r'\1"\2"', json_string)
+
+    # Handle string values with newlines
+    string_field_pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
     fixed_json = ''
     last_end = 0
 
-    # Loop through each match to fix the newlines within string fields
-    for m in re.finditer(pattern, json_string):
+    for m in re.finditer(string_field_pattern, json_string):
         start, end = m.span()
         fixed_json += json_string[last_end:start]  # Add the portion before this match
-        fixed_json += m.group(0).replace('\n', '\\n')  # Fix the newline within this string field
+        fixed_json += '"' + m.group(1).replace('\n', '\\n') + '"'  # Fix newlines
         last_end = end
 
     fixed_json += json_string[last_end:]  # Add the remaining portion of the original string
