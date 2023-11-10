@@ -18,15 +18,20 @@ def fix_invalid_json(json_string):
     # Fix unquoted values by capturing until the next comma, closing brace, or bracket
     json_string = re.sub(unquoted_value_pattern, r'\1"\2"', json_string)
 
-    # Handle string values with newlines
+    # Handle string values with newlines and potential code
     string_field_pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
     fixed_json = ''
     last_end = 0
 
     for m in re.finditer(string_field_pattern, json_string):
         start, end = m.span()
-        fixed_json += json_string[last_end:start]  # Add the portion before this match
-        fixed_json += '"' + m.group(1).replace('\n', '\\n') + '"'  # Fix newlines
+        string_value = m.group(1).replace('\n', '\\n')  # Fix newlines
+
+        # Additional handling for strings that might contain code
+        # Escaping quotes within the string value
+        string_value = string_value.replace('"', '\\"')
+
+        fixed_json += json_string[last_end:start] + '"' + string_value + '"'
         last_end = end
 
     fixed_json += json_string[last_end:]  # Add the remaining portion of the original string
