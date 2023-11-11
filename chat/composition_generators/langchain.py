@@ -20,7 +20,8 @@ from chat.structured_string import StructuredString, Section
 class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
     chat_model: BaseChatModel
     chat_model_args: Dict[str, Any]
-    generator_tools: Optional[List[BaseTool]] = None,
+    generator_tools: Optional[List[BaseTool]] = None
+    participant_available_tools: Optional[List[BaseTool]] = None
     spinner: Optional[Halo] = None
     n_output_parsing_tries: int = 3
     prefer_critics: bool = False
@@ -29,6 +30,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
     def __init__(self,
                  chat_model: BaseChatModel,
                  generator_tools: Optional[List[BaseTool]] = None,
+                 participant_available_tools: Optional[List[BaseTool]] = None,
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  n_output_parsing_tries: int = 3,
@@ -37,10 +39,13 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         self.chat_model = chat_model
         self.chat_model_args = chat_model_args or {}
         self.generator_tools = generator_tools
+        self.participant_available_tools = participant_available_tools
         self.spinner = spinner
         self.n_output_parsing_tries = n_output_parsing_tries
         self.prefer_critics = prefer_critics
         self.generate_composition_extra_args = generate_composition_extra_args or {}
+
+        self.participant_tool_names_to_tools = {tool.name: tool for tool in self.participant_available_tools or []}
 
     def generate_composition_for_chat(self,
                                       chat: Chat,
@@ -121,10 +126,13 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
         for participant in output.participants_to_add:
             if participant.type == 'individual':
+                participant_tools = [self.participant_tool_names_to_tools.get(tool_name) for tool_name in
+                                     participant.tools or [] if tool_name in self.participant_tool_names_to_tools]
                 chat_participant = LangChainBasedAIChatParticipant(
                     name=participant.name,
                     role=participant.role,
                     personal_mission=participant.mission,
+                    tools=participant_tools,
                     symbol=participant.symbol,
                     chat_model=self.chat_model,
                     spinner=self.spinner,
@@ -219,6 +227,11 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                         'In contrast to individual participants, you should name teams based only on their mission '
                         'and composition. Do not be creative here.',
                         'For example: "Development Team", "Marketing Team"'
+                    ]),
+                    Section(name='Giving Tools to Participants', list=[
+                        'Only individual participants can be given tools.',
+                        'You must only choose a tool from the AVAILABLE PARTICIPANT TOOLS list.',
+                        'A tools should be given to a participant only if it can help them achieve the goal.'
                     ])
                 ]),
                 Section(name='Removing Participants', list=[
@@ -266,7 +279,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                 'Previous messages from the conversation',
                 'Current speaker interaction schema (Optional)',
                 'Current termination condition (Optional)',
-                'Composition suggestion (Optional)'
+                'Composition suggestion (Optional)',
+                'Available participant tools (Optional)'
             ]),
             Section(name='Output',
                     text='The output can be compressed, as it will not be used by a human, but by an AI. It should '
@@ -274,7 +288,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
                     list=[
                         'Participants to Remove: List of participants to be removed (if any).',
                         'Participants to Add: List of participants to be added, with their name, role, team (if '
-                        'applicable), and personal (or team) mission.',
+                        'applicable), and personal (or team) mission, and tools (if applicable).',
                         'Updated Interaction Schema: An updated version of the original interaction schema.',
                         'Updated Termination Condition: An updated version of the original termination condition.'
                     ])
@@ -289,6 +303,8 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         messages = chat.get_messages()
         messages_list = [f'- {message.sender_name}: {message.content}' for message in messages]
 
+        available_tools_list = list(set(x.name for x in self.participant_available_tools or []))
+
         active_participants = chat.get_active_participants()
 
         prompt = StructuredString(sections=[
@@ -302,6 +318,9 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             Section(name='Composition Suggestion',
                     text=composition_suggestion or 'Not provided. Use the goal and other inputs to come up with a '
                                                    'good composition.'),
+            Section(name='Available Participant Tools',
+                    text='No tools available.' if len(available_tools_list) == 0 else None,
+                    list=available_tools_list if len(available_tools_list) > 0 else []),
             Section(name='Chat Messages',
                     text='No messages yet.' if len(messages_list) == 0 else None,
                     list=messages_list if len(messages_list) > 0 else []

@@ -198,5 +198,10 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
 
     def detailed_str(self, level: int = 0):
         prefix = '    ' * level
+
+        tool_names = ', '.join([tool.name for tool in self.tools or []])
+        if tool_names == '':
+            tool_names = 'None'
+
         return (f'{prefix}- Name: {self.name}\n{prefix}  Role: {self.role}\n{prefix}  Symbol: {self.symbol}\n'
-                f'{prefix}  Personal Mission: "{self.personal_mission}"')
+                f'{prefix}  Personal Mission: "{self.personal_mission}"  Tools: {tool_names}')

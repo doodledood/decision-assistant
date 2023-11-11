@@ -13,6 +13,11 @@ class IndividualParticipantToAddSchema(BaseModel):
                                      'mission statement.')
     symbol: str = Field(description='A unicode symbol of the participant to add (for presentation in chat). This '
                                     'needs to reflect the role.')
+    tools: Optional[List[str]] = Field(
+        description='List of useful tools that the participant should have access to in order to achieve their goal. '
+                    'Must be one of the available tools given as input. Do not give tools if you think the participant '
+                    'should not have access to any tools or non of the available tools are useful for the goal.'
+    )
 
     def __str__(self):
         return f'{self.symbol} {self.name} ({self.role})'
