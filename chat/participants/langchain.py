@@ -21,6 +21,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
     tools: Optional[List[BaseTool]] = None,
     ignore_group_chat_environment: bool = False
     spinner: Optional[Halo] = None
+    include_timestamp_in_messages: bool = False
 
     class Config:
         arbitrary_types_allowed = True
@@ -37,6 +38,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                  chat_model_args: Optional[Dict[str, Any]] = None,
                  spinner: Optional[Halo] = None,
                  ignore_group_chat_environment: bool = False,
+                 include_timestamp_in_messages: bool = False,
                  **kwargs
                  ):
         super().__init__(name=name, symbol=symbol, **kwargs)
@@ -46,6 +48,7 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         self.chat_model_args = chat_model_args or {}
         self.other_prompt_sections = other_prompt_sections or []
         self.ignore_group_chat_environment = ignore_group_chat_environment
+        self.include_timestamp_in_messages = include_timestamp_in_messages
         self.retriever = retriever
         self.tools = tools
         self.spinner = spinner
@@ -79,7 +82,8 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                     '"Hello, how are you?"'
                 ]),
                 Section(name='Badly-Formatted Chat Response Examples', list=[
-                    '"[TIMESTAMP] John: Hello, how are you?"'
+                    ('"[TIMESTAMP] John: Hello, how are you?"' if self.include_timestamp_in_messages else
+                     '"John: Hello, how are you?"'),
                 ])
             ])
         ]
@@ -108,8 +112,9 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
                         ]),
                         Section(name='Previous Chat Messages', list=[
                             'Messages are prefixed by a timestamp and the sender\'s name (could also be everyone). ',
-                            'The prefix is for context only; it\'s not actually part of the message they sent. '
-                            'Example: "[TIMESTAMP] John: Hello, how are you?"',
+                            'The prefix is for context only; it\'s not actually part of the message they sent. ',
+                            ('Example: "[TIMESTAMP] John: Hello, how are you?"' if self.include_timestamp_in_messages
+                             else 'Example: "John: Hello, how are you?"'),
                             'Some messages could have been sent by participants who are no longer a part of this '
                             'conversation. Use their contents for context only; do not talk to them.',
                             'In your response only include the message without the prefix.'
@@ -127,11 +132,15 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
         for message in chat_messages:
             pretty_datetime = message.timestamp.strftime('%m-%d-%Y %H:%M:%S')
 
-            if self.ignore_group_chat_environment:
-                content = \
-                    f'[{pretty_datetime}] {message.sender_name}: {message.content}'
+            if self.include_timestamp_in_messages:
+                content = f'[{pretty_datetime}] '
             else:
-                content = f'[{pretty_datetime}] {message.content}'
+                content = ''
+
+            if self.ignore_group_chat_environment:
+                content += f'{message.sender_name}: {message.content}'
+            else:
+                content += message.content
 
             if message.sender_name == self.name:
                 messages.append(AIMessage(content=content))
