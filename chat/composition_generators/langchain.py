@@ -303,7 +303,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
         messages = chat.get_messages()
         messages_list = [f'- {message.sender_name}: {message.content}' for message in messages]
 
-        available_tools_list = list(set(x.name for x in self.participant_available_tools or []))
+        available_tools_list = list(set(f'{x.name}: "{x.description}"' for x in self.participant_available_tools or []))
 
         active_participants = chat.get_active_participants()
 
