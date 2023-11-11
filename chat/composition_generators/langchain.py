@@ -81,6 +81,7 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
             HumanMessage(
                 content=self.create_compose_chat_participants_first_human_prompt(
                     chat=chat,
+                    participant_available_tools=self.participant_available_tools,
                     composition_suggestion=composition_suggestion,
                     participants_interaction_schema=participants_interaction_schema,
                     termination_condition=termination_condition))
@@ -296,14 +297,17 @@ class LangChainBasedAIChatCompositionGenerator(ChatCompositionGenerator):
 
         return str(system_message)
 
-    def create_compose_chat_participants_first_human_prompt(self, chat: Chat,
-                                                            composition_suggestion: Optional[str] = None,
-                                                            participants_interaction_schema: Optional[str] = None,
-                                                            termination_condition: Optional[str] = None) -> str:
+    def create_compose_chat_participants_first_human_prompt(
+            self,
+            chat: Chat,
+            participant_available_tools: Optional[List[BaseTool]] = None,
+            composition_suggestion: Optional[str] = None,
+            participants_interaction_schema: Optional[str] = None,
+            termination_condition: Optional[str] = None) -> str:
         messages = chat.get_messages()
         messages_list = [f'- {message.sender_name}: {message.content}' for message in messages]
 
-        available_tools_list = list(set(f'{x.name}: "{x.description}"' for x in self.participant_available_tools or []))
+        available_tools_list = list(set(f'{x.name}: "{x.description}"' for x in participant_available_tools or []))
 
         active_participants = chat.get_active_participants()
 
