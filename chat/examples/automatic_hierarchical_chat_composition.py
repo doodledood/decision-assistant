@@ -63,7 +63,7 @@ if __name__ == '__main__':
             ),
             participant_available_tools=[
                 CodeExecutionTool(
-                    code_executor=LocalCodeExecutor(),
+                    executor=LocalCodeExecutor(),
                     spinner=spinner
                 )
             ]
