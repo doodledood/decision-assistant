@@ -13,7 +13,7 @@ class CodeExecutionToolArgs(pydantic_v1.BaseModel):
         description='The verbatim python code to execute. Ensure code prints something or else the result will not be '
                     'captured. You do not have access to any external libraries. Use vanilla python 3 ONLY.')
     dependencies: Optional[List[str]] = pydantic_v1.Field(
-        description='List of dependencies to install before executing code. Ensure you specify the version, e.g. '
+        description='List of pip dependencies to install before executing code. Ensure you specify the version, e.g. '
                     '"requests==2.26.0". You can also specify the version using the "<" and ">" operators, e.g. '
                     '"requests>2.26.0".',
         default=None)
