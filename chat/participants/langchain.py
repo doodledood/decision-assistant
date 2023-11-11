@@ -204,4 +204,4 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
             tool_names = 'None'
 
         return (f'{prefix}- Name: {self.name}\n{prefix}  Role: {self.role}\n{prefix}  Symbol: {self.symbol}\n'
-                f'{prefix}  Personal Mission: "{self.personal_mission}"  Tools: {tool_names}')
+                f'{prefix}  Personal Mission: "{self.personal_mission}"\n{prefix}  Tools: {tool_names}')
