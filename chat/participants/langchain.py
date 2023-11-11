@@ -130,9 +130,8 @@ class LangChainBasedAIChatParticipant(ActiveChatParticipant):
             List[BaseMessage]:
         messages = []
         for message in chat_messages:
-            pretty_datetime = message.timestamp.strftime('%m-%d-%Y %H:%M:%S')
-
             if self.include_timestamp_in_messages:
+                pretty_datetime = message.timestamp.strftime('%m-%d-%Y %H:%M:%S')
                 content = f'[{pretty_datetime}] '
             else:
                 content = ''
