@@ -9,6 +9,8 @@ from langchain.memory import ConversationSummaryBufferMemory
 from chat.backing_stores import InMemoryChatDataBackingStore
 from chat.backing_stores.langchain import LangChainMemoryBasedChatDataBackingStore
 from chat.base import Chat, ChatDataBackingStore, ChatParticipant
+from chat.code.langchain import CodeExecutionTool
+from chat.code.local import LocalCodeExecutor
 from chat.composition_generators.langchain import LangChainBasedAIChatCompositionGenerator
 from chat.conductors import LangChainBasedAIChatConductor
 from langchain.chat_models import ChatOpenAI
@@ -46,6 +48,7 @@ if __name__ == '__main__':
             **kwargs
         )
 
+
     spinner = Halo(spinner='dots')
     user = UserChatParticipant(name='User')
     chat_conductor = LangChainBasedAIChatConductor(
@@ -57,7 +60,13 @@ if __name__ == '__main__':
             spinner=spinner,
             generate_composition_extra_args=dict(
                 create_internal_chat=create_chat
-            )
+            ),
+            participant_available_tools=[
+                CodeExecutionTool(
+                    code_executor=LocalCodeExecutor(),
+                    spinner=spinner
+                )
+            ]
         )
     )
     chat = create_chat(
