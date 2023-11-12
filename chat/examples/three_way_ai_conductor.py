@@ -35,16 +35,15 @@ if __name__ == '__main__':
         renderer=TerminalChatRenderer(),
         initial_participants=participants,
         goal='Make the user laugh by pranking the boring AI.',
-        participants_interaction_schema=f'Rob should take the lead and go back and forth with the assistant trying to '
-                                   f'prank him big time. Rob can and should talk to the user to get them in on the '
-                                   f'prank, however the majority of the prank should be done by Rob. By prank, '
-                                   f'I mean the AI should be confused and not know what to do, or laughs at the prank '
-                                   f'(funny).',
     )
 
     chat_conductor = LangChainBasedAIChatConductor(
         chat_model=chat_model,
         spinner=spinner,
+        participants_interaction_schema=
+        f'Assistant should go first. Then, rob should jump in and  take the lead and go back and forth with the '
+        f'assistant trying to prank him. Once a prank is done by Rob the user come in and give feedback or collaborate '
+        f'with Rob. However the majority of the prank should be done by Rob.',
         termination_condition='One laugh is enough. Terminate the chat when the user finds a prank funny.'
     )
 
