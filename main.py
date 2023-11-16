@@ -2,6 +2,12 @@ from functools import partial
 from pathlib import Path
 from typing import Optional
 
+from chatflock.sequencial_process import SequentialProcess, Step
+from chatflock.web_research import WebSearch, OpenAIChatPageQueryAnalyzer
+from chatflock.web_research.page_retrievers import RetrieverWithFallback, SeleniumPageRetriever, \
+    ScraperAPIPageRetriever, SimpleRequestsPageRetriever
+from chatflock.web_research.search import GoogleSerperSearchResultsProvider
+from chatflock.web_research.web_research import WebResearchTool
 from dotenv import load_dotenv
 from fire import Fire
 from halo import Halo
@@ -11,16 +17,6 @@ from langchain.globals import set_llm_cache
 from langchain.llms.openai import OpenAI
 from langchain.text_splitter import TokenTextSplitter
 
-from chat.web_research import WebSearch
-from chat.web_research.page_analyzer import OpenAIChatPageQueryAnalyzer
-from chat.web_research.page_retrievers.fallback import RetrieverWithFallback
-from chat.web_research.page_retrievers.requests_retriever import SimpleRequestsPageRetriever
-from chat.web_research.page_retrievers.scraper_api_retriever import ScraperAPIPageRetriever
-
-from chat.web_research.page_retrievers.selenium_retriever import SeleniumPageRetriever
-from chat.web_research.search import GoogleSerperSearchResultsProvider
-from chat.web_research.web_research import WebResearchTool
-from chat.sequencial_process import Step, SequentialProcess
 from state import DecisionAssistantState, load_state, save_state
 from steps import identify_goal, identify_alternatives, identify_criteria, prioritize_criteria, \
     generate_research_questions, perform_research, analyze_data, compile_data_for_presentation, present_report
@@ -63,7 +59,7 @@ def run_decision_assistant(
         page_query_analyzer=OpenAIChatPageQueryAnalyzer(
             chat_model=chat_model_for_analysis,
             page_retriever=RetrieverWithFallback([
-                SeleniumPageRetriever(headless=True),
+                SeleniumPageRetriever(headless=False),
                 ScraperAPIPageRetriever(render_js=True),
                 SimpleRequestsPageRetriever()
             ]),
