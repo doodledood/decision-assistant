@@ -1,6 +1,8 @@
 # Decision Assistant
 
-A GPT-based chatbot that helps you make decisions. It helps you identify relevant criteria, assign weights to the criteria based on your own judgement and preferences, come up with relevant alternatives to choose from, research each alternative autonomously, and finally rank the alternatives based on the criteria and your preferences so you can make the best decision possible based on concrete researched data.
+A [ChatFlock]() based cmd app that helps you weigh and make decisions.
+
+It helps you identify relevant criteria, assign weights to the criteria based on your own judgement and preferences, come up with relevant alternatives to choose from, research each alternative autonomously, and finally rank the alternatives based on the criteria and your preferences so you can make the best decision possible based on concrete researched data.
 
 ## How It Works
 
