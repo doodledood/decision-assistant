@@ -31,7 +31,10 @@ def topsis_score(items: List[T], weights: Dict[str, float], value_mapper: Option
 
 
 def normalize_label_value(label: str, label_list: List[str], lower_bound: float = 0.0, upper_bound: float = 1.0):
-    index = label_list.index(label)
+    try:
+        index = label_list.index(label)
+    except ValueError:
+        index = len(label_list) // 2
 
     min_val = 0
     max_val = len(label_list) - 1

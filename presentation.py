@@ -16,7 +16,11 @@ def save_html_to_file(html: str, filename: str):
 
 
 def label_to_color(label: str, scale: List[str]) -> str:
-    label_index = scale.index(label) + 1
+    try:
+        label_index = scale.index(label) + 1
+    except ValueError:
+        label_index = len(scale) // 2
+
     percentage_to_max = label_index / len(scale)
 
     if percentage_to_max <= 0.2:

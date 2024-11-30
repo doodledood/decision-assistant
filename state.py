@@ -13,7 +13,7 @@ def save_state(state: DecisionAssistantState, state_file: Optional[str]):
         return
 
     data = state.dict()
-    with open(state_file, 'w') as f:
+    with open(state_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
 
 
@@ -22,7 +22,7 @@ def load_state(state_file: Optional[str]) -> Optional[DecisionAssistantState]:
         return None
 
     try:
-        with open(state_file, 'r') as f:
+        with open(state_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
             return DecisionAssistantState.parse_obj(data)
     except FileNotFoundError:

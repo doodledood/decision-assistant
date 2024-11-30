@@ -12,10 +12,11 @@ from dotenv import load_dotenv
 from fire import Fire
 from halo import Halo
 from langchain.cache import SQLiteCache
-from langchain.chat_models import ChatOpenAI
+from langchain.chat_models import ChatOpenAI, ChatAnthropic
 from langchain.globals import set_llm_cache
-from langchain.llms.openai import OpenAI
+#from langchain.llms.openai import OpenAI
 from langchain.text_splitter import TokenTextSplitter
+#from langchain_anthropic import ChatAnthropic
 
 from state import DecisionAssistantState, load_state, save_state
 from steps import identify_goal, identify_alternatives, identify_criteria, prioritize_criteria, \
@@ -25,8 +26,9 @@ from steps import identify_goal, identify_alternatives, identify_criteria, prior
 def run_decision_assistant(
         goal: Optional[str] = None,
         llm_temperature: float = 0.0,
-        llm_model: str = 'gpt-4-1106-preview',
-        fast_llm_model: str = 'gpt-3.5-turbo-16k-0613',
+        llm_model: str = 'gpt-4o',
+        fast_llm_model: str = 'gpt-4o-mini',
+        max_context_size: int = 100_000,
         state_file: Optional[str] = 'output/state.json',
         report_file: str = 'output/decision_report.html',
         cache_file: Optional[str] = 'output/llm_cache.db',
@@ -48,10 +50,12 @@ def run_decision_assistant(
         llm_cache = SQLiteCache(database_path=cache_file)
         set_llm_cache(llm_cache)
 
-    try:
-        max_context_size = OpenAI.modelname_to_contextsize(chat_model_for_analysis.model_name)
-    except ValueError:
-        max_context_size = 12000
+    # try:
+    #     max_context_size = OpenAI.modelname_to_contextsize(chat_model_for_analysis.model_name)
+    # except ValueError:
+    #     max_context_size = 12000
+
+    max_context_size = min(max_context_size, 12000)
 
     web_search = WebSearch(
         chat_model=chat_model,

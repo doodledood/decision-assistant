@@ -382,16 +382,10 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         chat_model=chat_model,
         spinner=spinner)
     user = UserChatParticipant(name='User')
-    participants = [user, criteria_brainstormer, criteria_critic]
+    #participants = [user, criteria_brainstormer, criteria_critic]
+    participants = [user, criteria_brainstormer]
 
-    try:
-        memory = ConversationSummaryBufferMemory(
-            llm=chat_model,
-            max_token_limit=OpenAI.modelname_to_contextsize(chat_model.model_name)
-        )
-        backing_store = LangChainMemoryBasedChatDataBackingStore(memory=memory)
-    except ValueError:
-        backing_store = InMemoryChatDataBackingStore()
+    backing_store = InMemoryChatDataBackingStore()
 
     chat = Chat(
         backing_store=backing_store,
@@ -399,22 +393,23 @@ def identify_criteria(chat_model: ChatOpenAI, tools: List[BaseTool],
         initial_participants=participants
     )
 
-    chat_conductor = LangChainBasedAIChatConductor(
-        chat_model=chat_model,
-        goal='Identify clear well-defined criteria and their respective scales for the decision.',
-        interaction_schema=(
-            '1. The Criteria Brainstormer suggests an initial set of criteria (including description and scales) '
-            'based on the user input.\n'
-            '2. The Criteria Critic critiques the criteria suggested and suggests improvements.\n'
-            '3. The Criteria Brainstormer iterates on the criteria until they think they are good enough and ask the '
-            'user for feedback.\n'
-            '4. If the user is not satisfied with the criteria, go back to step 1, refining the criteria based on the '
-            'user feedback.\n'
-            '5. If the user is satisfied with the criteria, the criteria identification process is complete. The '
-            'Criteria Brainstormer should present the final list of criteria and their respective scales to the '
-            'user.\n'
-            '6. The chat should end.'),
-    )
+    chat_conductor = RoundRobinChatConductor()
+    # chat_conductor = LangChainBasedAIChatConductor(
+    #     chat_model=chat_model,
+    #     goal='Identify clear well-defined criteria and their respective scales for the decision.',
+    #     interaction_schema=(
+    #         '1. The Criteria Brainstormer suggests an initial set of criteria (including description and scales) '
+    #         'based on the user input.\n'
+    #         '2. The Criteria Critic critiques the criteria suggested and suggests improvements.\n'
+    #         '3. The Criteria Brainstormer iterates on the criteria until they think they are good enough and ask the '
+    #         'user for feedback.\n'
+    #         '4. If the user is not satisfied with the criteria, go back to step 1, refining the criteria based on the '
+    #         'user feedback.\n'
+    #         '5. If the user is satisfied with the criteria, the criteria identification process is complete. The '
+    #         'Criteria Brainstormer should present the final list of criteria and their respective scales to the '
+    #         'user.\n'
+    #         '6. The chat should end.'),
+    # )
     _ = chat_conductor.initiate_dialog(chat=chat, initial_message=str(StructuredString(
         sections=[
             Section(name='Goal', text=state.data['goal']),
@@ -812,9 +807,6 @@ def analyze_data(state: DecisionAssistantState):
 
 
 def compile_data_for_presentation(state: DecisionAssistantState, report_file: str):
-    if os.path.exists(report_file):
-        return
-
     enriched_alternatives = []
     for alternative in state.data['alternatives']:
         alternative_research_data = state.data['research_data'][alternative]
